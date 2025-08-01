@@ -35,7 +35,23 @@ const CameraView: React.FC<CameraViewProps> = () => {
 
   const refreshCamera = () => {
     const timestamp = Date.now();
-    const cameraBase = process.env.REACT_APP_CAMERA_URL || 'http://89.24.76.191:10180';
+    
+    // Detect if we're on HTTPS and need a proxy
+    const isHttps = window.location.protocol === 'https:';
+    let cameraBase = process.env.REACT_APP_CAMERA_URL || 'http://89.24.76.191:10180';
+    
+    // If on HTTPS, we can't load HTTP images due to mixed content policy
+    if (isHttps) {
+      console.warn('🚨 HTTPS detected - cannot load HTTP camera due to mixed content policy');
+      // Show an informative error instead of trying to load
+      if (imgRef.current) {
+        setOverlayText('Kamera nedostupná na HTTPS - otevřete kameru v novém okně');
+        setShowOverlay(true);
+        setIsRealCamera(false);
+      }
+      return; // Don't try to load HTTP content on HTTPS page
+    }
+    
     const realUrl = `${cameraBase}/photo.jpg?t=${timestamp}&cache=${Math.random()}`;
     
     if (imgRef.current) {
@@ -104,7 +120,7 @@ const CameraView: React.FC<CameraViewProps> = () => {
       {/* Camera Image */}
       <img
         ref={imgRef}
-        src="http://89.24.76.191:10180/photo.jpg"
+        src="/placeholder-camera.svg"
         alt="Webkamera"
         style={{
           width: '100%',
@@ -169,7 +185,11 @@ const CameraView: React.FC<CameraViewProps> = () => {
           transition: 'background-color 0.2s',
           zIndex: 2
         }}
-        onClick={() => window.open('http://89.24.76.191:10180', '_blank')}
+        onClick={() => {
+          const isHttps = window.location.protocol === 'https:';
+          const cameraUrl = isHttps ? 'https://89.24.76.191:10180' : 'http://89.24.76.191:10180';
+          window.open(cameraUrl, '_blank');
+        }}
         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
         title="Nastavení kamery"
@@ -198,7 +218,11 @@ const CameraView: React.FC<CameraViewProps> = () => {
         
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
-            onClick={() => window.open('http://89.24.76.191:10180', '_blank')}
+            onClick={() => {
+          const isHttps = window.location.protocol === 'https:';
+          const cameraUrl = isHttps ? 'https://89.24.76.191:10180' : 'http://89.24.76.191:10180';
+          window.open(cameraUrl, '_blank');
+        }}
             className="btn-icon md-ripple"
             style={{
               background: 'var(--md-surface-variant)',

@@ -1,0 +1,16 @@
+<svg width="640" height="360" viewBox="0 0 640 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="640" height="360" fill="#F5F5F5"/>
+  <!-- Camera Icon -->
+  <circle cx="320" cy="150" r="40" stroke="#CCCCCC" stroke-width="4" fill="none"/>
+  <circle cx="320" cy="150" r="20" fill="#CCCCCC"/>
+  <rect x="280" y="120" width="80" height="60" rx="8" stroke="#CCCCCC" stroke-width="3" fill="none"/>
+  <rect x="300" y="110" width="40" height="15" rx="3" fill="#CCCCCC"/>
+  
+  <!-- Text -->
+  <text x="320" y="250" font-family="Arial, sans-serif" font-size="16" fill="#999999" text-anchor="middle">
+    Kamera nedostupná na HTTPS
+  </text>
+  <text x="320" y="275" font-family="Arial, sans-serif" font-size="14" fill="#AAAAAA" text-anchor="middle">
+    Klepněte na ikonu pro otevření v novém okně
+  </text>
+</svg>
