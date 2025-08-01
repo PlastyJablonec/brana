@@ -29,9 +29,9 @@ const HttpsWarning: React.FC = () => {
           Omezená funkcionalita na HTTPS
         </div>
         <div style={{ opacity: 0.9 }}>
-          MQTT ovládání a kamera nejsou dostupné kvůli bezpečnostním omezením.
+          MQTT ovládání a kamera môžu byť blokované kvôli mixed content policy.
           <br />
-          Pro plnou funkcionalnost použijte HTTP verzi.
+          <strong>Riešenia:</strong> 1) Povoliť mixed content v prehliadači 2) Použiť HTTP verziu
         </div>
       </div>
       <a

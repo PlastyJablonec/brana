@@ -79,20 +79,19 @@ export class MqttService {
           return;
         }
         
-        // Handle HTTPS mixed content policy
+        // Handle protocol selection
         const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
         let brokerUrl = this.brokerUrl;
         
         if (isHttps) {
-          // HTTPS pages cannot connect to WS (only WSS)
-          console.error('🚨 MQTT Service: HTTPS detected but MQTT server only supports WS (not WSS)');
-          console.error('🚨 MQTT Service: Mixed content policy prevents WS connection on HTTPS');
-          console.error('💡 Solution: Use HTTP version for full MQTT functionality');
+          // Try WSS first (secure), but server doesn't support it
+          // So we'll try WS and let browser handle mixed content policy
+          console.warn('🚨 MQTT Service: HTTPS detected, trying WS connection anyway');
+          console.warn('💡 Browser may block this due to mixed content policy');
           
-          // Reject immediately with clear error message
-          const httpsError = new Error('MQTT nedostupné na HTTPS - použijte HTTP verzi aplikace pro ovládání brány');
-          reject(httpsError);
-          return;
+          // Force WS - let browser decide if it's allowed
+          brokerUrl = brokerUrl.replace('wss://', 'ws://');
+          console.log('🔧 MqttService: HTTPS page using WS:', brokerUrl);
         } else {
           // On HTTP, force WS to avoid certificate issues
           brokerUrl = brokerUrl.replace('wss://', 'ws://');
@@ -127,7 +126,15 @@ export class MqttService {
           console.error('❌ MQTT Connection Error:', error);
           this.currentStatus.isConnected = false;
           this.notifyStatusChange();
-          reject(error);
+          
+          // Check if it's a mixed content error on HTTPS
+          if (isHttps && error.message.includes('insecure WebSocket')) {
+            console.error('💡 Mixed content blocked - MQTT requires HTTP or manual browser permission');
+            const mixedContentError = new Error('MQTT blokované kvôli mixed content policy - povoľte v prehliadači alebo použite HTTP verziu');
+            reject(mixedContentError);
+          } else {
+            reject(error);
+          }
         });
 
         this.client.on('close', () => {
