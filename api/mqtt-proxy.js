@@ -96,18 +96,22 @@ export default function handler(req, res) {
     // Handle MQTT publish commands
     const { topic, message } = req.body;
     
-    if (!client || !client.connected) {
-      res.status(503).json({ error: 'MQTT not connected' });
+    if (!client) {
+      console.error('MQTT Proxy: No client available for publish');
+      res.status(503).json({ error: 'MQTT client not initialized' });
       return;
     }
 
+    // If not connected, try to publish anyway - MQTT client handles queuing
+    console.log(`MQTT Proxy: Attempting to publish to ${topic}: ${message} (connected: ${client.connected})`);
+    
     client.publish(topic, message, { qos: 1 }, (err) => {
       if (err) {
         console.error('MQTT Proxy: Publish error:', err);
         res.status(500).json({ error: 'Publish failed', details: err.message });
       } else {
-        console.log(`MQTT Proxy: Published to ${topic}: ${message}`);
-        res.status(200).json({ success: true, topic, message });
+        console.log(`MQTT Proxy: ✅ Successfully published to ${topic}: ${message}`);
+        res.status(200).json({ success: true, topic, message, connected: client.connected });
       }
     });
     return;

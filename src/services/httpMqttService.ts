@@ -241,12 +241,27 @@ export class HttpMqttService {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Publish failed: ${errorData.error || response.statusText}`);
+        let errorMessage = `HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || response.statusText;
+        } catch (parseError) {
+          console.warn('Could not parse error response:', parseError);
+        }
+        
+        console.error(`❌ HTTP MQTT: Publish failed with status ${response.status}:`, errorMessage);
+        throw new Error(`Publish failed: ${errorMessage}`);
       }
 
-      const result = await response.json();
-      console.log(`✅ HTTP MQTT: Command sent:`, result);
+      let result;
+      try {
+        result = await response.json();
+        console.log(`✅ HTTP MQTT: Command sent successfully:`, result);
+      } catch (parseError) {
+        console.warn('Could not parse success response, but request succeeded:', parseError);
+        console.log(`✅ HTTP MQTT: Command sent (status ${response.status})`);
+        result = { success: true, status: response.status };
+      }
 
       // Log activity to Firestore asynchronously
       this.logActivityToFirestore(userEmail, action, message)
