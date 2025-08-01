@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ovládání Brány - Funkční Verze</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        .status-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .status-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            border-left: 5px solid #007bff;
+        }
+        .status-card h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .status-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .control-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            border-radius: 8px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .control-btn:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+        }
+        .control-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .camera-section {
+            margin-top: 30px;
+            text-align: center;
+        }
+        .camera-feed {
+            max-width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        .log {
+            background: #000;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            height: 200px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .mqtt-status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            text-align: center;
+            font-weight: bold;
+        }
+        .mqtt-connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .mqtt-disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏠 Ovládání Brány a Garáže</h1>
+        
+        <div id="mqtt-status" class="mqtt-status mqtt-disconnected">
+            MQTT: Připojování...
+        </div>
+
+        <div class="status-panel">
+            <div class="status-card">
+                <h3>🚪 Stav Brány</h3>
+                <div id="gate-status" class="status-value">Načítání...</div>
+            </div>
+            <div class="status-card">
+                <h3>🏠 Stav Garáže</h3>
+                <div id="garage-status" class="status-value">Načítání...</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="gate-btn" class="control-btn" onclick="sendGateCommand()">
+                🚪 Ovládat Bránu
+            </button>
+            <button id="garage-btn" class="control-btn" onclick="sendGarageCommand()">
+                🏠 Ovládat Garáž
+            </button>
+            <button id="stop-btn" class="control-btn" onclick="sendStopCommand()" style="background: #dc3545;">
+                🛑 STOP Režim
+            </button>
+        </div>
+
+        <div class="camera-section">
+            <h3>📹 Kamera</h3>
+            <img id="camera-feed" class="camera-feed" src="http://89.24.76.191:10180/photo.jpg" alt="Camera Feed">
+        </div>
+
+        <div id="log" class="log"></div>
+    </div>
+
+    <script src="https://unpkg.com/mqtt@5.13.3/dist/mqtt.min.js"></script>
+    <script>
+        let client = null;
+        let isConnected = false;
+
+        // MQTT Configuration
+        const MQTT_CONFIG = {
+            broker: 'ws://89.24.76.191:9001',
+            options: {
+                clientId: 'gate-control-' + Math.random().toString(16).substr(2, 8),
+                keepalive: 30,
+                protocolVersion: 4,
+                reconnectPeriod: 3000,
+                connectTimeout: 30000,
+                clean: true
+            }
+        };
+
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${time}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        function updateMQTTStatus(connected) {
+            const statusDiv = document.getElementById('mqtt-status');
+            if (connected) {
+                statusDiv.textContent = 'MQTT: ✅ Připojeno';
+                statusDiv.className = 'mqtt-status mqtt-connected';
+            } else {
+                statusDiv.textContent = 'MQTT: ❌ Odpojeno';
+                statusDiv.className = 'mqtt-status mqtt-disconnected';
+            }
+            
+            // Enable/disable buttons
+            const buttons = document.querySelectorAll('.control-btn');
+            buttons.forEach(btn => btn.disabled = !connected);
+        }
+
+        function connectMQTT() {
+            log('🔌 Připojování k MQTT broker: ' + MQTT_CONFIG.broker);
+            
+            try {
+                client = mqtt.connect(MQTT_CONFIG.broker, MQTT_CONFIG.options);
+
+                client.on('connect', () => {
+                    isConnected = true;
+                    log('✅ MQTT připojeno úspěšně!');
+                    updateMQTTStatus(true);
+                    
+                    // Subscribe to status topics
+                    client.subscribe('IoT/Brana/Status', (err) => {
+                        if (err) {
+                            log('❌ Chyba při subscribe na IoT/Brana/Status: ' + err.message);
+                        } else {
+                            log('📡 Přihlášeno k odběru IoT/Brana/Status');
+                        }
+                    });
+                    
+                    client.subscribe('IoT/Brana/Status2', (err) => {
+                        if (err) {
+                            log('❌ Chyba při subscribe na IoT/Brana/Status2: ' + err.message);
+                        } else {
+                            log('📡 Přihlášeno k odběru IoT/Brana/Status2');
+                        }
+                    });
+                });
+
+                client.on('message', (topic, message) => {
+                    const msg = message.toString();
+                    log(`📨 Zpráva: ${topic} = "${msg}"`);
+                    
+                    if (topic === 'IoT/Brana/Status') {
+                        document.getElementById('gate-status').textContent = parseGateStatus(msg);
+                    } else if (topic === 'IoT/Brana/Status2') {
+                        document.getElementById('garage-status').textContent = parseGarageStatus(msg);
+                    }
+                });
+
+                client.on('error', (error) => {
+                    isConnected = false;
+                    log('❌ MQTT chyba: ' + error.message);
+                    updateMQTTStatus(false);
+                });
+
+                client.on('close', () => {
+                    isConnected = false;
+                    log('🔌 MQTT odpojeno - pokus o znovupřipojení...');
+                    updateMQTTStatus(false);
+                });
+
+                client.on('reconnect', () => {
+                    log('🔄 MQTT pokus o znovupřipojení...');
+                });
+
+                client.on('offline', () => {
+                    isConnected = false;
+                    log('📴 MQTT offline');
+                    updateMQTTStatus(false);
+                });
+
+            } catch (error) {
+                log('❌ MQTT setup chyba: ' + error.message);
+                updateMQTTStatus(false);
+            }
+        }
+
+        function parseGateStatus(status) {
+            switch (status.toUpperCase()) {
+                case 'P1': return 'Zavřena';
+                case 'P2': return 'Otevřena';
+                case 'P3': return 'Otevírá se...';
+                case 'P4': return 'Zavírá se...';
+                default: return status;
+            }
+        }
+
+        function parseGarageStatus(status) {
+            switch (status.toUpperCase()) {
+                case 'P7': return 'Zavřena';
+                case 'P8': return 'Otevřena';
+                case 'P9': return 'Otevírá se...';
+                case 'P10': return 'Zavírá se...';
+                default: return status;
+            }
+        }
+
+        function sendCommand(command, action) {
+            if (!isConnected || !client) {
+                alert('MQTT není připojeno!');
+                return;
+            }
+
+            log(`📤 Odesílání příkazu: ${command} (${action})`);
+            
+            client.publish('IoT/Brana/Ovladani', command, { qos: 1 }, (error) => {
+                if (error) {
+                    log('❌ Chyba při odesílání příkazu: ' + error.message);
+                    alert('Chyba při odesílání příkazu!');
+                } else {
+                    log(`✅ Příkaz "${command}" odeslán úspěšně!`);
+                }
+            });
+        }
+
+        function sendGateCommand() {
+            sendCommand('1', 'Brána');
+        }
+
+        function sendGarageCommand() {
+            sendCommand('3', 'Garáž');
+        }
+
+        function sendStopCommand() {
+            sendCommand('6', 'STOP režim');
+        }
+
+        // Camera refresh
+        function refreshCamera() {
+            const img = document.getElementById('camera-feed');
+            const timestamp = Date.now();
+            img.src = `http://89.24.76.191:10180/photo.jpg?t=${timestamp}`;
+        }
+
+        // Initialize
+        window.onload = function() {
+            log('🚀 Aplikace spuštěna');
+            connectMQTT();
+            
+            // Refresh camera every 2 seconds
+            setInterval(refreshCamera, 2000);
+            refreshCamera();
+            
+            updateMQTTStatus(false);
+        };
+    </script>
+</body>
+</html>

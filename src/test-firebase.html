@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Firebase Test</title>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth.js"></script>
+</head>
+<body>
+    <h1>Firebase Connection Test</h1>
+    <div id="result"></div>
+    
+    <script>
+        // Firebase config
+        const firebaseConfig = {
+            apiKey: "AIzaSyBaDmIBLtw4ck4eUJMmGScwPBPYuIv8QSU",
+            authDomain: "brana-a71fe.firebaseapp.com",
+            projectId: "brana-a71fe"
+        };
+        
+        // Initialize Firebase
+        try {
+            firebase.initializeApp(firebaseConfig);
+            document.getElementById('result').innerHTML = '✅ Firebase initialized successfully';
+            
+            // Test auth
+            const auth = firebase.auth();
+            auth.signInWithEmailAndPassword('admin@test.cz', 'test123')
+                .then((userCredential) => {
+                    document.getElementById('result').innerHTML += '<br>✅ Login successful: ' + userCredential.user.email;
+                })
+                .catch((error) => {
+                    document.getElementById('result').innerHTML += '<br>❌ Login failed: ' + error.message;
+                });
+                
+        } catch (error) {
+            document.getElementById('result').innerHTML = '❌ Firebase initialization failed: ' + error.message;
+        }
+    </script>
+</body>
+</html>

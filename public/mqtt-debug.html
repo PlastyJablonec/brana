@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MQTT Debug Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a1a; color: white; }
+        .result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background: #0f5132; }
+        .error { background: #842029; }
+        .info { background: #0c4a6e; }
+        .warning { background: #664d03; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; background: #0d6efd; color: white; border: none; border-radius: 5px; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        .command-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 MQTT Debug Test - Brána Control</h1>
+        
+        <div>
+            <button onclick="connectMQTT()">Connect MQTT</button>
+            <button onclick="disconnect()">Disconnect</button>
+            <button onclick="clearResults()">Clear Log</button>
+        </div>
+        
+        <div class="command-grid">
+            <button onclick="sendCommand('1')">Brána OTEVŘI (1)</button>
+            <button onclick="sendCommand('2')">Brána ZAVŘI (2)</button>
+            <button onclick="sendCommand('3')">Garáž OTEVŘI (3)</button>
+            <button onclick="sendCommand('4')">Garáž ZAVŘI (4)</button>
+            <button onclick="sendCommand('5')">Garáž STOP (5)</button>
+            <button onclick="sendCommand('6')">STOP Režim (6)</button>
+        </div>
+        
+        <div>
+            <input type="text" id="customCommand" placeholder="Custom command" value="">
+            <button onclick="sendCustomCommand()">Send Custom</button>
+        </div>
+        
+        <div id="results"></div>
+    </div>
+
+    <script src="https://unpkg.com/mqtt@5.13.3/dist/mqtt.min.js"></script>
+
+    <script>
+        let client = null;
+        let isConnected = false;
+
+        const MQTT_CONFIG = {
+            broker: 'ws://89.24.76.191:9001',
+            options: {
+                clientId: 'mqtt-debug-' + Math.random().toString(16).substr(2, 8),
+                keepalive: 30,
+                protocolVersion: 4,
+                reconnectPeriod: 1000,
+                connectTimeout: 30000,
+                clean: true
+            }
+        };
+
+        window.connectMQTT = function() {
+            if (isConnected) {
+                addResult('warning', '⚠️ Already connected to MQTT');
+                return;
+            }
+
+            addResult('info', `🔌 Connecting to MQTT broker: ${MQTT_CONFIG.broker}`);
+            addResult('info', `📋 Client ID: ${MQTT_CONFIG.options.clientId}`);
+
+            try {
+                client = mqtt.connect(MQTT_CONFIG.broker, MQTT_CONFIG.options);
+
+                client.on('connect', () => {
+                    isConnected = true;
+                    addResult('success', '✅ MQTT Connected successfully!');
+                    
+                    // Subscribe to status topics
+                    client.subscribe('IoT/Brana/Status', (err) => {
+                        if (err) {
+                            addResult('error', `❌ Failed to subscribe to IoT/Brana/Status: ${err.message}`);
+                        } else {
+                            addResult('success', '📡 Subscribed to IoT/Brana/Status');
+                        }
+                    });
+                    
+                    client.subscribe('IoT/Brana/Status2', (err) => {
+                        if (err) {
+                            addResult('error', `❌ Failed to subscribe to IoT/Brana/Status2: ${err.message}`);
+                        } else {
+                            addResult('success', '📡 Subscribed to IoT/Brana/Status2');
+                        }
+                    });
+
+                    // Subscribe to all IoT topics for debugging
+                    client.subscribe('IoT/#', (err) => {
+                        if (err) {
+                            addResult('error', `❌ Failed to subscribe to IoT/#: ${err.message}`);
+                        } else {
+                            addResult('info', '📡 Subscribed to IoT/# (all topics)');
+                        }
+                    });
+                });
+
+                client.on('message', (topic, message) => {
+                    const msg = message.toString();
+                    addResult('info', `📨 Received: ${topic} = "${msg}"`);
+                });
+
+                client.on('error', (error) => {
+                    addResult('error', `❌ MQTT Error: ${error.message}`);
+                    isConnected = false;
+                });
+
+                client.on('close', () => {
+                    addResult('warning', '🔌 MQTT Connection closed');
+                    isConnected = false;
+                });
+
+                client.on('reconnect', () => {
+                    addResult('info', '🔄 MQTT Reconnecting...');
+                });
+
+                client.on('offline', () => {
+                    addResult('warning', '📴 MQTT Client offline');
+                    isConnected = false;
+                });
+
+            } catch (error) {
+                addResult('error', `❌ MQTT Setup Error: ${error.message}`);
+            }
+        };
+
+        window.sendCommand = function(command) {
+            if (!isConnected || !client) {
+                addResult('error', '❌ MQTT not connected! Click "Connect MQTT" first.');
+                return;
+            }
+
+            const topic = 'IoT/Brana/Ovladani';
+            const commandNames = {
+                '1': 'Brána OTEVŘI',
+                '2': 'Brána ZAVŘI', 
+                '3': 'Garáž OTEVŘI',
+                '4': 'Garáž ZAVŘI',
+                '5': 'Garáž STOP',
+                '6': 'STOP Režim'
+            };
+
+            addResult('info', `📤 Sending command: ${command} (${commandNames[command] || 'Unknown'}) to ${topic}`);
+
+            client.publish(topic, command, { qos: 1 }, (error) => {
+                if (error) {
+                    addResult('error', `❌ Failed to send command: ${error.message}`);
+                } else {
+                    addResult('success', `✅ Command "${command}" sent successfully!`);
+                }
+            });
+        };
+
+        window.sendCustomCommand = function() {
+            const command = document.getElementById('customCommand').value;
+            if (!command) {
+                addResult('warning', '⚠️ Enter custom command first');
+                return;
+            }
+            sendCommand(command);
+        };
+
+        window.disconnect = function() {
+            if (client) {
+                client.end();
+                client = null;
+                isConnected = false;
+                addResult('info', '🔌 MQTT Disconnected');
+            }
+        };
+
+        window.clearResults = function() {
+            document.getElementById('results').innerHTML = '';
+        };
+
+        function addResult(type, message) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            results.appendChild(div);
+            results.scrollTop = results.scrollHeight;
+            console.log(`[${type.toUpperCase()}]`, message);
+        }
+
+        // Auto-connect on load
+        window.onload = function() {
+            addResult('info', '🚀 MQTT Debug Tool loaded');
+            addResult('info', '📋 Commands: 1=Brána otevři, 2=Brána zavři, 3=Garáž otevři, 4=Garáž zavři, 5=Garáž stop, 6=STOP režim');
+        };
+    </script>
+</body>
+</html>

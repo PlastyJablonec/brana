@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create User Document</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a1a; color: white; }
+        .result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background: #0f5132; }
+        .error { background: #842029; }
+        .info { background: #0c4a6e; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; background: #0d6efd; color: white; border: none; border-radius: 5px; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+        .container { max-width: 800px; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 Create User Document in Firestore</h1>
+        
+        <div>
+            <input type="email" id="email" value="admin@test.cz" placeholder="Email">
+            <input type="password" id="password" value="test123" placeholder="Password">
+            <button onclick="loginAndCreateUser()">Login & Create User Doc</button>
+            <button onclick="clearResults()">Clear</button>
+        </div>
+        
+        <div id="results"></div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBaDmIBLtw4ck4eUJMmGScwPBPYuIv8QSU",
+            authDomain: "brana-a71fe.firebaseapp.com",
+            projectId: "brana-a71fe",
+            storageBucket: "brana-a71fe.firebasestorage.app",
+            messagingSenderId: "1080619570120",
+            appId: "1:1080619570120:web:62c1ea8d1a78532672e6fd"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        window.loginAndCreateUser = async function() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            addResult('info', `🔐 Logging in as: ${email}`);
+            
+            try {
+                // Login first
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                
+                addResult('success', `✅ Login successful: ${user.email} (${user.uid})`);
+                
+                // Check if user document exists
+                const userDocRef = db.collection('users').doc(user.uid);
+                const userDoc = await userDocRef.get();
+                
+                if (userDoc.exists) {
+                    addResult('info', '📄 User document already exists:');
+                    addResult('info', JSON.stringify(userDoc.data(), null, 2));
+                } else {
+                    addResult('info', '📝 User document not found, creating...');
+                    
+                    // Create user document
+                    const userData = {
+                        email: user.email,
+                        displayName: user.displayName || 'Admin User',
+                        role: 'admin',
+                        permissions: {
+                            gate: true,
+                            garage: true,
+                            camera: true,
+                            stopMode: true,
+                            viewLogs: true,
+                            manageUsers: true,
+                            requireLocation: false
+                        },
+                        gpsEnabled: false,
+                        createdAt: new Date(),
+                        lastLogin: new Date()
+                    };
+                    
+                    await userDocRef.set(userData);
+                    
+                    addResult('success', '✅ User document created successfully!');
+                    addResult('info', `📄 Created document: ${JSON.stringify(userData, null, 2)}`);
+                    
+                    // Verify the document was created
+                    const verifyDoc = await userDocRef.get();
+                    if (verifyDoc.exists) {
+                        addResult('success', '✅ Verification: Document exists and is readable!');
+                    } else {
+                        addResult('error', '❌ Verification failed: Document not found after creation');
+                    }
+                }
+                
+            } catch (error) {
+                addResult('error', `❌ Error: ${error.code} - ${error.message}`);
+                console.error('Detailed error:', error);
+            }
+        };
+
+        window.clearResults = function() {
+            document.getElementById('results').innerHTML = '';
+        };
+
+        function addResult(type, message) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            results.appendChild(div);
+            console.log(`[${type.toUpperCase()}]`, message);
+        }
+
+        // Initial load
+        addResult('info', '🚀 Ready to create user document');
+    </script>
+</body>
+</html>

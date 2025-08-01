@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Firebase Test</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+</head>
+<body>
+    <h1>Firebase Connection Test</h1>
+    <div id="result">Testing Firebase connection...</div>
+    
+    <script>
+        // Firebase config
+        const firebaseConfig = {
+            apiKey: "AIzaSyBaDmIBLtw4ck4eUJMmGScwPBPYuIv8QSU",
+            authDomain: "brana-a71fe.firebaseapp.com",
+            projectId: "brana-a71fe",
+            storageBucket: "brana-a71fe.firebasestorage.app",
+            messagingSenderId: "1080619570120",
+            appId: "1:1080619570120:web:62c1ea8d1a78532672e6fd"
+        };
+        
+        // Initialize Firebase
+        try {
+            firebase.initializeApp(firebaseConfig);
+            document.getElementById('result').innerHTML = '✅ Firebase initialized successfully<br>';
+            
+            // Test connection
+            const auth = firebase.auth();
+            const db = firebase.firestore();
+            
+            // Test authentication
+            console.log('Testing login with admin@test.cz...');
+            document.getElementById('result').innerHTML += 'Testing login...<br>';
+            
+            auth.signInWithEmailAndPassword('admin@test.cz', 'test123')
+                .then((userCredential) => {
+                    const user = userCredential.user;
+                    document.getElementById('result').innerHTML += `✅ Login successful: ${user.email}<br>`;
+                    console.log('Login successful:', user);
+                    
+                    // Test Firestore
+                    return db.collection('users').doc(user.uid).get();
+                })
+                .then((doc) => {
+                    if (doc.exists) {
+                        document.getElementById('result').innerHTML += '✅ Firestore user document found<br>';
+                        console.log('User data:', doc.data());
+                    } else {
+                        document.getElementById('result').innerHTML += '❌ Firestore user document NOT found<br>';
+                        console.log('No user document found');
+                    }
+                })
+                .catch((error) => {
+                    document.getElementById('result').innerHTML += `❌ Error: ${error.code} - ${error.message}<br>`;
+                    console.error('Firebase error:', error);
+                });
+                
+        } catch (error) {
+            document.getElementById('result').innerHTML = '❌ Firebase initialization failed: ' + error.message;
+            console.error('Initialization error:', error);
+        }
+    </script>
+</body>
+</html>
