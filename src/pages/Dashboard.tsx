@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import CameraView from '../components/CameraView';
 import ThemeToggle from '../components/ThemeToggle';
+import HttpsWarning from '../components/HttpsWarning';
 import { mqttService } from '../services/mqttService';
 import { activityService } from '../services/activityService';
 import { useGateTimer } from '../hooks/useGateTimer';
@@ -323,6 +324,9 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="dashboard" style={{ padding: '16px', maxWidth: '800px', margin: '0 auto', minHeight: '100vh' }}>
+      {/* HTTPS Warning Banner */}
+      <HttpsWarning />
+      
       {/* Top Header with Material Design */}
       <div className="md-card md-card-elevated" style={{ marginBottom: '16px' }}>
         <div className="md-card-content" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

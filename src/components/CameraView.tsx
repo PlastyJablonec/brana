@@ -43,9 +43,10 @@ const CameraView: React.FC<CameraViewProps> = () => {
     // If on HTTPS, we can't load HTTP images due to mixed content policy
     if (isHttps) {
       console.warn('🚨 HTTPS detected - cannot load HTTP camera due to mixed content policy');
+      console.warn('💡 Solution: Use HTTP version for full camera functionality');
       // Show an informative error instead of trying to load
       if (imgRef.current) {
-        setOverlayText('Kamera nedostupná na HTTPS - otevřete kameru v novém okně');
+        setOverlayText('Kamera nedostupná na HTTPS - použijte HTTP verzi pro ovládání');
         setShowOverlay(true);
         setIsRealCamera(false);
       }

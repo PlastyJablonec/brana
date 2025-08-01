@@ -79,9 +79,25 @@ export class MqttService {
           return;
         }
         
-        // Force WS protocol for HTTPS pages to avoid WSS certificate issues
-        const brokerUrl = this.brokerUrl.replace('wss://', 'ws://');
-        console.log('🔧 MqttService: Using URL:', brokerUrl, '(forced WS)');
+        // Handle HTTPS mixed content policy
+        const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+        let brokerUrl = this.brokerUrl;
+        
+        if (isHttps) {
+          // HTTPS pages cannot connect to WS (only WSS)
+          console.error('🚨 MQTT Service: HTTPS detected but MQTT server only supports WS (not WSS)');
+          console.error('🚨 MQTT Service: Mixed content policy prevents WS connection on HTTPS');
+          console.error('💡 Solution: Use HTTP version for full MQTT functionality');
+          
+          // Reject immediately with clear error message
+          const httpsError = new Error('MQTT nedostupné na HTTPS - použijte HTTP verzi aplikace pro ovládání brány');
+          reject(httpsError);
+          return;
+        } else {
+          // On HTTP, force WS to avoid certificate issues
+          brokerUrl = brokerUrl.replace('wss://', 'ws://');
+          console.log('🔧 MqttService: HTTP detected, using WS:', brokerUrl);
+        }
         
         this.client = mqtt.connect(brokerUrl, this.options);
         console.log('🔗 MQTT client created:', !!this.client);
