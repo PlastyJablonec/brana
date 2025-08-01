@@ -115,7 +115,23 @@ export class HttpMqttService {
   }
 
   private parseGateStatus(status: string): GateStatusType {
+    // Handle both text messages and P codes
     const upperStatus = status.toUpperCase();
+    
+    // If it's already a text message, return it directly (if valid)
+    const validStatuses: GateStatusType[] = [
+      'Brána zavřena', 'Brána otevřena', 'Otevírá se...', 
+      'Zavírá se...', 'Zastavena', 'STOP režim'
+    ];
+    
+    for (const validStatus of validStatuses) {
+      if (status === validStatus) {
+        console.log(`🔄 HTTP MQTT: Parsed gate status: ${status} (direct match)`);
+        return validStatus;
+      }
+    }
+    
+    // Handle P codes
     switch (upperStatus) {
       case 'P1':
         return 'Brána zavřena';
@@ -136,6 +152,19 @@ export class HttpMqttService {
   }
 
   private parseGarageStatus(status: string): GarageStatusType {
+    // Handle both text messages and P codes
+    const validStatuses: GarageStatusType[] = [
+      'Garáž zavřena', 'Garáž otevřena', 'Garáž - otevírá se...', 'Garáž - zavírá se...'
+    ];
+    
+    for (const validStatus of validStatuses) {
+      if (status === validStatus) {
+        console.log(`🔄 HTTP MQTT: Parsed garage status: ${status} (direct match)`);
+        return validStatus;
+      }
+    }
+    
+    // Handle P codes
     const upperStatus = status.toUpperCase();
     switch (upperStatus) {
       case 'P7':
