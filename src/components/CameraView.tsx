@@ -35,25 +35,20 @@ const CameraView: React.FC<CameraViewProps> = () => {
 
   const refreshCamera = () => {
     const timestamp = Date.now();
-    
-    // Detect if we're on HTTPS and need a proxy
     const isHttps = window.location.protocol === 'https:';
-    let cameraBase = process.env.REACT_APP_CAMERA_URL || 'http://89.24.76.191:10180';
     
-    // If on HTTPS, we can't load HTTP images due to mixed content policy
+    let realUrl: string;
+    
     if (isHttps) {
-      console.warn('🚨 HTTPS detected - cannot load HTTP camera due to mixed content policy');
-      console.warn('💡 Solution: Use HTTP version for full camera functionality');
-      // Show an informative error instead of trying to load
-      if (imgRef.current) {
-        setOverlayText('Kamera nedostupná na HTTPS - použijte HTTP verzi pro ovládání');
-        setShowOverlay(true);
-        setIsRealCamera(false);
-      }
-      return; // Don't try to load HTTP content on HTTPS page
+      // Use proxy on HTTPS
+      realUrl = `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`;
+      console.log('🌐 HTTPS detected - using camera proxy:', realUrl);
+    } else {
+      // Direct connection on HTTP
+      const cameraBase = process.env.REACT_APP_CAMERA_URL || 'http://89.24.76.191:10180';
+      realUrl = `${cameraBase}/photo.jpg?t=${timestamp}&cache=${Math.random()}`;
+      console.log('🎥 HTTP detected - direct camera connection:', realUrl);
     }
-    
-    const realUrl = `${cameraBase}/photo.jpg?t=${timestamp}&cache=${Math.random()}`;
     
     if (imgRef.current) {
       let hasLoaded = false;
@@ -63,22 +58,23 @@ const CameraView: React.FC<CameraViewProps> = () => {
           setOverlayText('Kamera nedostupná');
           setIsRealCamera(false);
         }
-      }, 5000);
+      }, 10000); // Increased timeout for proxy
       
       imgRef.current.onload = () => {
         hasLoaded = true;
         clearTimeout(fallbackTimeout);
         const loadTime = Date.now();
         
-        // Kontrola, jestli je to skutečně real kamera (ne mock)
-        const isReal = imgRef.current?.src.includes('89.24.76.191') || imgRef.current?.src.includes('photo.jpg') || false;
+        // Check if it's real camera (including proxy)
+        const isReal = imgRef.current?.src.includes('camera-proxy') || 
+                       imgRef.current?.src.includes('89.24.76.191') || 
+                       imgRef.current?.src.includes('photo.jpg') || false;
         setIsRealCamera(isReal);
         
         if (isReal) {
           setShowOverlay(false);
           setLastSuccessfulLoad(loadTime);
         } else {
-          // Mock image - neaktualizuj timestamp
           setOverlayText('Používám testovací obraz');
         }
       };
@@ -86,7 +82,11 @@ const CameraView: React.FC<CameraViewProps> = () => {
       imgRef.current.onerror = () => {
         hasLoaded = true;
         clearTimeout(fallbackTimeout);
-        setOverlayText('Chyba načítání kamery');
+        if (isHttps) {
+          setOverlayText('Proxy kamera nedostupná');
+        } else {
+          setOverlayText('Chyba načítání kamery');
+        }
         setIsRealCamera(false);
       };
       

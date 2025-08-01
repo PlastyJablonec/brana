@@ -1,6 +1,7 @@
 import mqtt, { MqttClient, IClientOptions, IConnackPacket } from 'mqtt';
 import { db } from '../firebase/config';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
+import { httpMqttService } from './httpMqttService';
 
 export type GateStatusType = 'Brána zavřena' | 'Brána otevřena' | 'Otevírá se...' | 'Zavírá se...' | 'Zastavena' | 'STOP režim' | 'Neznámý stav';
 export type GarageStatusType = 'Garáž zavřena' | 'Garáž otevřena' | 'Garáž - otevírá se...' | 'Garáž - zavírá se...' | 'Neznámý stav';
@@ -72,6 +73,35 @@ export class MqttService {
         console.log(`🔌 Connecting to MQTT broker: ${this.brokerUrl}`);
         console.log('⚙️ MQTT options:', this.options);
         
+        // Handle protocol selection
+        const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+        
+        if (isHttps) {
+          console.log('🌐 MQTT Service: HTTPS detected, using HTTP proxy instead of WebSocket');
+          // Use HTTP proxy service on HTTPS
+          httpMqttService.connect()
+            .then(() => {
+              console.log('✅ MQTT connected via HTTP proxy');
+              this.currentStatus.isConnected = true;
+              this.notifyStatusChange();
+              
+              // Forward HTTP MQTT status changes to this service
+              httpMqttService.onStatusChange((status) => {
+                this.currentStatus = { ...status };
+                this.notifyStatusChange();
+              });
+              
+              resolve();
+            })
+            .catch((error) => {
+              console.error('❌ HTTP MQTT proxy connection failed:', error);
+              this.currentStatus.isConnected = false;
+              this.notifyStatusChange();
+              reject(error);
+            });
+          return;
+        }
+        
         if (!mqtt || typeof mqtt.connect !== 'function') {
           const error = new Error('MQTT library not available - mqtt.connect is not a function');
           console.error('❌ MQTT library error:', error);
@@ -79,24 +109,9 @@ export class MqttService {
           return;
         }
         
-        // Handle protocol selection
-        const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-        let brokerUrl = this.brokerUrl;
-        
-        if (isHttps) {
-          // Try WSS first (secure), but server doesn't support it
-          // So we'll try WS and let browser handle mixed content policy
-          console.warn('🚨 MQTT Service: HTTPS detected, trying WS connection anyway');
-          console.warn('💡 Browser may block this due to mixed content policy');
-          
-          // Force WS - let browser decide if it's allowed
-          brokerUrl = brokerUrl.replace('wss://', 'ws://');
-          console.log('🔧 MqttService: HTTPS page using WS:', brokerUrl);
-        } else {
-          // On HTTP, force WS to avoid certificate issues
-          brokerUrl = brokerUrl.replace('wss://', 'ws://');
-          console.log('🔧 MqttService: HTTP detected, using WS:', brokerUrl);
-        }
+        // On HTTP, use direct WebSocket connection
+        let brokerUrl = this.brokerUrl.replace('wss://', 'ws://');
+        console.log('🔧 MqttService: HTTP detected, using WS:', brokerUrl);
         
         this.client = mqtt.connect(brokerUrl, this.options);
         console.log('🔗 MQTT client created:', !!this.client);
@@ -195,14 +210,20 @@ export class MqttService {
   }
 
   public disconnect(): void {
-    if (this.client) {
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    
+    if (isHttps) {
+      console.log('🔌 Disconnecting HTTP MQTT proxy...');
+      httpMqttService.disconnect();
+    } else if (this.client) {
       console.log('🔌 Disconnecting MQTT client...');
       this.client.end(true); // Force close
       this.client = null;
-      this.currentStatus.isConnected = false;
-      this.notifyStatusChange();
-      console.log('✅ MQTT client disconnected');
     }
+    
+    this.currentStatus.isConnected = false;
+    this.notifyStatusChange();
+    console.log('✅ MQTT client disconnected');
   }
 
   private handleMessage(topic: string, message: string): void {
@@ -269,20 +290,43 @@ export class MqttService {
     console.log('🔌 MQTT client exists:', !!this.client);
     console.log('🔌 MQTT connected status:', this.currentStatus.isConnected);
     
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    
+    if (isHttps) {
+      console.log('🌐 Using HTTP MQTT proxy for gate command');
+      await httpMqttService.publishGateCommand(userEmail);
+      return;
+    }
+    
     this.validateConnection();
-
     const command = '1';
     console.log('📤 Publishing gate command:', command, 'for', userEmail);
     await this.publishCommand(command, userEmail, 'Brána');
   }
 
   public async publishGarageCommand(userEmail: string): Promise<void> {
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    
+    if (isHttps) {
+      console.log('🌐 Using HTTP MQTT proxy for garage command');
+      await httpMqttService.publishGarageCommand(userEmail);
+      return;
+    }
+    
     this.validateConnection();
     const command = '3';
     await this.publishCommand(command, userEmail, 'Garáž');
   }
 
   public async publishStopCommand(userEmail: string): Promise<void> {
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    
+    if (isHttps) {
+      console.log('🌐 Using HTTP MQTT proxy for stop command');
+      await httpMqttService.publishStopCommand(userEmail);
+      return;
+    }
+    
     this.validateConnection();
     const command = '6';
     await this.publishCommand(command, userEmail, 'STOP režim');
