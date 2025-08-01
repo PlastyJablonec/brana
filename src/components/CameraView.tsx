@@ -35,8 +35,7 @@ const CameraView: React.FC<CameraViewProps> = () => {
 
   const refreshCamera = () => {
     const timestamp = Date.now();
-    const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
-    const cameraBase = process.env.REACT_APP_CAMERA_URL || `${protocol}://89.24.76.191:10180`;
+    const cameraBase = process.env.REACT_APP_CAMERA_URL || 'http://89.24.76.191:10180';
     const realUrl = `${cameraBase}/photo.jpg?t=${timestamp}&cache=${Math.random()}`;
     
     if (imgRef.current) {
@@ -105,7 +104,7 @@ const CameraView: React.FC<CameraViewProps> = () => {
       {/* Camera Image */}
       <img
         ref={imgRef}
-        src={`${window.location.protocol === 'https:' ? 'https' : 'http'}://89.24.76.191:10180/photo.jpg`}
+        src="http://89.24.76.191:10180/photo.jpg"
         alt="Webkamera"
         style={{
           width: '100%',
@@ -170,7 +169,7 @@ const CameraView: React.FC<CameraViewProps> = () => {
           transition: 'background-color 0.2s',
           zIndex: 2
         }}
-        onClick={() => window.open(`${window.location.protocol === 'https:' ? 'https' : 'http'}://89.24.76.191:10180`, '_blank')}
+        onClick={() => window.open('http://89.24.76.191:10180', '_blank')}
         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
         title="Nastavení kamery"
@@ -199,7 +198,7 @@ const CameraView: React.FC<CameraViewProps> = () => {
         
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
-            onClick={() => window.open(`${window.location.protocol === 'https:' ? 'https' : 'http'}://89.24.76.191:10180`, '_blank')}
+            onClick={() => window.open('http://89.24.76.191:10180', '_blank')}
             className="btn-icon md-ripple"
             style={{
               background: 'var(--md-surface-variant)',
