@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../firebase/config';
-import DebugPanel from '../components/DebugPanel';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -89,7 +88,6 @@ const LoginPage: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative">
-      <DebugPanel />
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-32 w-80 h-80 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>

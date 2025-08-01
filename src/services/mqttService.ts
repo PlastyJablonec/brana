@@ -18,7 +18,7 @@ export class MqttService {
   };
 
   constructor(
-    private brokerUrl: string = process.env.REACT_APP_MQTT_URL || 'ws://89.24.76.191:9001',
+    private brokerUrl: string = process.env.REACT_APP_MQTT_URL || (window.location.protocol === 'https:' ? 'wss://89.24.76.191:9001' : 'ws://89.24.76.191:9001'),
     private options: any = {
       clientId: 'gate-control-' + Math.random().toString(16).substr(2, 8),
       clean: false, // Zachováme session

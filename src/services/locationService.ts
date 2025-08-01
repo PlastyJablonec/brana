@@ -67,21 +67,11 @@ class LocationService {
           console.error('📍 LocationService: Error code:', error.code);
           console.error('📍 LocationService: Error message:', error.message);
           
-          // Pro PC/desktop aplikace používáme automaticky fallback pro všechny chyby
-          if (error.code === 2 || error.code === 3 || error.message.includes('429') || error.message.includes('network service') || error.message.includes('Timeout')) {
-            console.log('📍 LocationService: GPS failed (code ' + error.code + '), using fallback location for desktop');
-            const fallback = this.getFallbackLocation();
-            this.currentLocation = fallback;
-            this.lastUpdateTime = Date.now();
-            console.log('📍 LocationService: ✅ SUCCESS - Fallback location resolved:', fallback);
-            resolve(fallback);
-            return;
-          }
-          
-          // Jen pro permission denied (code 1) vraťme skutečnou chybu
+          // GPS selhalo - BEZ FALLBACK! Reálná poloha nebo nic.
+          console.error('📍 LocationService: GPS nedostupné - žádná falešná lokace!');
           const locationError: LocationError = {
             code: error.code,
-            message: this.getDetailedErrorMessage(error)
+            message: this.getDetailedErrorMessage(error) + ' - GPS je vyžadováno!'
           };
           console.error('📍 LocationService: Formatted error:', locationError);
           reject(locationError);
