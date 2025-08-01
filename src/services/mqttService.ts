@@ -47,7 +47,11 @@ export class MqttService {
           throw new Error('MQTT library not available - mqtt.connect is not a function');
         }
         
-        this.client = mqtt.connect(this.brokerUrl, this.options);
+        // Force WS protocol for HTTPS pages to avoid WSS certificate issues
+        const brokerUrl = this.brokerUrl.replace('wss://', 'ws://');
+        console.log('🔧 MqttService: Using URL:', brokerUrl, '(forced WS)');
+        
+        this.client = mqtt.connect(brokerUrl, this.options);
         console.log('🔗 MQTT client created:', !!this.client);
 
         this.client.on('connect', () => {
