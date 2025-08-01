@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User as FirebaseUser, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, collection } from 'firebase/firestore';
+import firebase from 'firebase/compat/app';
 import { auth, db } from '../firebase/config';
-import { IAuthContext, IAuthUser, User } from '../types';
-import { useAsyncOperation } from '../hooks/useAsyncOperation';
+import { IAuthContext, User } from '../types';
+
+type FirebaseUser = firebase.User;
 
 interface IUserPermissions {
   gate: boolean;
@@ -46,20 +46,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('🔐 Attempting Firebase login with email:', email);
       setIsInitialLogin(true);
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await auth.signInWithEmailAndPassword(email, password);
       console.log('✅ Firebase login successful:', userCredential.user?.uid);
-    } catch (error) {
+    } catch (error: any) {
       setIsInitialLogin(false);
-      const authError = error as { code: string; message: string };
-      console.error('❌ Firebase login error:', authError.code, authError.message);
-      throw new Error(`Login failed: ${authError.message}`);
+      console.error('❌ Firebase login error:', error.code, error.message);
+      throw new Error(`Login failed: ${error.message}`);
     }
   };
 
   const logout = async (): Promise<void> => {
     try {
       console.log('🚪 Logging out user...');
-      await signOut(auth);
+      await auth.signOut();
       console.log('✅ User logged out successfully');
     } catch (error) {
       console.error('❌ Logout error:', error);
@@ -78,10 +77,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('📊 Fetching user data from Firestore for:', firebaseUser.uid);
       
-      const userDocRef = doc(db, 'users', firebaseUser.uid);
-      const userDoc = await getDoc(userDocRef);
+      const userDoc = await db.collection('users').doc(firebaseUser.uid).get();
       
-      if (userDoc.exists()) {
+      if (userDoc.exists) {
         const userData = userDoc.data();
         console.log('✅ User found in Firestore:', userData?.email);
         
@@ -111,7 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Only update lastLogin on actual login, not refresh
         if (isInitialLogin) {
           console.log('🔧 AuthContext: Updating lastLogin for initial login');
-          await updateDoc(userDocRef, {
+          await db.collection('users').doc(firebaseUser.uid).update({
             lastLogin: new Date()
           });
           setIsInitialLogin(false);
@@ -147,9 +145,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Try to save to Firestore for future use
       try {
-        await setDoc(userDocRef, {
+        await db.collection('users').doc(firebaseUser.uid).set({
           email: user.email,
           displayName: user.displayName,
+          role: user.role,
+          permissions: user.permissions,
+          gpsEnabled: user.gpsEnabled,
           createdAt: new Date(),
           lastLogin: new Date()
         });
@@ -168,7 +169,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     console.log('🔧 AuthContext: Setting up auth state listener');
     
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       if (firebaseUser) {
         try {
           await fetchUserData(firebaseUser);
@@ -214,7 +215,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     currentUser,
     loading,
     login,
-    logout
+    logout,
+    refreshUser
   };
 
   return (
