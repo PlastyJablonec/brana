@@ -1,30 +1,60 @@
-// @ts-nocheck
-import mqtt from 'mqtt';
+import mqtt, { MqttClient, IClientOptions, IConnackPacket } from 'mqtt';
 import { db } from '../firebase/config';
+import { collection, addDoc, Timestamp } from 'firebase/firestore';
 
-export interface MqttStatus {
-  gateStatus: string;
-  garageStatus: string;
+export type GateStatusType = 'Brána zavřena' | 'Brána otevřena' | 'Otevírá se...' | 'Zavírá se...' | 'Zastavena' | 'STOP režim' | 'Neznámý stav';
+export type GarageStatusType = 'Garáž zavřena' | 'Garáž otevřena' | 'Garáž - otevírá se...' | 'Garáž - zavírá se...' | 'Neznámý stav';
+
+export interface IMqttStatus {
+  gateStatus: GateStatusType;
+  garageStatus: GarageStatusType;
   isConnected: boolean;
 }
 
+export interface IMqttConnectionOptions extends IClientOptions {
+  clientId: string;
+  clean: boolean;
+  reconnectPeriod: number;
+  connectTimeout: number;
+  keepalive: number;
+  resubscribe: boolean;
+  queueQoSZero: boolean;
+  will: {
+    topic: string;
+    payload: string;
+    qos: 0 | 1 | 2;
+    retain: boolean;
+  };
+}
+
+export interface IActivityLog {
+  user: string;
+  action: string;
+  command: string;
+  timestamp: Timestamp;
+  status: 'sent' | 'failed';
+}
+
+type StatusCallback = (status: IMqttStatus) => void;
+type UnsubscribeFunction = () => void;
+
 export class MqttService {
-  private client: any | null = null;
-  private statusCallbacks: Array<(status: MqttStatus) => void> = [];
-  private currentStatus: MqttStatus = {
+  private client: MqttClient | null = null;
+  private statusCallbacks: StatusCallback[] = [];
+  private currentStatus: IMqttStatus = {
     gateStatus: 'Neznámý stav',
     garageStatus: 'Neznámý stav',
     isConnected: false
   };
 
   constructor(
-    private brokerUrl: string = process.env.REACT_APP_MQTT_URL || 'ws://89.24.76.191:9001',
-    private options: any = {
-      clientId: 'gate-control-' + Math.random().toString(16).substr(2, 8),
-      clean: false, // Zachováme session
-      reconnectPeriod: 5000, // Prodloužíme reconnect interval
-      connectTimeout: 15 * 1000, // Prodloužíme timeout
-      keepalive: 60, // Prodloužíme keepalive
+    private readonly brokerUrl: string = process.env.REACT_APP_MQTT_URL || 'ws://89.24.76.191:9001',
+    private readonly options: IMqttConnectionOptions = {
+      clientId: `gate-control-${Math.random().toString(16).substring(2, 8)}`,
+      clean: false,
+      reconnectPeriod: 5000,
+      connectTimeout: 15000,
+      keepalive: 60,
       resubscribe: true,
       queueQoSZero: false,
       will: {
@@ -36,15 +66,17 @@ export class MqttService {
     }
   ) {}
 
-  connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
+  public async connect(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
       try {
         console.log(`🔌 Connecting to MQTT broker: ${this.brokerUrl}`);
         console.log('⚙️ MQTT options:', this.options);
-        console.log('📚 MQTT library:', typeof mqtt, mqtt);
         
         if (!mqtt || typeof mqtt.connect !== 'function') {
-          throw new Error('MQTT library not available - mqtt.connect is not a function');
+          const error = new Error('MQTT library not available - mqtt.connect is not a function');
+          console.error('❌ MQTT library error:', error);
+          reject(error);
+          return;
         }
         
         // Force WS protocol for HTTPS pages to avoid WSS certificate issues
@@ -54,33 +86,29 @@ export class MqttService {
         this.client = mqtt.connect(brokerUrl, this.options);
         console.log('🔗 MQTT client created:', !!this.client);
 
-        this.client.on('connect', () => {
-          console.log('✅ MQTT Connected successfully');
+        this.client.on('connect', (connack: IConnackPacket) => {
+          console.log('✅ MQTT Connected successfully', connack);
           this.currentStatus.isConnected = true;
           console.log('🔄 MQTT status updated:', this.currentStatus);
           this.notifyStatusChange();
           
-          // Subscribe to status topics
-          this.client?.subscribe('IoT/Brana/Status', (err: any) => {
-            if (err) console.error('Failed to subscribe to gate status:', err);
-            else console.log('✅ Subscribed to IoT/Brana/Status');
-          });
-          
-          this.client?.subscribe('IoT/Brana/Status2', (err: any) => {
-            if (err) console.error('Failed to subscribe to garage status:', err);
-            else console.log('✅ Subscribed to IoT/Brana/Status2');
-          });
-          
-          resolve();
+          // Subscribe to status topics with proper error handling
+          this.subscribeToTopics()
+            .then(() => resolve())
+            .catch(error => {
+              console.error('❌ Failed to subscribe to topics:', error);
+              reject(error);
+            });
         });
 
-        this.client.on('message', (topic: string, message: any) => {
-          console.log(`📨 MQTT Message: ${topic} = ${message.toString()}`);
-          this.handleMessage(topic, message.toString());
+        this.client.on('message', (topic: string, message: Buffer) => {
+          const messageStr = message.toString();
+          console.log(`📨 MQTT Message: ${topic} = ${messageStr}`);
+          this.handleMessage(topic, messageStr);
         });
 
-        this.client.on('error', (error: any) => {
-          console.error('MQTT Connection Error:', error);
+        this.client.on('error', (error: Error) => {
+          console.error('❌ MQTT Connection Error:', error);
           this.currentStatus.isConnected = false;
           this.notifyStatusChange();
           reject(error);
@@ -109,18 +137,48 @@ export class MqttService {
         });
 
       } catch (error) {
-        console.error('MQTT Setup Error:', error);
-        reject(error);
+        const mqttError = error instanceof Error ? error : new Error('Unknown MQTT setup error');
+        console.error('❌ MQTT Setup Error:', mqttError);
+        reject(mqttError);
       }
     });
   }
 
-  disconnect(): void {
+  private async subscribeToTopics(): Promise<void> {
+    if (!this.client) {
+      throw new Error('MQTT client not available for subscription');
+    }
+
+    const subscriptions = [
+      { topic: 'IoT/Brana/Status', name: 'gate status' },
+      { topic: 'IoT/Brana/Status2', name: 'garage status' }
+    ];
+
+    const subscriptionPromises = subscriptions.map(({ topic, name }) => 
+      new Promise<void>((resolve, reject) => {
+        this.client!.subscribe(topic, { qos: 1 }, (err) => {
+          if (err) {
+            console.error(`❌ Failed to subscribe to ${name}:`, err);
+            reject(new Error(`Failed to subscribe to ${topic}: ${err.message}`));
+          } else {
+            console.log(`✅ Subscribed to ${topic}`);
+            resolve();
+          }
+        });
+      })
+    );
+
+    await Promise.all(subscriptionPromises);
+  }
+
+  public disconnect(): void {
     if (this.client) {
-      this.client.end();
+      console.log('🔌 Disconnecting MQTT client...');
+      this.client.end(true); // Force close
       this.client = null;
       this.currentStatus.isConnected = false;
       this.notifyStatusChange();
+      console.log('✅ MQTT client disconnected');
     }
   }
 
@@ -143,9 +201,10 @@ export class MqttService {
     this.notifyStatusChange();
   }
 
-  private parseGateStatus(status: string): string {
+  private parseGateStatus(status: string): GateStatusType {
     // Parse gate status based on the original HTML implementation
-    switch (status.toUpperCase()) {
+    const upperStatus = status.toUpperCase();
+    switch (upperStatus) {
       case 'P1':
         return 'Brána zavřena';
       case 'P2':
@@ -159,13 +218,15 @@ export class MqttService {
       case 'P6':
         return 'STOP režim';
       default:
-        return status;
+        console.warn(`Unknown gate status received: ${status}`);
+        return 'Neznámý stav';
     }
   }
 
-  private parseGarageStatus(status: string): string {
+  private parseGarageStatus(status: string): GarageStatusType {
     // Parse garage status
-    switch (status.toUpperCase()) {
+    const upperStatus = status.toUpperCase();
+    switch (upperStatus) {
       case 'P7':
         return 'Garáž zavřena';
       case 'P8':
@@ -175,103 +236,115 @@ export class MqttService {
       case 'P10':
         return 'Garáž - zavírá se...';
       default:
-        return status;
+        console.warn(`Unknown garage status received: ${status}`);
+        return 'Neznámý stav';
     }
   }
 
-  async publishGateCommand(userEmail: string): Promise<void> {
+  public async publishGateCommand(userEmail: string): Promise<void> {
     console.log('📡 publishGateCommand called for:', userEmail);
     console.log('🔌 MQTT client exists:', !!this.client);
     console.log('🔌 MQTT connected status:', this.currentStatus.isConnected);
     
+    this.validateConnection();
+
+    const command = '1';
+    console.log('📤 Publishing gate command:', command, 'for', userEmail);
+    await this.publishCommand(command, userEmail, 'Brána');
+  }
+
+  public async publishGarageCommand(userEmail: string): Promise<void> {
+    this.validateConnection();
+    const command = '3';
+    await this.publishCommand(command, userEmail, 'Garáž');
+  }
+
+  public async publishStopCommand(userEmail: string): Promise<void> {
+    this.validateConnection();
+    const command = '6';
+    await this.publishCommand(command, userEmail, 'STOP režim');
+  }
+
+  private validateConnection(): void {
     if (!this.client || !this.currentStatus.isConnected) {
       const error = `MQTT not connected - client: ${!!this.client}, connected: ${this.currentStatus.isConnected}`;
       console.error('❌', error);
       throw new Error(error);
     }
-
-    const command = '1';
-    console.log('📤 Publishing command:', command, 'for', userEmail);
-    await this.publishCommand(command, userEmail, 'Brána');
-  }
-
-  async publishGarageCommand(userEmail: string): Promise<void> {
-    if (!this.client || !this.currentStatus.isConnected) {
-      throw new Error('MQTT not connected');
-    }
-
-    const command = '3';
-    await this.publishCommand(command, userEmail, 'Garáž');
-  }
-
-  async publishStopCommand(userEmail: string): Promise<void> {
-    if (!this.client || !this.currentStatus.isConnected) {
-      throw new Error('MQTT not connected');
-    }
-
-    const command = '6';
-    await this.publishCommand(command, userEmail, 'STOP režim');
   }
 
   private async publishCommand(command: string, userEmail: string, action: string): Promise<void> {
-    return new Promise((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       if (!this.client) {
-        reject(new Error('MQTT client not available'));
+        const error = new Error('MQTT client not available');
+        console.error('❌', error.message);
+        reject(error);
         return;
       }
 
-      this.client.publish('IoT/Brana/Ovladani', command, { qos: 1 }, async (error: any) => {
-        if (error) {
-          console.error('MQTT Publish error:', error);
-          reject(error);
+      this.client.publish('IoT/Brana/Ovladani', command, { qos: 1 }, (publishError) => {
+        if (publishError) {
+          console.error('❌ MQTT Publish error:', publishError);
+          reject(publishError);
         } else {
-          console.log(`MQTT Command sent: ${command} by ${userEmail}`);
+          console.log(`✅ MQTT Command sent: ${command} by ${userEmail}`);
           
-          // Log activity to Firestore (optional - doesn't block if AdBlocked)
-          try {
-            await db.collection('activity_logs').add({
-              user: userEmail,
-              action: action,
-              command: command,
-              timestamp: new Date(),
-              status: 'sent'
-            });
-            console.log('Activity logged to Firestore (optional)');
-          } catch (logError) {
-            console.warn('Firestore logging failed, but command was sent successfully:', logError);
-            // Don't throw error - MQTT command was successful!
-          }
-          
+          // Log activity to Firestore asynchronously (non-blocking)
+          this.logActivityToFirestore(userEmail, action, command)
+            .then(() => console.log('📝 Activity logged to Firestore'))
+            .catch(logError => {
+              console.warn('⚠️ Firestore logging failed, but command was sent successfully:', logError);
+            })
+            .finally(() => resolve());
+        }
+      });
+    });
+  }
+
+  private async logActivityToFirestore(userEmail: string, action: string, command: string): Promise<void> {
+    try {
+      const activityLog: IActivityLog = {
+        user: userEmail,
+        action: action,
+        command: command,
+        timestamp: Timestamp.now(),
+        status: 'sent'
+      };
+
+      await addDoc(collection(db, 'activity_logs'), activityLog);
+    } catch (error) {
+      const firestoreError = error instanceof Error ? error : new Error('Unknown Firestore error');
+      console.error('❌ Failed to log activity to Firestore:', firestoreError);
+      throw firestoreError;
+    }
+  }
+
+  public async publishMessage(topic: string, message: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      if (!this.client) {
+        const error = new Error('MQTT client not available');
+        console.error('❌', error.message);
+        reject(error);
+        return;
+      }
+
+      this.client.publish(topic, message, { qos: 1 }, (publishError) => {
+        if (publishError) {
+          console.error('❌ MQTT Publish error:', publishError);
+          reject(publishError);
+        } else {
+          console.log(`✅ MQTT Message sent to ${topic}: ${message}`);
           resolve();
         }
       });
     });
   }
 
-  async publishMessage(topic: string, message: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (!this.client) {
-        reject(new Error('MQTT client not available'));
-        return;
-      }
-
-      this.client.publish(topic, message, { qos: 1 }, (error: any) => {
-        if (error) {
-          console.error('MQTT Publish error:', error);
-          reject(error);
-        } else {
-          console.log(`MQTT Message sent to ${topic}: ${message}`);
-          resolve();
-        }
-      });
-    });
-  }
-
-  onStatusChange(callback: (status: MqttStatus) => void): () => void {
+  public onStatusChange(callback: StatusCallback): UnsubscribeFunction {
     this.statusCallbacks.push(callback);
     
     // Return unsubscribe function
-    return () => {
+    return (): void => {
       this.statusCallbacks = this.statusCallbacks.filter(cb => cb !== callback);
     };
   }
@@ -291,11 +364,11 @@ export class MqttService {
     });
   }
 
-  getStatus(): MqttStatus {
+  public getStatus(): IMqttStatus {
     return { ...this.currentStatus };
   }
 
-  isConnected(): boolean {
+  public isConnected(): boolean {
     return this.currentStatus.isConnected;
   }
 }

@@ -1,20 +1,33 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import firebase from 'firebase/compat/app';
-import { User } from '../types';
+import { User as FirebaseUser, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc, setDoc, updateDoc, collection } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
-import { activityService } from '../services/activityService';
-type FirebaseUser = firebase.User;
+import { IAuthContext, IAuthUser, User } from '../types';
+import { useAsyncOperation } from '../hooks/useAsyncOperation';
 
-interface AuthContextType {
-  currentUser: User | null;
-  firebaseUser: FirebaseUser | null;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
-  refreshUser: () => Promise<void>;
+interface IUserPermissions {
+  gate: boolean;
+  garage: boolean;
+  camera: boolean;
+  stopMode: boolean;
+  viewLogs: boolean;
+  manageUsers: boolean;
+  requireLocation: boolean;
+  allowGPS: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+interface IAppUser {
+  id: string;
+  email: string;
+  displayName: string;
+  role: 'admin' | 'user' | 'viewer';
+  permissions: IUserPermissions;
+  gpsEnabled: boolean;
+  createdAt: Date;
+  lastLogin: Date;
+}
+
+const AuthContext = createContext<IAuthContext | null>(null);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -26,112 +39,97 @@ export const useAuth = () => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isInitialLogin, setIsInitialLogin] = useState(false);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<void> => {
     try {
-      console.log('Attempting Firebase login with email:', email);
-      setIsInitialLogin(true); // Mark this as initial login
-      const userCredential = await auth.signInWithEmailAndPassword(email, password);
-      console.log('Firebase login successful:', userCredential.user?.uid);
-    } catch (error: any) {
+      console.log('🔐 Attempting Firebase login with email:', email);
+      setIsInitialLogin(true);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log('✅ Firebase login successful:', userCredential.user?.uid);
+    } catch (error) {
       setIsInitialLogin(false);
-      console.error('Firebase login error:', error.code, error.message);
-      throw error;
+      const authError = error as { code: string; message: string };
+      console.error('❌ Firebase login error:', authError.code, authError.message);
+      throw new Error(`Login failed: ${authError.message}`);
     }
   };
 
-  const logout = async () => {
-    await auth.signOut();
-  };
-
-  const refreshUser = async () => {
-    if (firebaseUser) {
-      console.log('🔧 AuthContext: Refreshing user data...');
-      await fetchUserData(firebaseUser);
-    }
-  };
-
-  const fetchUserData = async (firebaseUser: FirebaseUser) => {
+  const logout = async (): Promise<void> => {
     try {
-      console.log('Fetching user data from Firestore for:', firebaseUser.uid);
+      console.log('🚪 Logging out user...');
+      await signOut(auth);
+      console.log('✅ User logged out successfully');
+    } catch (error) {
+      console.error('❌ Logout error:', error);
+      throw new Error('Logout failed');
+    }
+  };
+
+  const refreshUser = async (): Promise<void> => {
+    if (auth.currentUser) {
+      console.log('🔄 AuthContext: Refreshing user data...');
+      await fetchUserData(auth.currentUser);
+    }
+  };
+
+  const fetchUserData = async (firebaseUser: FirebaseUser): Promise<void> => {
+    try {
+      console.log('📊 Fetching user data from Firestore for:', firebaseUser.uid);
       
-      // First try to get user from Firestore
-      try {
-        const userDoc = await db.collection('users').doc(firebaseUser.uid).get();
+      const userDocRef = doc(db, 'users', firebaseUser.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        console.log('✅ User found in Firestore:', userData?.email);
         
-        if (userDoc.exists) {
-          const userData = userDoc.data();
-          console.log('User found in Firestore:', userData?.email);
-          
-          const user: User = {
-            id: firebaseUser.uid,
-            email: userData?.email || firebaseUser.email || '',
-            displayName: userData?.displayName || firebaseUser.displayName || firebaseUser.email || 'User',
-            role: userData?.role || 'viewer',
-            permissions: userData?.permissions || {
-              gate: false,
-              garage: false, 
-              camera: false,
-              stopMode: false,
-              viewLogs: true,
-              manageUsers: false,
-              requireLocation: false,
-              allowGPS: true,
-            },
-            gpsEnabled: userData?.gpsEnabled || false,
-            createdAt: userData?.createdAt?.toDate() || new Date(),
-            lastLogin: userData?.lastLogin?.toDate() || new Date(),
-          };
-          
-          console.log('🔧 AuthContext: User permissions loaded from Firestore:', user.permissions);
-          console.log('🔧 AuthContext: viewLogs permission:', user.permissions.viewLogs);
-          console.log('🔧 AuthContext: manageUsers permission:', user.permissions.manageUsers);
-          setCurrentUser(user);
-          
-          // Only update lastLogin on actual login, not refresh
-          if (isInitialLogin) {
-            console.log('🔧 AuthContext: Updating lastLogin for initial login');
-            await db.collection('users').doc(firebaseUser.uid).update({
-              lastLogin: new Date()
-            });
-            
-            // Log the login activity
-            try {
-              await activityService.logActivity({
-                user: user.email,
-                userDisplayName: user.displayName,
-                action: 'Přihlášení do systému',
-                device: 'gate', // Default device for login
-                status: 'success',
-                details: 'Uživatel se úspěšně přihlásil do systému'
-              });
-              console.log('🔧 AuthContext: Login activity logged');
-            } catch (logError) {
-              console.error('🔧 AuthContext: Failed to log login activity:', logError);
-            }
-            
-            setIsInitialLogin(false);
-          }
-          
-          return;
+        const user: User = {
+          id: firebaseUser.uid,
+          email: userData?.email || firebaseUser.email || '',
+          displayName: userData?.displayName || firebaseUser.displayName || firebaseUser.email || 'User',
+          role: userData?.role || 'viewer',
+          permissions: userData?.permissions || {
+            gate: false,
+            garage: false,
+            camera: false,
+            stopMode: false,
+            viewLogs: true,
+            manageUsers: false,
+            requireLocation: false,
+            allowGPS: true,
+          },
+          gpsEnabled: userData?.gpsEnabled || false,
+          createdAt: userData?.createdAt?.toDate() || new Date(),
+          lastLogin: userData?.lastLogin?.toDate() || new Date(),
+        };
+        
+        console.log('🔧 AuthContext: User data loaded from Firestore');
+        setCurrentUser(user);
+        
+        // Only update lastLogin on actual login, not refresh
+        if (isInitialLogin) {
+          console.log('🔧 AuthContext: Updating lastLogin for initial login');
+          await updateDoc(userDocRef, {
+            lastLogin: new Date()
+          });
+          setIsInitialLogin(false);
         }
-      } catch (firestoreError) {
-        console.warn('Firestore fetch failed, using default user:', firestoreError);
+        
+        return;
       }
       
-      // Fallback: Create user with minimal permissions
-      console.log('Creating default user profile for:', firebaseUser.email);
+      // Fallback: Create user with minimal data
+      console.log('📝 Creating default user profile for:', firebaseUser.email);
       const user: User = {
         id: firebaseUser.uid,
         email: firebaseUser.email || '',
         displayName: firebaseUser.displayName || firebaseUser.email || 'User',
-        role: 'viewer', // Default to viewer, not admin!
+        role: 'viewer',
         permissions: {
           gate: false,
-          garage: false, 
+          garage: false,
           camera: false,
           stopMode: false,
           viewLogs: true,
@@ -144,33 +142,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lastLogin: new Date(),
       };
       
-      console.log('🔧 AuthContext: Default user created with limited permissions:', user.permissions);
-      console.log('🔧 AuthContext: Default viewLogs permission:', user.permissions.viewLogs);
+      console.log('🔧 AuthContext: Default user created');
       setCurrentUser(user);
       
       // Try to save to Firestore for future use
       try {
-        await db.collection('users').doc(firebaseUser.uid).set(user);
-        console.log('New user saved to Firestore');
+        await setDoc(userDocRef, {
+          email: user.email,
+          displayName: user.displayName,
+          createdAt: new Date(),
+          lastLogin: new Date()
+        });
+        console.log('✅ New user saved to Firestore');
       } catch (saveError) {
-        console.warn('Could not save user to Firestore:', saveError);
+        console.warn('⚠️ Could not save user to Firestore:', saveError);
       }
       
     } catch (error) {
-      console.error('Error in fetchUserData:', error);
-      throw error;
+      const fetchError = error instanceof Error ? error : new Error('Unknown fetch error');
+      console.error('❌ Error in fetchUserData:', fetchError);
+      throw fetchError;
     }
   };
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
-      setFirebaseUser(firebaseUser);
+    console.log('🔧 AuthContext: Setting up auth state listener');
+    
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
           await fetchUserData(firebaseUser);
         } catch (error) {
-          console.error('Failed to fetch user data, creating minimal user:', error);
-          // Create minimal user with limited permissions - don't give admin by default!
+          console.error('❌ Failed to fetch user data, creating minimal user:', error);
+          // Create minimal user as fallback
           const minimalUser: User = {
             id: firebaseUser.uid,
             email: firebaseUser.email || '',
@@ -190,25 +194,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             createdAt: new Date(),
             lastLogin: new Date(),
           };
-          console.log('Using minimal user profile with limited permissions:', minimalUser.permissions);
+          console.log('⚠️ Using minimal user profile');
           setCurrentUser(minimalUser);
         }
       } else {
+        console.log('🚪 User signed out');
         setCurrentUser(null);
       }
       setLoading(false);
     });
 
-    return unsubscribe;
+    return () => {
+      console.log('🔧 AuthContext: Cleaning up auth state listener');
+      unsubscribe();
+    };
   }, []);
 
-  const value = {
+  const value: IAuthContext = {
     currentUser,
-    firebaseUser,
     loading,
     login,
-    logout,
-    refreshUser,
+    logout
   };
 
   return (
