@@ -9,6 +9,7 @@ import ActivityLogs from './pages/ActivityLogs';
 import Settings from './pages/Settings';
 import LoadingSpinner from './components/LoadingSpinner';
 import { mqttService } from './services/mqttService';
+import AppFooter from './components/AppFooter';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser, loading } = useAuth();
@@ -93,6 +94,7 @@ function App() {
       <ThemeProvider>
         <Router>
           <AppRoutes />
+          <AppFooter />
         </Router>
       </ThemeProvider>
     </AuthProvider>
