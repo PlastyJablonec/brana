@@ -53,6 +53,7 @@ const Dashboard: React.FC = () => {
         startTravelTimer();
       } else if (isOpen && !prevGateStatus.includes('otevřen')) {
         console.log('🔧 Dashboard: Gate opened, starting auto-close timer');
+        console.log('🔧 Dashboard: Gate status changed from', prevGateStatus, 'to', status.gateStatus);
         startAutoCloseTimer();
       } else if (isClosed) {
         console.log('🔧 Dashboard: Gate closed, stopping timers');

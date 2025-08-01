@@ -324,6 +324,55 @@ export class HttpMqttService {
   public isConnected(): boolean {
     return this.currentStatus.isConnected;
   }
+
+  public async publishMessage(topic: string, message: string): Promise<void> {
+    console.log(`📤 HTTP MQTT: publishMessage called for topic: ${topic}, message: ${message}`);
+    
+    if (!this.currentStatus.isConnected) {
+      throw new Error('MQTT not connected via proxy');
+    }
+
+    try {
+      console.log(`📤 HTTP MQTT: Publishing to ${topic}: ${message}`);
+      
+      const response = await fetch(this.proxyUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          topic: topic,
+          message: message
+        })
+      });
+
+      if (!response.ok) {
+        let errorMessage = `HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || response.statusText;
+        } catch (parseError) {
+          console.warn('Could not parse error response:', parseError);
+        }
+        
+        console.error(`❌ HTTP MQTT: publishMessage failed with status ${response.status}:`, errorMessage);
+        throw new Error(`Publish failed: ${errorMessage}`);
+      }
+
+      let result;
+      try {
+        result = await response.json();
+        console.log(`✅ HTTP MQTT: Message sent successfully:`, result);
+      } catch (parseError) {
+        console.warn('Could not parse success response, but request succeeded:', parseError);
+        console.log(`✅ HTTP MQTT: Message sent (status ${response.status})`);
+      }
+
+    } catch (error) {
+      console.error('❌ HTTP MQTT: publishMessage error:', error);
+      throw error;
+    }
+  }
 }
 
 // Export singleton instance

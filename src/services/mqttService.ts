@@ -387,6 +387,14 @@ export class MqttService {
   }
 
   public async publishMessage(topic: string, message: string): Promise<void> {
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    
+    if (isHttps) {
+      console.log('🌐 Using HTTP MQTT proxy for publishMessage');
+      await httpMqttService.publishMessage(topic, message);
+      return;
+    }
+    
     return new Promise<void>((resolve, reject) => {
       if (!this.client) {
         const error = new Error('MQTT client not available');
