@@ -23,19 +23,24 @@ export interface ActivityLog {
 class ActivityService {
   private collection = collection(db, 'activity_logs');
 
-  async logActivity(activity: Omit<ActivityLog, 'id' | 'timestamp'>) {
+  async logActivity(activity: Omit<ActivityLog, 'id' | 'timestamp'>, skipLocation: boolean = false) {
     try {
       console.log('🔧 ActivityService: Logging activity:', activity);
       
-      // Pokusíme se získat lokaci pro aktivitu
+      // Get location only if not explicitly skipped
       let location: GeoLocation | null = null;
-      try {
-        location = await locationService.getLocationForActivity();
-        if (location) {
-          console.log('📍 ActivityService: Location added to activity:', locationService.formatLocationString(location));
+      if (!skipLocation) {
+        try {
+          location = await locationService.getLocationForActivity();
+          if (location) {
+            console.log('📍 ActivityService: Location added to activity:', locationService.formatLocationString(location));
+          }
+        } catch (error) {
+          console.warn('📍 ActivityService: Could not get location:', error);
+          // Don't throw error, just continue without location
         }
-      } catch (error) {
-        console.warn('📍 ActivityService: Could not get location:', error);
+      } else {
+        console.log('📍 ActivityService: Skipping location for this activity');
       }
       
       const activityWithTimestamp = {

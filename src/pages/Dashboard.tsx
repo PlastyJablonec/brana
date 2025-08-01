@@ -68,9 +68,17 @@ const Dashboard: React.FC = () => {
     };
   }, []);
 
-  // GPS permission request
+  // GPS permission request - only if required by user permissions
   useEffect(() => {
     const requestLocation = async () => {
+      // Skip GPS if not required for this user
+      if (!currentUser?.permissions?.requireLocation) {
+        console.log('📍 Dashboard: GPS not required for this user, skipping');
+        setLocationPermission(true); // Set as "allowed" so UI doesn't show error
+        setLocationError('');
+        return;
+      }
+
       if (!locationService.isLocationSupported() || !locationService.isSecureContext()) {
         const reason = locationService.getLocationUnavailableReason();
         setLocationError(reason);
@@ -189,7 +197,8 @@ const Dashboard: React.FC = () => {
       
       const action = gateStatus.includes('zavřen') ? 'Otevření brány' : 'Zavření brány';
       
-      // Log the activity (GPS will be added automatically by activityService)
+      // Log the activity (skip GPS if not required for this user)
+      const skipLocation = !currentUser.permissions?.requireLocation;
       await activityService.logActivity({
         user: currentUser.email || '',
         userDisplayName: currentUser.displayName || currentUser.email || '',
@@ -197,7 +206,7 @@ const Dashboard: React.FC = () => {
         device: 'gate',
         status: 'success',
         details: `Brána byla ${gateStatus.includes('zavřen') ? 'otevřena' : 'zavřena'} uživatelem`
-      });
+      }, skipLocation);
       
       // Update last user service
       await lastUserService.logGateActivity(
@@ -210,8 +219,9 @@ const Dashboard: React.FC = () => {
     } catch (error) {
       console.error('Failed to send gate command:', error);
       
-      // Log the failed activity
+      // Log the failed activity (skip GPS if not required for this user)
       try {
+        const skipLocation = !currentUser.permissions?.requireLocation;
         await activityService.logActivity({
           user: currentUser.email || '',
           userDisplayName: currentUser.displayName || currentUser.email || '',
@@ -219,7 +229,7 @@ const Dashboard: React.FC = () => {
           device: 'gate',
           status: 'error',
           details: `Chyba při ovládání brány: ${(error as Error).message}`
-        });
+        }, skipLocation);
       } catch (logError) {
         console.error('Failed to log error activity:', logError);
       }
