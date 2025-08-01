@@ -63,10 +63,38 @@ export class HttpMqttService {
         if (response.ok) {
           const status = await response.json();
           const wasConnected = this.currentStatus.isConnected;
-          this.currentStatus.isConnected = status.connected || false;
+          let statusChanged = false;
           
+          // Update connection status
+          this.currentStatus.isConnected = status.connected || false;
           if (wasConnected !== this.currentStatus.isConnected) {
             console.log(`🔄 HTTP MQTT: Connection status changed: ${this.currentStatus.isConnected}`);
+            statusChanged = true;
+          }
+          
+          // Update gate and garage status from messages
+          if (status.messages) {
+            const oldGateStatus = this.currentStatus.gateStatus;
+            const oldGarageStatus = this.currentStatus.garageStatus;
+            
+            if (status.messages['IoT/Brana/Status']) {
+              this.currentStatus.gateStatus = this.parseGateStatus(status.messages['IoT/Brana/Status']);
+              if (oldGateStatus !== this.currentStatus.gateStatus) {
+                console.log(`🚪 HTTP MQTT: Gate status: ${oldGateStatus} → ${this.currentStatus.gateStatus}`);
+                statusChanged = true;
+              }
+            }
+            
+            if (status.messages['IoT/Brana/Status2']) {
+              this.currentStatus.garageStatus = this.parseGarageStatus(status.messages['IoT/Brana/Status2']);
+              if (oldGarageStatus !== this.currentStatus.garageStatus) {
+                console.log(`🏠 HTTP MQTT: Garage status: ${oldGarageStatus} → ${this.currentStatus.garageStatus}`);
+                statusChanged = true;
+              }
+            }
+          }
+          
+          if (statusChanged) {
             this.notifyStatusChange();
           }
         } else {
@@ -84,6 +112,44 @@ export class HttpMqttService {
         }
       }
     }, 2000);
+  }
+
+  private parseGateStatus(status: string): GateStatusType {
+    const upperStatus = status.toUpperCase();
+    switch (upperStatus) {
+      case 'P1':
+        return 'Brána zavřena';
+      case 'P2':
+        return 'Brána otevřena';
+      case 'P3':
+        return 'Otevírá se...';
+      case 'P4':
+        return 'Zavírá se...';
+      case 'P5':
+        return 'Zastavena';
+      case 'P6':
+        return 'STOP režim';
+      default:
+        console.warn(`HTTP MQTT: Unknown gate status received: ${status}`);
+        return 'Neznámý stav';
+    }
+  }
+
+  private parseGarageStatus(status: string): GarageStatusType {
+    const upperStatus = status.toUpperCase();
+    switch (upperStatus) {
+      case 'P7':
+        return 'Garáž zavřena';
+      case 'P8':
+        return 'Garáž otevřena';
+      case 'P9':
+        return 'Garáž - otevírá se...';
+      case 'P10':
+        return 'Garáž - zavírá se...';
+      default:
+        console.warn(`HTTP MQTT: Unknown garage status received: ${status}`);
+        return 'Neznámý stav';
+    }
   }
 
   public disconnect(): void {

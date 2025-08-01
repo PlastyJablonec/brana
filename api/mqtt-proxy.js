@@ -3,6 +3,10 @@ const mqtt = require('mqtt');
 // Global MQTT client to maintain connection
 let mqttClient = null;
 let isConnecting = false;
+let lastMessages = {
+  'IoT/Brana/Status': null,
+  'IoT/Brana/Status2': null
+};
 
 function connectToMqtt() {
   if (mqttClient && mqttClient.connected) {
@@ -10,10 +14,11 @@ function connectToMqtt() {
   }
 
   if (isConnecting) {
-    return null;
+    return mqttClient; // Return existing client even if connecting
   }
 
   isConnecting = true;
+  console.log('MQTT Proxy: Attempting to connect to ws://89.24.76.191:9001');
   
   try {
     mqttClient = mqtt.connect('ws://89.24.76.191:9001', {
@@ -25,31 +30,41 @@ function connectToMqtt() {
     });
 
     mqttClient.on('connect', () => {
-      console.log('MQTT Proxy: Connected to broker');
+      console.log('MQTT Proxy: ✅ Connected to broker successfully');
       isConnecting = false;
       
       // Subscribe to status topics
-      mqttClient.subscribe(['IoT/Brana/Status', 'IoT/Brana/Status2'], (err) => {
+      mqttClient.subscribe(['IoT/Brana/Status', 'IoT/Brana/Status2'], { qos: 1 }, (err) => {
         if (err) {
           console.error('MQTT Proxy: Subscribe error:', err);
         } else {
-          console.log('MQTT Proxy: Subscribed to status topics');
+          console.log('MQTT Proxy: ✅ Subscribed to status topics');
         }
       });
     });
 
+    mqttClient.on('message', (topic, message) => {
+      const messageStr = message.toString();
+      console.log(`MQTT Proxy: 📨 Message received: ${topic} = ${messageStr}`);
+      lastMessages[topic] = messageStr;
+    });
+
     mqttClient.on('error', (error) => {
-      console.error('MQTT Proxy: Connection error:', error);
+      console.error('MQTT Proxy: ❌ Connection error:', error);
       isConnecting = false;
     });
 
     mqttClient.on('close', () => {
-      console.log('MQTT Proxy: Connection closed');
+      console.log('MQTT Proxy: 🔌 Connection closed');
       isConnecting = false;
     });
 
+    mqttClient.on('reconnect', () => {
+      console.log('MQTT Proxy: 🔄 Reconnecting...');
+    });
+
   } catch (error) {
-    console.error('MQTT Proxy: Setup error:', error);
+    console.error('MQTT Proxy: ❌ Setup error:', error);
     isConnecting = false;
   }
 
@@ -69,7 +84,13 @@ export default function handler(req, res) {
 
   console.log('MQTT Proxy: Request received', req.method, req.url);
 
+  // Always try to connect (or get existing connection)
   const client = connectToMqtt();
+  
+  // Give some time for connection to establish if needed
+  if (client && !client.connected && isConnecting) {
+    console.log('MQTT Proxy: Client connecting, waiting a moment...');
+  }
 
   if (req.method === 'POST') {
     // Handle MQTT publish commands
@@ -93,11 +114,12 @@ export default function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    // Return current status
+    // Return current status and messages
     if (!client) {
       res.status(503).json({ 
         connected: false, 
-        error: 'MQTT client not initialized' 
+        error: 'MQTT client not initialized',
+        messages: lastMessages
       });
       return;
     }
@@ -105,7 +127,9 @@ export default function handler(req, res) {
     res.status(200).json({ 
       connected: client.connected,
       status: 'MQTT Proxy Active via HTTP',
-      clientId: client.options?.clientId
+      clientId: client.options?.clientId,
+      messages: lastMessages,
+      isConnecting: isConnecting
     });
     return;
   }
