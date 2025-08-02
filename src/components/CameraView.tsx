@@ -21,9 +21,9 @@ const CameraView: React.FC<CameraViewProps> = () => {
     const secondsAgo = Math.floor((Date.now() - lastSuccessfulLoad) / 1000);
     let newTimestamp = '';
     
-    // Nikdy nezobrazuj "Nyní" - minimálně "Před 1s" pro realistické zobrazení
-    if (secondsAgo <= 1) {
-      newTimestamp = 'Před 1s';
+    // Zobraz "Live" pro čerstvé snímky, pak přejdi na "Před Xs"
+    if (secondsAgo <= 2) {
+      newTimestamp = 'Live';
     } else if (secondsAgo < 60) {
       newTimestamp = `Před ${secondsAgo}s`;
     } else {
@@ -61,24 +61,26 @@ const CameraView: React.FC<CameraViewProps> = () => {
         }
       }, 10000); // Increased timeout for proxy
       
-      // Pokusit se získat skutečný timestamp snímku
-      let actualImageTimestamp = timestamp;
+      // Pro nový snímek nastavíme timestamp na aktuální čas - začínáme od "Live"
+      let actualImageTimestamp = timestamp; // Začni od času načtení = "Live"
+      
       try {
-        // Fetch pro získání HTTP headers s časem posledního snímku
+        // Fetch pro získání HTTP headers s časem posledního snímku (jen pro info)
         const response = await fetch(realUrl, { method: 'HEAD' });
         const lastModified = response.headers.get('Last-Modified');
         if (lastModified) {
-          actualImageTimestamp = new Date(lastModified).getTime();
-          console.log('📸 Získán timestamp snímku z Last-Modified:', new Date(actualImageTimestamp));
+          const serverTimestamp = new Date(lastModified).getTime();
+          console.log('📸 Server timestamp snímku:', new Date(serverTimestamp));
+          console.log('📸 Rozdíl server vs načtení:', Math.floor((timestamp - serverTimestamp) / 1000) + 's');
+          // Použijeme čas načtení, aby začal od "Live"
+          actualImageTimestamp = timestamp;
         } else {
-          // Fallback: odečti refresh interval pro konzervativní odhad
-          actualImageTimestamp = timestamp - 5000; // 5s refresh interval
-          console.log('📸 Použit konzervativní odhad timestamp (refresh interval)');
+          console.log('📸 Last-Modified nedostupný, začínáme od "Live"');
+          actualImageTimestamp = timestamp;
         }
       } catch (error) {
-        // Fallback: odečti refresh interval
-        actualImageTimestamp = timestamp - 5000;
-        console.log('📸 Chyba při získávání timestamp, použit konzervativní odhad:', error);
+        console.log('📸 Chyba při získávání timestamp, začínáme od "Live":', error);
+        actualImageTimestamp = timestamp;
       }
       
       imgRef.current.onload = () => {
