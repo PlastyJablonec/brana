@@ -6,6 +6,7 @@ import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc } from 'firebase
 import { db } from '../firebase/config';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase/config';
+import { locationService } from '../services/locationService';
 
 interface User {
   id: string;
@@ -24,6 +25,12 @@ interface User {
   };
   createdAt: Date;
   lastLogin?: Date;
+  lastLocation?: {
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+    timestamp: Date;
+  };
 }
 
 const UserManagement: React.FC = () => {
@@ -72,13 +79,47 @@ const UserManagement: React.FC = () => {
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate() || new Date(),
-        lastLogin: doc.data().lastLogin?.toDate()
+        lastLogin: doc.data().lastLogin?.toDate(),
+        lastLocation: doc.data().lastLocation ? {
+          ...doc.data().lastLocation,
+          timestamp: doc.data().lastLocation.timestamp?.toDate() || new Date()
+        } : undefined
       })) as User[];
       setUsers(usersList);
     } catch (error) {
       console.error('Error loading users:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefreshGPS = async (userId: string) => {
+    try {
+      console.log('📍 UserManagement: Refreshing GPS for user:', userId);
+      
+      // Request current location
+      const location = await locationService.getCurrentLocation();
+      
+      // Update user's location in Firestore
+      const userDoc = doc(db, 'users', userId);
+      await updateDoc(userDoc, {
+        lastLocation: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          accuracy: location.accuracy,
+          timestamp: new Date()
+        }
+      });
+      
+      console.log('📍 GPS updated successfully:', locationService.formatLocationString(location));
+      
+      // Reload users to show updated location
+      await loadUsers();
+      
+      alert('GPS lokace byla aktualizována!');
+    } catch (error: any) {
+      console.error('📍 GPS refresh failed:', error);
+      alert('Nepodařilo se získat GPS lokaci: ' + error.message);
     }
   };
 
@@ -438,36 +479,77 @@ const UserManagement: React.FC = () => {
                 {currentUser?.permissions.manageUsers && (
                   <div style={{ 
                     marginTop: '8px',
-                    padding: '8px',
+                    padding: '12px',
                     backgroundColor: 'var(--md-surface-variant)',
                     borderRadius: '8px',
                     border: '1px solid var(--md-outline)'
                   }}>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--md-on-surface-variant)', marginBottom: '4px', fontWeight: 500 }}>
-                      📍 GPS Status pro admina
-                    </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--md-on-surface-variant)', marginBottom: 0, fontWeight: 500 }}>
+                        📍 GPS Lokace
+                      </p>
+                      <button
+                        onClick={() => handleRefreshGPS(user.id)}
+                        className="btn-icon md-ripple"
+                        style={{
+                          background: 'var(--md-primary)',
+                          color: 'var(--md-on-primary)',
+                          border: 'none',
+                          borderRadius: '6px',
+                          width: '24px',
+                          height: '24px',
+                          fontSize: '0.7rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        title="Aktualizovat GPS lokaci"
+                      >
+                        🔄
+                      </button>
+                    </div>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       <span style={{ fontSize: '0.7rem', color: 'var(--md-on-surface-variant)' }}>
                         Požaduje lokaci: {user.permissions?.requireLocation ? '✅ Ano' : '❌ Ne'}
                       </span>
                       <span style={{ fontSize: '0.7rem', color: 'var(--md-on-surface-variant)' }}>
                         GPS povoleno: {user.permissions?.allowGPS ? '✅ Ano' : '❌ Ne'}
                       </span>
-                      <a 
-                        href={`https://maps.google.com/maps?q=50.0755,14.4378`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          fontSize: '0.7rem',
-                          color: 'var(--md-primary)',
-                          textDecoration: 'none',
-                          marginTop: '2px'
-                        }}
-                        onMouseOver={(e) => (e.target as HTMLAnchorElement).style.textDecoration = 'underline'}
-                        onMouseOut={(e) => (e.target as HTMLAnchorElement).style.textDecoration = 'none'}
-                      >
-                        🗺️ Zobrazit poslední lokaci uživatele
-                      </a>
+                      
+                      {user.lastLocation ? (
+                        <>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--md-on-surface-variant)', marginTop: '4px' }}>
+                            📍 Poslední pozice: {user.lastLocation.latitude.toFixed(6)}°, {user.lastLocation.longitude.toFixed(6)}°
+                          </span>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--md-on-surface-variant)' }}>
+                            ⏱️ Čas: {user.lastLocation.timestamp.toLocaleString('cs-CZ')}
+                          </span>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--md-on-surface-variant)' }}>
+                            🎯 Přesnost: ±{Math.round(user.lastLocation.accuracy)}m
+                          </span>
+                          <a 
+                            href={`https://maps.google.com/maps?q=${user.lastLocation.latitude},${user.lastLocation.longitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              fontSize: '0.7rem',
+                              color: 'var(--md-primary)',
+                              textDecoration: 'none',
+                              marginTop: '4px',
+                              display: 'inline-block'
+                            }}
+                            onMouseOver={(e) => (e.target as HTMLAnchorElement).style.textDecoration = 'underline'}
+                            onMouseOut={(e) => (e.target as HTMLAnchorElement).style.textDecoration = 'none'}
+                          >
+                            🗺️ Zobrazit na mapě
+                          </a>
+                        </>
+                      ) : (
+                        <span style={{ fontSize: '0.7rem', color: 'var(--md-on-surface-variant)', fontStyle: 'italic', marginTop: '4px' }}>
+                          ❌ Žádná GPS lokace není uložena
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
