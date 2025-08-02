@@ -269,12 +269,8 @@ export class HttpMqttService {
         result = { success: true, status: response.status };
       }
 
-      // Log activity to Firestore asynchronously
-      this.logActivityToFirestore(userEmail, action, message)
-        .then(() => console.log('📝 Activity logged to Firestore'))
-        .catch(logError => {
-          console.warn('⚠️ Firestore logging failed, but command was sent successfully:', logError);
-        });
+      // Note: Activity logging is now handled in Dashboard.tsx with detailed actions
+      // This old logging system created generic "Brána"/"Garáž" entries
 
     } catch (error) {
       console.error('❌ HTTP MQTT: Publish error:', error);

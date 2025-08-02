@@ -356,13 +356,9 @@ export class MqttService {
         } else {
           console.log(`✅ MQTT Command sent: ${command} by ${userEmail}`);
           
-          // Log activity to Firestore asynchronously (non-blocking)
-          this.logActivityToFirestore(userEmail, action, command)
-            .then(() => console.log('📝 Activity logged to Firestore'))
-            .catch(logError => {
-              console.warn('⚠️ Firestore logging failed, but command was sent successfully:', logError);
-            })
-            .finally(() => resolve());
+          // Note: Activity logging is now handled in Dashboard.tsx with detailed actions
+          // This old logging system created generic "Brána"/"Garáž" entries
+          resolve();
         }
       });
     });
