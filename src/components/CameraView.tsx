@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 interface CameraViewProps {}
 
@@ -12,7 +12,7 @@ const CameraView: React.FC<CameraViewProps> = () => {
   const timestampIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
-  const updateTimestampDisplay = () => {
+  const updateTimestampDisplay = useCallback(() => {
     if (lastSuccessfulLoad === 0) {
       setTimestampText('--');
       return;
@@ -32,9 +32,9 @@ const CameraView: React.FC<CameraViewProps> = () => {
     }
     
     setTimestampText(newTimestamp);
-  };
+  }, [lastSuccessfulLoad]);
 
-  const refreshCamera = async () => {
+  const refreshCamera = useCallback(async () => {
     const timestamp = Date.now();
     const isHttps = window.location.protocol === 'https:';
     
@@ -114,15 +114,15 @@ const CameraView: React.FC<CameraViewProps> = () => {
       
       imgRef.current.src = realUrl;
     }
-  };
+  }, []);
 
 
+  // Spusť aktualizaci timestamp pokaždé když se změní lastSuccessfulLoad
   useEffect(() => {
-    if (lastSuccessfulLoad > 0) {
-      updateTimestampDisplay();
-    }
-  }, [lastSuccessfulLoad]);
+    updateTimestampDisplay();
+  }, [updateTimestampDisplay]);
 
+  // Nastav intervaly pro refresh kamery a aktualizaci timestamp
   useEffect(() => {
     timestampIntervalRef.current = setInterval(updateTimestampDisplay, 1000);
     intervalRef.current = setInterval(refreshCamera, 5000); // Každých 5 sekund
@@ -136,7 +136,7 @@ const CameraView: React.FC<CameraViewProps> = () => {
         clearInterval(timestampIntervalRef.current);
       }
     };
-  }, []);
+  }, [updateTimestampDisplay, refreshCamera]);
 
   return (
     <div className="camera-container" style={{ position: 'relative' }}>
