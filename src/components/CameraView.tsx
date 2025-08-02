@@ -110,7 +110,9 @@ const CameraView: React.FC<CameraViewProps> = () => {
     try {
       // Vytvoříme nový Image objekt pro testování
       const testImg = new Image();
-      testImg.crossOrigin = 'anonymous';
+      if (!isHttps) {
+        testImg.crossOrigin = 'anonymous'; // Jen pro HTTP, HTTPS proxy nepotřebuje
+      }
       
       await new Promise<void>((resolve, reject) => {
         testImg.onload = async () => {
@@ -124,14 +126,32 @@ const CameraView: React.FC<CameraViewProps> = () => {
               setLastSuccessfulLoad(changeTime);
               console.log('📸 ZMĚNA DETEKOVÁNA - aktualizace timestamp:', new Date(changeTime));
               
-              // Aktualizuj zobrazený obrázek
+              // Aktualizuj zobrazený obrázek s fallback
               if (imgRef.current) {
+                // Nastav onload handler pro imgRef před změnou src
+                imgRef.current.onload = () => {
+                  console.log('📸 Obrázek úspěšně zobrazen');
+                  setShowOverlay(false);
+                  setIsRealCamera(true);
+                };
+                
+                imgRef.current.onerror = () => {
+                  console.error('📸 Chyba při zobrazení v imgRef');
+                  setOverlayText(isHttps ? 'Proxy kamera nedostupná' : 'Chyba načítání kamery');
+                  setIsRealCamera(false);
+                };
+                
                 imgRef.current.src = realUrl;
               }
-              setShowOverlay(false);
-              setIsRealCamera(true);
             } else {
               console.log('📸 Žádná změna - timestamp se neaktualizuje');
+              // Ale pokud ještě není zobrazen žádný obrázek, zkus ho zobrazit
+              if (imgRef.current && !imgRef.current.src.includes('photo.jpg') && !imgRef.current.src.includes('camera-proxy')) {
+                console.log('📸 První zobrazení - načítám i bez změny');
+                imgRef.current.src = realUrl;
+                setShowOverlay(false);
+                setIsRealCamera(true);
+              }
             }
             
             resolve();
