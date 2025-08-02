@@ -10,6 +10,12 @@ const ActivityLogs: React.FC = () => {
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCleanupDialog, setShowCleanupDialog] = useState(false);
+  const [cleanupType, setCleanupType] = useState<'days' | 'all' | 'user' | 'device'>('days');
+  const [cleanupDays, setCleanupDays] = useState(30);
+  const [cleanupUser, setCleanupUser] = useState('');
+  const [cleanupDevice, setCleanupDevice] = useState<'gate' | 'garage'>('gate');
+  const [isCleanupLoading, setIsCleanupLoading] = useState(false);
 
   // Load activities from DB
   useEffect(() => {
@@ -31,6 +37,57 @@ const ActivityLogs: React.FC = () => {
 
     loadActivities();
   }, [currentUser]);
+
+  const handleCleanup = async () => {
+    if (!currentUser?.permissions.manageUsers) {
+      alert('Nemáte oprávnění pro mazání logů');
+      return;
+    }
+
+    setIsCleanupLoading(true);
+    try {
+      let deletedCount = 0;
+      
+      switch (cleanupType) {
+        case 'days':
+          deletedCount = await activityService.deleteActivitiesOlderThan(cleanupDays);
+          break;
+        case 'all':
+          if (window.confirm('Opravdu chcete smazat VŠECHNY logy? Tuto akci nelze vrátit zpět!')) {
+            deletedCount = await activityService.deleteAllActivities();
+          } else {
+            setIsCleanupLoading(false);
+            return;
+          }
+          break;
+        case 'user':
+          if (cleanupUser.trim()) {
+            deletedCount = await activityService.deleteActivitiesByUser(cleanupUser.trim());
+          } else {
+            alert('Zadejte email uživatele');
+            setIsCleanupLoading(false);
+            return;
+          }
+          break;
+        case 'device':
+          deletedCount = await activityService.deleteActivitiesByDevice(cleanupDevice);
+          break;
+      }
+
+      alert(`Úspěšně smazáno ${deletedCount} záznamů`);
+      setShowCleanupDialog(false);
+      
+      // Reload activities
+      const logs = await activityService.getRecentActivities(100);
+      setActivities(logs);
+      
+    } catch (error) {
+      console.error('Error during cleanup:', error);
+      alert('Chyba při mazání logů: ' + (error instanceof Error ? error.message : 'Neznámá chyba'));
+    } finally {
+      setIsCleanupLoading(false);
+    }
+  };
 
   if (!currentUser?.permissions.viewLogs) {
     return (
@@ -81,14 +138,6 @@ const ActivityLogs: React.FC = () => {
     { key: 'error', label: 'Chyby', count: activities.filter(l => l.status === 'error').length },
   ];
 
-  const getStatusClass = (status: string) => {
-    switch (status) {
-      case 'success': return 'status-success';
-      case 'warning': return 'status-warning';
-      case 'error': return 'status-error';
-      default: return 'status-error';
-    }
-  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -152,6 +201,24 @@ const ActivityLogs: React.FC = () => {
           </div>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {currentUser?.permissions.manageUsers && (
+              <button 
+                onClick={() => setShowCleanupDialog(true)}
+                className="btn-icon md-ripple"
+                style={{ 
+                  background: 'var(--md-error)', 
+                  border: '1px solid var(--md-error)',
+                  borderRadius: '12px',
+                  color: 'white',
+                  boxShadow: 'var(--md-elevation-1-shadow)'
+                }}
+                title="Vyčistit logy"
+              >
+                <svg style={{ width: '20px', height: '20px', fill: 'currentColor' }} viewBox="0 0 24 24">
+                  <path d="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z"/>
+                </svg>
+              </button>
+            )}
             <ThemeToggle />
             <button 
               onClick={() => navigate('/dashboard')}
@@ -324,6 +391,238 @@ const ActivityLogs: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Cleanup Dialog */}
+      {showCleanupDialog && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="md-card md-card-elevated" style={{
+            maxWidth: '500px',
+            width: '90%',
+            maxHeight: '80vh',
+            overflow: 'auto'
+          }}>
+            <div className="md-card-header">
+              <h2 className="md-card-title">Vyčistit logy aktivit</h2>
+              <p className="md-card-subtitle">Vyberte typ čištění logů</p>
+            </div>
+            
+            <div className="md-card-content" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Cleanup Type Selection */}
+              <div>
+                <label style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: '8px', display: 'block' }}>
+                  Typ čištění:
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="cleanupType"
+                      value="days"
+                      checked={cleanupType === 'days'}
+                      onChange={(e) => setCleanupType(e.target.value as any)}
+                      style={{ accentColor: 'var(--md-primary)' }}
+                    />
+                    <span>Smazat záznamy starší než X dní</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="cleanupType"
+                      value="user"
+                      checked={cleanupType === 'user'}
+                      onChange={(e) => setCleanupType(e.target.value as any)}
+                      style={{ accentColor: 'var(--md-primary)' }}
+                    />
+                    <span>Smazat záznamy konkrétního uživatele</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="cleanupType"
+                      value="device"
+                      checked={cleanupType === 'device'}
+                      onChange={(e) => setCleanupType(e.target.value as any)}
+                      style={{ accentColor: 'var(--md-primary)' }}
+                    />
+                    <span>Smazat záznamy konkrétního zařízení</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="cleanupType"
+                      value="all"
+                      checked={cleanupType === 'all'}
+                      onChange={(e) => setCleanupType(e.target.value as any)}
+                      style={{ accentColor: 'var(--md-error)' }}
+                    />
+                    <span style={{ color: 'var(--md-error)', fontWeight: 500 }}>Smazat VŠECHNY záznamy</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Days Input */}
+              {cleanupType === 'days' && (
+                <div>
+                  <label style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: '8px', display: 'block' }}>
+                    Počet dní:
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="365"
+                    value={cleanupDays}
+                    onChange={(e) => setCleanupDays(parseInt(e.target.value) || 1)}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '1px solid var(--md-outline)',
+                      borderRadius: '8px',
+                      fontSize: '1rem',
+                      backgroundColor: 'var(--md-surface)',
+                      color: 'var(--md-on-surface)'
+                    }}
+                    placeholder="30"
+                  />
+                  <p style={{ fontSize: '0.75rem', color: 'var(--md-on-surface-variant)', marginTop: '4px' }}>
+                    Budou smazány záznamy starší než {cleanupDays} dní
+                  </p>
+                </div>
+              )}
+
+              {/* User Email Input */}
+              {cleanupType === 'user' && (
+                <div>
+                  <label style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: '8px', display: 'block' }}>
+                    Email uživatele:
+                  </label>
+                  <input
+                    type="email"
+                    value={cleanupUser}
+                    onChange={(e) => setCleanupUser(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '1px solid var(--md-outline)',
+                      borderRadius: '8px',
+                      fontSize: '1rem',
+                      backgroundColor: 'var(--md-surface)',
+                      color: 'var(--md-on-surface)'
+                    }}
+                    placeholder="user@example.com"
+                  />
+                </div>
+              )}
+
+              {/* Device Selection */}
+              {cleanupType === 'device' && (
+                <div>
+                  <label style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: '8px', display: 'block' }}>
+                    Zařízení:
+                  </label>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="cleanupDevice"
+                        value="gate"
+                        checked={cleanupDevice === 'gate'}
+                        onChange={(e) => setCleanupDevice(e.target.value as any)}
+                        style={{ accentColor: 'var(--md-primary)' }}
+                      />
+                      <span>Brána</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="cleanupDevice"
+                        value="garage"
+                        checked={cleanupDevice === 'garage'}
+                        onChange={(e) => setCleanupDevice(e.target.value as any)}
+                        style={{ accentColor: 'var(--md-primary)' }}
+                      />
+                      <span>Garáž</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* Warning */}
+              <div style={{
+                padding: '12px',
+                borderRadius: '8px',
+                backgroundColor: 'var(--md-error-container)',
+                color: 'var(--md-on-error-container)',
+                border: '1px solid var(--md-error)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <svg style={{ width: '20px', height: '20px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.248 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  <span style={{ fontWeight: 500 }}>Upozornění</span>
+                </div>
+                <p style={{ fontSize: '0.875rem', margin: 0 }}>
+                  Smazané logy nelze obnovit. Tato akce je nevratná!
+                </p>
+              </div>
+            </div>
+
+            <div className="md-card-actions" style={{ padding: '16px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                onClick={() => setShowCleanupDialog(false)}
+                className="md-ripple"
+                disabled={isCleanupLoading}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '20px',
+                  border: '1px solid var(--md-outline)',
+                  backgroundColor: 'var(--md-surface)',
+                  color: 'var(--md-on-surface)',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  fontWeight: 500
+                }}
+              >
+                Zrušit
+              </button>
+              <button
+                onClick={handleCleanup}
+                disabled={isCleanupLoading}
+                className="md-ripple"
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '20px',
+                  border: 'none',
+                  backgroundColor: cleanupType === 'all' ? 'var(--md-error)' : 'var(--md-primary)',
+                  color: 'white',
+                  cursor: isCleanupLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  opacity: isCleanupLoading ? 0.6 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                {isCleanupLoading && (
+                  <div className="loading" style={{ width: '16px', height: '16px' }}></div>
+                )}
+                {cleanupType === 'all' ? 'Smazat vše' : 'Vyčistit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

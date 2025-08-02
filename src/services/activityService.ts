@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs, query, orderBy, limit, where, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, orderBy, limit, where, Timestamp, deleteDoc, doc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { locationService, GeoLocation } from './locationService';
 
@@ -136,6 +136,144 @@ class ActivityService {
     } catch (error) {
       console.error('🔧 ActivityService: Error fetching device activities:', error);
       return [];
+    }
+  }
+
+  async deleteActivity(activityId: string): Promise<void> {
+    try {
+      console.log('🗑️ ActivityService: Deleting activity:', activityId);
+      await deleteDoc(doc(db, 'activity_logs', activityId));
+      console.log('✅ ActivityService: Activity deleted successfully');
+    } catch (error) {
+      console.error('❌ ActivityService: Error deleting activity:', error);
+      throw error;
+    }
+  }
+
+  async deleteActivitiesOlderThan(days: number): Promise<number> {
+    try {
+      console.log(`🗑️ ActivityService: Deleting activities older than ${days} days...`);
+      
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+      const cutoffTimestamp = Timestamp.fromDate(cutoffDate);
+      
+      const q = query(
+        this.collection,
+        where('timestamp', '<', cutoffTimestamp)
+      );
+
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        console.log('🗑️ ActivityService: No old activities found to delete');
+        return 0;
+      }
+
+      // Use batch delete for better performance
+      const batch = writeBatch(db);
+      querySnapshot.docs.forEach((docSnapshot) => {
+        batch.delete(docSnapshot.ref);
+      });
+
+      await batch.commit();
+      
+      console.log(`✅ ActivityService: Deleted ${querySnapshot.docs.length} old activities`);
+      return querySnapshot.docs.length;
+    } catch (error) {
+      console.error('❌ ActivityService: Error deleting old activities:', error);
+      throw error;
+    }
+  }
+
+  async deleteAllActivities(): Promise<number> {
+    try {
+      console.log('🗑️ ActivityService: Deleting all activities...');
+      
+      const querySnapshot = await getDocs(this.collection);
+      
+      if (querySnapshot.empty) {
+        console.log('🗑️ ActivityService: No activities found to delete');
+        return 0;
+      }
+
+      // Use batch delete for better performance
+      const batch = writeBatch(db);
+      querySnapshot.docs.forEach((docSnapshot) => {
+        batch.delete(docSnapshot.ref);
+      });
+
+      await batch.commit();
+      
+      console.log(`✅ ActivityService: Deleted all ${querySnapshot.docs.length} activities`);
+      return querySnapshot.docs.length;
+    } catch (error) {
+      console.error('❌ ActivityService: Error deleting all activities:', error);
+      throw error;
+    }
+  }
+
+  async deleteActivitiesByUser(userEmail: string): Promise<number> {
+    try {
+      console.log(`🗑️ ActivityService: Deleting activities for user: ${userEmail}`);
+      
+      const q = query(
+        this.collection,
+        where('user', '==', userEmail)
+      );
+
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        console.log(`🗑️ ActivityService: No activities found for user: ${userEmail}`);
+        return 0;
+      }
+
+      // Use batch delete for better performance
+      const batch = writeBatch(db);
+      querySnapshot.docs.forEach((docSnapshot) => {
+        batch.delete(docSnapshot.ref);
+      });
+
+      await batch.commit();
+      
+      console.log(`✅ ActivityService: Deleted ${querySnapshot.docs.length} activities for user: ${userEmail}`);
+      return querySnapshot.docs.length;
+    } catch (error) {
+      console.error(`❌ ActivityService: Error deleting activities for user ${userEmail}:`, error);
+      throw error;
+    }
+  }
+
+  async deleteActivitiesByDevice(device: 'gate' | 'garage'): Promise<number> {
+    try {
+      console.log(`🗑️ ActivityService: Deleting activities for device: ${device}`);
+      
+      const q = query(
+        this.collection,
+        where('device', '==', device)
+      );
+
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        console.log(`🗑️ ActivityService: No activities found for device: ${device}`);
+        return 0;
+      }
+
+      // Use batch delete for better performance
+      const batch = writeBatch(db);
+      querySnapshot.docs.forEach((docSnapshot) => {
+        batch.delete(docSnapshot.ref);
+      });
+
+      await batch.commit();
+      
+      console.log(`✅ ActivityService: Deleted ${querySnapshot.docs.length} activities for device: ${device}`);
+      return querySnapshot.docs.length;
+    } catch (error) {
+      console.error(`❌ ActivityService: Error deleting activities for device ${device}:`, error);
+      throw error;
     }
   }
 }
