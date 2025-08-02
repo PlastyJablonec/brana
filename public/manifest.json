@@ -1,6 +1,6 @@
 {
-  "short_name": "Gate Control",
-  "name": "Gate Control - Ovládání Brány",
+  "short_name": "Ovládání Brány",
+  "name": "Ovládání Brány a Garáže",
   "description": "Moderní aplikace pro ovládání brány a garáže přes MQTT",
   "icons": [
     {
