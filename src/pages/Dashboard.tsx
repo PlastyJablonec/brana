@@ -404,7 +404,22 @@ const Dashboard: React.FC = () => {
   console.log('🔧 Dashboard render - user permissions:', currentUser?.permissions);
 
   return (
-    <div className="dashboard" style={{ padding: '16px', maxWidth: '800px', margin: '0 auto', minHeight: '100vh' }}>
+    <>
+      <style>
+        {`
+          @keyframes pulse {
+            0%, 100% { 
+              opacity: 1; 
+              transform: scale(1);
+            }
+            50% { 
+              opacity: 0.8; 
+              transform: scale(1.05);
+            }
+          }
+        `}
+      </style>
+      <div className="dashboard" style={{ padding: '16px', maxWidth: '800px', margin: '0 auto', minHeight: '100vh' }}>
       
       {/* Top Header with Material Design */}
       <div className="md-card md-card-elevated" style={{ marginBottom: '16px' }}>
@@ -535,11 +550,21 @@ const Dashboard: React.FC = () => {
                 {timerState.isActive && (
                   <div 
                     style={{ 
-                      fontSize: '16px', 
-                      fontWeight: '700',
-                      color: timerState.type === 'travel' ? '#ffeb3b' : '#4caf50',
+                      fontSize: timerState.type === 'autoClose' ? '20px' : '16px', 
+                      fontWeight: '800',
+                      color: timerState.type === 'travel' ? '#ffeb3b' : '#ff5722',
                       marginTop: '8px',
-                      textShadow: timerState.type === 'travel' ? '0 0 10px rgba(255, 235, 59, 0.5)' : '0 0 10px rgba(76, 175, 80, 0.5)'
+                      textShadow: timerState.type === 'travel' ? 
+                        '0 0 10px rgba(255, 235, 59, 0.8)' : 
+                        '0 0 15px rgba(255, 87, 34, 0.8), 0 0 25px rgba(255, 87, 34, 0.6)',
+                      background: timerState.type === 'autoClose' ? 
+                        'linear-gradient(45deg, rgba(255, 87, 34, 0.2), rgba(255, 152, 0, 0.2))' : 
+                        'transparent',
+                      padding: timerState.type === 'autoClose' ? '8px 12px' : '4px',
+                      borderRadius: timerState.type === 'autoClose' ? '12px' : '0',
+                      border: timerState.type === 'autoClose' ? '2px solid rgba(255, 87, 34, 0.5)' : 'none',
+                      animation: timerState.type === 'autoClose' && timerState.countdown <= 60 ? 
+                        'pulse 1.5s ease-in-out infinite' : 'none'
                     }}
                   >
                     {timerState.displayText}
@@ -795,6 +820,7 @@ const Dashboard: React.FC = () => {
         </button>
       </div>
     </div>
+    </>
   );
 };
 
