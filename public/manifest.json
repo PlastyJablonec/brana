@@ -1,6 +1,6 @@
 {
   "short_name": "Ovládání Brány",
-  "name": "Ovládání Brány a Garáže",
+  "name": "Ovládání Brány",
   "description": "Moderní aplikace pro ovládání brány a garáže přes MQTT",
   "icons": [
     {
