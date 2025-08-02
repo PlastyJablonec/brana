@@ -1,8 +1,9 @@
 import React from 'react';
 
 const AppFooter: React.FC = () => {
-  const buildTime = process.env.REACT_APP_BUILD_TIME || new Date().toISOString();
-  const version = process.env.REACT_APP_VERSION || '2.0.0';
+  // Use build-time values, not runtime values
+  const buildTime = process.env.REACT_APP_BUILD_TIME || '2025-02-08T09:00:00.000Z';
+  const version = process.env.REACT_APP_VERSION || '2.1.0';
   const commitHash = process.env.REACT_APP_COMMIT_HASH || 'dev';
 
   return (
