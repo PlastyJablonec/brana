@@ -3,6 +3,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
 import { activityService, ActivityLog } from '../services/activityService';
+import { settingsService } from '../services/settingsService';
+import { distanceService } from '../services/distanceService';
 
 const ActivityLogs: React.FC = () => {
   const { currentUser } = useAuth();
@@ -16,6 +18,8 @@ const ActivityLogs: React.FC = () => {
   const [cleanupUser, setCleanupUser] = useState('');
   const [cleanupDevice, setCleanupDevice] = useState<'gate' | 'garage'>('gate');
   const [isCleanupLoading, setIsCleanupLoading] = useState(false);
+  const [selectedLog, setSelectedLog] = useState<ActivityLog | null>(null);
+  const [showLogDetail, setShowLogDetail] = useState(false);
 
   // Load activities from DB
   useEffect(() => {
@@ -86,6 +90,27 @@ const ActivityLogs: React.FC = () => {
       alert('Chyba při mazání logů: ' + (error instanceof Error ? error.message : 'Neznámá chyba'));
     } finally {
       setIsCleanupLoading(false);
+    }
+  };
+
+  const handleShowLogDetail = async (log: ActivityLog) => {
+    setSelectedLog(log);
+    setShowLogDetail(true);
+  };
+
+  const calculateDistanceFromGate = async (userLat: number, userLng: number): Promise<number | null> => {
+    try {
+      const settings = await settingsService.getAppSettings();
+      const gateLatitude = settings.location?.gateLatitude || 50.719252;
+      const gateLongitude = settings.location?.gateLongitude || 15.162632;
+      
+      return distanceService.calculateDistance(
+        { latitude: userLat, longitude: userLng },
+        { latitude: gateLatitude, longitude: gateLongitude }
+      );
+    } catch (error) {
+      console.error('Error calculating distance:', error);
+      return null;
     }
   };
 
@@ -360,6 +385,7 @@ const ActivityLogs: React.FC = () => {
                       {log.device === 'gate' ? 'Brána' : 'Garáž'}
                     </span>
                     <button 
+                      onClick={() => handleShowLogDetail(log)}
                       className="btn-icon md-ripple"
                       style={{
                         background: 'var(--md-surface-variant)',
@@ -367,9 +393,10 @@ const ActivityLogs: React.FC = () => {
                         borderRadius: '8px',
                         color: 'var(--md-on-surface-variant)',
                         width: '36px',
-                        height: '36px'
+                        height: '36px',
+                        cursor: 'pointer'
                       }}
-                      title={log.details}
+                      title="Zobrazit detail"
                     >
                       <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -391,6 +418,15 @@ const ActivityLogs: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Log Detail Dialog */}
+      {showLogDetail && selectedLog && (
+        <LogDetailDialog 
+          log={selectedLog} 
+          onClose={() => setShowLogDetail(false)}
+          calculateDistance={calculateDistanceFromGate}
+        />
+      )}
 
       {/* Cleanup Dialog */}
       {showCleanupDialog && (
@@ -623,6 +659,295 @@ const ActivityLogs: React.FC = () => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+// Log Detail Dialog Component
+interface LogDetailDialogProps {
+  log: ActivityLog;
+  onClose: () => void;
+  calculateDistance: (lat: number, lng: number) => Promise<number | null>;
+}
+
+const LogDetailDialog: React.FC<LogDetailDialogProps> = ({ log, onClose, calculateDistance }) => {
+  const [distance, setDistance] = useState<number | null>(null);
+  const [isLoadingDistance, setIsLoadingDistance] = useState(false);
+
+  useEffect(() => {
+    const loadDistance = async () => {
+      if (log.location) {
+        setIsLoadingDistance(true);
+        try {
+          const dist = await calculateDistance(log.location.latitude, log.location.longitude);
+          setDistance(dist);
+        } catch (error) {
+          console.error('Error calculating distance:', error);
+        } finally {
+          setIsLoadingDistance(false);
+        }
+      }
+    };
+    loadDistance();
+  }, [log.location, calculateDistance]);
+
+  const formatTime = (timestamp: any) => {
+    if (!timestamp) return '--:--:--';
+    
+    let date: Date;
+    if (timestamp.toDate) {
+      date = timestamp.toDate();
+    } else if (timestamp instanceof Date) {
+      date = timestamp;
+    } else {
+      date = new Date(timestamp);
+    }
+    
+    return date.toLocaleString('cs-CZ', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'success': return 'var(--md-success)';
+      case 'warning': return 'var(--md-warning)';
+      case 'error': return 'var(--md-error)';
+      default: return 'var(--md-on-surface-variant)';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'success':
+        return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />;
+      case 'warning':
+        return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.248 16.5c-.77.833.192 2.5 1.732 2.5z" />;
+      case 'error':
+        return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />;
+      default:
+        return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />;
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000
+    }}>
+      <div className="md-card md-card-elevated" style={{
+        maxWidth: '600px',
+        width: '90%',
+        maxHeight: '80vh',
+        overflow: 'auto'
+      }}>
+        <div className="md-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h2 className="md-card-title">Detail aktivity</h2>
+            <p className="md-card-subtitle">{log.action}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="btn-icon md-ripple"
+            style={{
+              background: 'var(--md-surface-variant)',
+              border: '1px solid var(--md-outline)',
+              borderRadius: '8px',
+              color: 'var(--md-on-surface-variant)',
+              width: '40px',
+              height: '40px'
+            }}
+          >
+            <svg style={{ width: '20px', height: '20px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <div className="md-card-content" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Status */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: getStatusColor(log.status),
+              color: 'white'
+            }}>
+              <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {getStatusIcon(log.status)}
+              </svg>
+            </div>
+            <div>
+              <div style={{ fontSize: '1.1rem', fontWeight: 500, color: 'var(--md-on-surface)' }}>
+                {log.action}
+              </div>
+              <div style={{ fontSize: '0.875rem', color: 'var(--md-on-surface-variant)' }}>
+                Status: {log.status === 'success' ? 'Úspěch' : log.status === 'warning' ? 'Varování' : 'Chyba'}
+              </div>
+            </div>
+          </div>
+
+          {/* User Info */}
+          <div>
+            <div style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--md-on-surface-variant)', marginBottom: '8px' }}>
+              Uživatel:
+            </div>
+            <div style={{ fontSize: '1rem', color: 'var(--md-on-surface)' }}>
+              {log.userDisplayName || log.user}
+            </div>
+            <div style={{ fontSize: '0.875rem', color: 'var(--md-on-surface-variant)' }}>
+              {log.user}
+            </div>
+          </div>
+
+          {/* Time */}
+          <div>
+            <div style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--md-on-surface-variant)', marginBottom: '8px' }}>
+              Čas:
+            </div>
+            <div style={{ fontSize: '1rem', color: 'var(--md-on-surface)' }}>
+              {formatTime(log.timestamp)}
+            </div>
+          </div>
+
+          {/* Device */}
+          <div>
+            <div style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--md-on-surface-variant)', marginBottom: '8px' }}>
+              Zařízení:
+            </div>
+            <span style={{
+              padding: '4px 12px',
+              borderRadius: '12px',
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              backgroundColor: log.device === 'gate' ? 'var(--md-primary)' : 'var(--md-secondary)',
+              color: 'white'
+            }}>
+              {log.device === 'gate' ? 'Brána' : 'Garáž'}
+            </span>
+          </div>
+
+          {/* GPS Location */}
+          {log.location && (
+            <div>
+              <div style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--md-on-surface-variant)', marginBottom: '12px' }}>
+                GPS Poloha:
+              </div>
+              <div style={{
+                padding: '16px',
+                backgroundColor: 'var(--md-surface-variant)',
+                borderRadius: '12px',
+                border: '1px solid var(--md-outline)'
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ fontSize: '0.875rem', color: 'var(--md-on-surface-variant)' }}>
+                    <strong>Souřadnice:</strong>
+                  </div>
+                  <div style={{ fontSize: '1rem', color: 'var(--md-on-surface)', fontFamily: 'monospace' }}>
+                    {log.location.latitude.toFixed(6)}, {log.location.longitude.toFixed(6)}
+                  </div>
+                  
+                  <div style={{ fontSize: '0.875rem', color: 'var(--md-on-surface-variant)' }}>
+                    <strong>Přesnost:</strong> ±{Math.round(log.location.accuracy)}m
+                  </div>
+
+                  {distance !== null && (
+                    <div style={{ fontSize: '0.875rem', color: 'var(--md-on-surface-variant)' }}>
+                      <strong>Vzdálenost od brány:</strong> {Math.round(distance)}m
+                    </div>
+                  )}
+
+                  {isLoadingDistance && (
+                    <div style={{ fontSize: '0.875rem', color: 'var(--md-on-surface-variant)' }}>
+                      <strong>Vzdálenost od brány:</strong> Počítám...
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: '8px' }}>
+                    <a 
+                      href={`https://maps.google.com/maps?q=${log.location.latitude},${log.location.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 16px',
+                        backgroundColor: 'var(--md-primary)',
+                        color: 'white',
+                        borderRadius: '20px',
+                        textDecoration: 'none',
+                        fontSize: '0.875rem',
+                        fontWeight: 500
+                      }}
+                    >
+                      📍 Zobrazit na mapě
+                      <svg style={{ width: '14px', height: '14px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Details */}
+          {log.details && (
+            <div>
+              <div style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--md-on-surface-variant)', marginBottom: '8px' }}>
+                Podrobnosti:
+              </div>
+              <div style={{
+                padding: '12px',
+                backgroundColor: 'var(--md-surface-variant)',
+                borderRadius: '8px',
+                fontSize: '0.875rem',
+                color: 'var(--md-on-surface)',
+                fontFamily: 'monospace'
+              }}>
+                {log.details}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="md-card-actions" style={{ padding: '16px', display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            onClick={onClose}
+            className="md-ripple"
+            style={{
+              padding: '8px 24px',
+              borderRadius: '20px',
+              border: 'none',
+              backgroundColor: 'var(--md-primary)',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: 500
+            }}
+          >
+            Zavřít
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

@@ -22,6 +22,52 @@ const Dashboard: React.FC = () => {
   const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
   const [locationError, setLocationError] = useState<string>('');
   const [currentLocation, setCurrentLocation] = useState<any>(null);
+  const [distanceFromGate, setDistanceFromGate] = useState<number | null>(null);
+  const [isLocationProximityAllowed, setIsLocationProximityAllowed] = useState<boolean>(true);
+
+  // Helper function to play sound feedback
+  const playSound = (type: 'click' | 'success' | 'error') => {
+    try {
+      // Create audio context if it doesn't exist
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      let frequency: number;
+      let duration: number;
+      
+      switch (type) {
+        case 'click':
+          frequency = 800;
+          duration = 100;
+          break;
+        case 'success':
+          frequency = 1000;
+          duration = 200;
+          break;
+        case 'error':
+          frequency = 400;
+          duration = 300;
+          break;
+      }
+      
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration / 1000);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + duration / 1000);
+      
+    } catch (error) {
+      console.log('Sound playback not available:', error);
+    }
+  };
 
   // Helper function to get user identifier for MQTT messages
   const getUserIdentifier = (): string => {
@@ -29,6 +75,47 @@ const Dashboard: React.FC = () => {
       return currentUser.nick;
     }
     return currentUser?.displayName || currentUser?.email || 'Neznámý';
+  };
+
+  // Helper function to continuously check and update user distance from gate
+  const updateDistanceFromGate = async () => {
+    // If user doesn't have location proximity requirement, always allow
+    if (!currentUser?.permissions?.requireLocationProximity) {
+      setIsLocationProximityAllowed(true);
+      setDistanceFromGate(null);
+      return;
+    }
+
+    try {
+      // Get current user location
+      const userLocation = await locationService.getCurrentLocation();
+      
+      // Get gate settings
+      const settings = await settingsService.getAppSettings();
+      const gateLocation = {
+        latitude: settings.location.gateLatitude,
+        longitude: settings.location.gateLongitude
+      };
+
+      // Calculate distance
+      const distance = distanceService.calculateDistance(
+        userLocation, gateLocation
+      );
+
+      setDistanceFromGate(Math.round(distance));
+      
+      // Check if within allowed distance
+      const maxDistance = settings.location.maxDistanceMeters;
+      const allowed = distance <= maxDistance;
+      setIsLocationProximityAllowed(allowed);
+
+      console.log(`📍 Distance from gate: ${Math.round(distance)}m, allowed: ${allowed} (max: ${maxDistance}m)`);
+      
+    } catch (error) {
+      console.error('Error checking location proximity:', error);
+      setDistanceFromGate(null);
+      setIsLocationProximityAllowed(false);
+    }
   };
 
   // Helper function to check if user is within allowed distance for gate operations
@@ -99,12 +186,24 @@ const Dashboard: React.FC = () => {
       const isClosed = status.gateStatus.includes('zavřen') || status.gateStatus.includes('Zavřena');
       
       if (isMoving) {
-        console.log('🔧 Dashboard: Gate is moving, starting travel timer');
-        startTravelTimer();
+        // Spustí travel timer pouze pokud ještě neběží
+        if (timerState.type !== 'travel' || !timerState.isActive) {
+          console.log('🔧 Dashboard: Gate is moving, starting travel timer');
+          startTravelTimer();
+        }
       } else if (isOpen && !prevGateStatus.includes('otevřen')) {
-        console.log('🔧 Dashboard: Gate opened, starting auto-close timer');
-        console.log('🔧 Dashboard: Gate status changed from', prevGateStatus, 'to', status.gateStatus);
-        startAutoCloseTimer();
+        // Spustí auto-close timer pouze pokud ještě neběží
+        if (timerState.type !== 'autoClose' || !timerState.isActive) {
+          console.log('🔧 Dashboard: Gate opened, starting auto-close timer');
+          console.log('🔧 Dashboard: Gate status changed from', prevGateStatus, 'to', status.gateStatus);
+          startAutoCloseTimer();
+        }
+      } else if (isOpen && prevGateStatus.includes('otevřen')) {
+        // Brána je stále otevřená - spustí auto-close timer pouze pokud žádný neběží
+        if (!timerState.isActive) {
+          console.log('🔧 Dashboard: Gate remains open, starting auto-close timer');
+          startAutoCloseTimer();
+        }
       } else if (isClosed) {
         console.log('🔧 Dashboard: Gate closed, stopping timers');
         stopTimer();
@@ -156,6 +255,9 @@ const Dashboard: React.FC = () => {
             } else {
               setLocationError('');
             }
+            
+            // Update distance from gate for the first time
+            await updateDistanceFromGate();
           } catch (error: any) {
             console.warn('📍 Dashboard: Could not get initial location:', error);
             setLocationError('GPS nedostupné');
@@ -187,6 +289,23 @@ const Dashboard: React.FC = () => {
       locationService.stopWatching();
     };
   }, []);
+
+  // Periodically update distance from gate for location-restricted users
+  useEffect(() => {
+    if (!currentUser?.permissions?.requireLocationProximity) {
+      return;
+    }
+
+    // Update distance immediately
+    updateDistanceFromGate();
+
+    // Then update every 5 seconds
+    const interval = setInterval(() => {
+      updateDistanceFromGate();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [currentUser?.permissions?.requireLocationProximity, currentLocation]);
 
   // Backup check for MQTT status every 5 seconds
   useEffect(() => {
@@ -226,20 +345,25 @@ const Dashboard: React.FC = () => {
   }, [locationPermission]);
 
   const handleGateControl = async () => {
+    // Play click sound
+    playSound('click');
+    
     if (!currentUser?.permissions.gate) {
+      playSound('error');
       alert('Nemáte oprávnění k ovládání brány');
       return;
     }
 
     if (!mqttConnected) {
+      playSound('error');
       alert('MQTT není připojen');
       return;
     }
 
-    // Check location proximity if required
-    const proximityCheck = await checkLocationProximity();
-    if (!proximityCheck.allowed) {
-      alert(proximityCheck.message);
+    // Check location proximity if required (now handled by UI state)
+    if (!isLocationProximityAllowed) {
+      playSound('error');
+      console.log('📍 Gate operation blocked by location proximity');
       return;
     }
 
@@ -265,7 +389,6 @@ const Dashboard: React.FC = () => {
       
       // Log MQTT failure
       try {
-        const skipLocation = !currentUser.permissions?.requireLocation;
         await activityService.logActivity({
           user: currentUser.email || '',
           userDisplayName: getUserIdentifier(),
@@ -273,11 +396,12 @@ const Dashboard: React.FC = () => {
           device: 'gate',
           status: 'error',
           details: `Chyba při MQTT příkazu: ${(mqttError as Error).message}`
-        }, skipLocation);
+        }, false); // Always include GPS location in logs
       } catch (logError) {
         console.error('Failed to log MQTT error:', logError);
       }
       
+      playSound('error');
       alert('Chyba při odesílání příkazu');
       setLoading(false);
       return;
@@ -287,7 +411,6 @@ const Dashboard: React.FC = () => {
     const action = gateStatus.includes('zavřen') ? 'Otevření brány' : 'Zavření brány';
     
     try {
-      const skipLocation = !currentUser.permissions?.requireLocation;
       await activityService.logActivity({
         user: currentUser.email || '',
         userDisplayName: getUserIdentifier(),
@@ -295,7 +418,7 @@ const Dashboard: React.FC = () => {
         device: 'gate',
         status: 'success',
         details: `Brána byla ${gateStatus.includes('zavřen') ? 'otevřena' : 'zavřena'} uživatelem`
-      }, skipLocation);
+      }, false); // Always include GPS location in logs
       
       console.log('📝 Dashboard: Activity logged successfully');
     } catch (activityError) {
@@ -316,24 +439,30 @@ const Dashboard: React.FC = () => {
     }
     
     console.log('🎉 Dashboard: Gate command completed successfully');
+    playSound('success');
     setLoading(false);
   };
 
   const handleGarageControl = async () => {
+    // Play click sound
+    playSound('click');
+    
     if (!currentUser?.permissions.garage) {
+      playSound('error');
       alert('Nemáte oprávnění k ovládání garáže');
       return;
     }
 
     if (!mqttConnected) {
+      playSound('error');
       alert('MQTT není připojen');
       return;
     }
 
-    // Check location proximity if required
-    const proximityCheck = await checkLocationProximity();
-    if (!proximityCheck.allowed) {
-      alert(proximityCheck.message);
+    // Check location proximity if required (now handled by UI state)
+    if (!isLocationProximityAllowed) {
+      playSound('error');
+      console.log('📍 Gate operation blocked by location proximity');
       return;
     }
 
@@ -355,6 +484,7 @@ const Dashboard: React.FC = () => {
       
     } catch (mqttError) {
       console.error('❌ Dashboard: Garage MQTT command failed:', mqttError);
+      playSound('error');
       alert('Chyba při odesílání příkazu');
       setLoading(false);
       return;
@@ -366,7 +496,6 @@ const Dashboard: React.FC = () => {
       
       // Non-critical Firestore activity logging
       try {
-        const skipLocation = !currentUser.permissions?.requireLocation;
         await activityService.logActivity({
           user: currentUser.email || '',
           userDisplayName: getUserIdentifier(),
@@ -374,7 +503,7 @@ const Dashboard: React.FC = () => {
           device: 'garage',
           status: 'success',
           details: `Garáž byla ${garageStatus.includes('zavřen') ? 'otevřena' : 'zavřena'} uživatelem`
-        }, skipLocation);
+        }, false); // Always include GPS location in logs
         console.log('✅ Dashboard: Garage activity logged to Firestore');
       } catch (activityError) {
         console.warn('⚠️ Dashboard: Failed to log garage activity to Firestore (non-critical):', activityError);
@@ -395,6 +524,7 @@ const Dashboard: React.FC = () => {
       }
       
       console.log('🎉 Dashboard: Garage command completed successfully');
+      playSound('success');
     }
     
     setLoading(false);
@@ -436,7 +566,6 @@ const Dashboard: React.FC = () => {
     // Non-critical logging operations - should not cause error alerts
     if (mqttCommandSucceeded) {
       try {
-        const skipLocation = !currentUser.permissions?.requireLocation;
         await activityService.logActivity({
           user: currentUser.email || '',
           userDisplayName: getUserIdentifier(),
@@ -444,7 +573,7 @@ const Dashboard: React.FC = () => {
           device: 'gate',
           status: 'success',
           details: `Příkaz: STOP režim aktivován`
-        }, skipLocation);
+        }, false); // Always include GPS location in logs
         console.log('✅ Dashboard: STOP activity logged to Firestore');
       } catch (activityError) {
         console.warn('⚠️ Dashboard: Failed to log STOP activity to Firestore (non-critical):', activityError);
@@ -559,7 +688,7 @@ const Dashboard: React.FC = () => {
             
             <button
               onClick={handleGateControl}
-              disabled={loading || !mqttConnected}
+              disabled={loading || !mqttConnected || !isLocationProximityAllowed}
               className={`gate-button-modern ${(gateStatus.includes('se...') || loading) ? 'pulsing' : ''} ${timerState.type === 'autoClose' && timerState.countdown <= 60 ? 'timer-blinking' : ''} md-ripple`}
               style={{
                 width: '280px',
@@ -573,36 +702,37 @@ const Dashboard: React.FC = () => {
                 gap: '12px',
                 fontSize: '16px',
                 fontWeight: '600',
-                background: gateStatus.includes('zavřen') ? 'var(--md-error)' : 
+                background: !isLocationProximityAllowed ? 'var(--md-surface-variant)' :
+                           gateStatus.includes('zavřen') ? 'var(--md-error)' : 
                            gateStatus.includes('otevřen') ? 'var(--md-success)' : 'var(--md-primary)',
-                color: 'white',
-                boxShadow: 'var(--md-elevation-4-shadow)',
-                cursor: (loading || !mqttConnected) ? 'not-allowed' : 'pointer',
-                opacity: (loading || !mqttConnected) ? 0.6 : 1,
+                color: !isLocationProximityAllowed ? 'var(--md-on-surface-variant)' : 'white',
+                boxShadow: !isLocationProximityAllowed ? 'none' : 'var(--md-elevation-4-shadow)',
+                cursor: (loading || !mqttConnected || !isLocationProximityAllowed) ? 'not-allowed' : 'pointer',
+                opacity: (loading || !mqttConnected || !isLocationProximityAllowed) ? 0.6 : 1,
                 transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                 transform: 'translateY(0px) scale(1)',
                 userSelect: 'none'
               }}
               onMouseEnter={(e) => {
-                if (!loading && mqttConnected && !gateStatus.includes('se...')) {
+                if (!loading && mqttConnected && isLocationProximityAllowed && !gateStatus.includes('se...')) {
                   e.currentTarget.style.transform = 'translateY(-8px) scale(1.02)';
                   e.currentTarget.style.boxShadow = 'var(--md-elevation-5-shadow)';
                 }
               }}
               onMouseLeave={(e) => {
-                if (!loading && mqttConnected) {
+                if (!loading && mqttConnected && isLocationProximityAllowed) {
                   e.currentTarget.style.transform = 'translateY(0px) scale(1)';
                   e.currentTarget.style.boxShadow = 'var(--md-elevation-4-shadow)';
                 }
               }}
               onMouseDown={(e) => {
-                if (!loading && mqttConnected) {
+                if (!loading && mqttConnected && isLocationProximityAllowed) {
                   e.currentTarget.style.transform = 'translateY(2px) scale(0.98)';
                   e.currentTarget.style.boxShadow = 'var(--md-elevation-2-shadow)';
                 }
               }}
               onMouseUp={(e) => {
-                if (!loading && mqttConnected) {
+                if (!loading && mqttConnected && isLocationProximityAllowed) {
                   e.currentTarget.style.transform = 'translateY(-8px) scale(1.02)';
                   e.currentTarget.style.boxShadow = 'var(--md-elevation-5-shadow)';
                 }
@@ -624,6 +754,19 @@ const Dashboard: React.FC = () => {
                     animation: 'pulse-text 1s infinite alternate'
                   }}>
                     {loading ? 'Odesílám...' : 'Pohyb brány'}
+                  </div>
+                )}
+                {/* Location proximity information */}
+                {currentUser?.permissions?.requireLocationProximity && !isLocationProximityAllowed && distanceFromGate && (
+                  <div style={{ 
+                    fontSize: '14px', 
+                    fontWeight: '500', 
+                    color: 'var(--md-error)',
+                    marginTop: '8px'
+                  }}>
+                    Vzdálenost: {distanceFromGate}m
+                    <br />
+                    <span style={{ fontSize: '12px' }}>Přijďte blíž k bráně</span>
                   </div>
                 )}
                 {/* Timer uvnitř tlačítka */}
@@ -654,14 +797,16 @@ const Dashboard: React.FC = () => {
             
             <button
               onClick={handleGarageControl}
-              disabled={loading || !mqttConnected}
+              disabled={loading || !mqttConnected || !isLocationProximityAllowed}
               className={`md-fab md-fab-extended md-ripple ${(garageStatus.includes('se...') || loading) ? 'pulsing' : ''}`}
               style={{
                 minWidth: '140px',
                 height: '56px',
-                background: garageStatus.includes('zavřen') ? 'var(--md-error)' : 
+                background: !isLocationProximityAllowed ? 'var(--md-surface-variant)' :
+                           garageStatus.includes('zavřen') ? 'var(--md-error)' : 
                            garageStatus.includes('otevřen') ? 'var(--md-success)' : 'var(--md-secondary)',
-                opacity: (loading || !mqttConnected) ? 0.6 : 1
+                color: !isLocationProximityAllowed ? 'var(--md-on-surface-variant)' : 'white',
+                opacity: (loading || !mqttConnected || !isLocationProximityAllowed) ? 0.6 : 1
               }}
               aria-label={`Ovládat garáž - aktuální stav: ${garageStatus}`}
             >

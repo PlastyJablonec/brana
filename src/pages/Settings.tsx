@@ -530,12 +530,12 @@ const Settings: React.FC = () => {
               type="number"
               min="1"
               max="1000"
-              value={settings.location?.maxDistanceMeters || 15}
+              value={settings.location?.maxDistanceMeters || ''}
               onChange={(e) => setSettings({
                 ...settings,
                 location: { 
                   ...settings.location, 
-                  maxDistanceMeters: parseInt(e.target.value) || 15 
+                  maxDistanceMeters: e.target.value === '' ? 15 : parseInt(e.target.value) || 15
                 }
               })}
               style={{
