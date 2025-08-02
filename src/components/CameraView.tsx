@@ -21,8 +21,9 @@ const CameraView: React.FC<CameraViewProps> = () => {
     const secondsAgo = Math.floor((Date.now() - lastSuccessfulLoad) / 1000);
     let newTimestamp = '';
     
-    if (secondsAgo === 0) {
-      newTimestamp = 'Nyní';
+    // Nikdy nezobrazuj "Nyní" - minimálně "Před 1s" pro realistické zobrazení
+    if (secondsAgo <= 1) {
+      newTimestamp = 'Před 1s';
     } else if (secondsAgo < 60) {
       newTimestamp = `Před ${secondsAgo}s`;
     } else {
@@ -33,7 +34,7 @@ const CameraView: React.FC<CameraViewProps> = () => {
     setTimestampText(newTimestamp);
   };
 
-  const refreshCamera = () => {
+  const refreshCamera = async () => {
     const timestamp = Date.now();
     const isHttps = window.location.protocol === 'https:';
     
@@ -60,10 +61,29 @@ const CameraView: React.FC<CameraViewProps> = () => {
         }
       }, 10000); // Increased timeout for proxy
       
+      // Pokusit se získat skutečný timestamp snímku
+      let actualImageTimestamp = timestamp;
+      try {
+        // Fetch pro získání HTTP headers s časem posledního snímku
+        const response = await fetch(realUrl, { method: 'HEAD' });
+        const lastModified = response.headers.get('Last-Modified');
+        if (lastModified) {
+          actualImageTimestamp = new Date(lastModified).getTime();
+          console.log('📸 Získán timestamp snímku z Last-Modified:', new Date(actualImageTimestamp));
+        } else {
+          // Fallback: odečti refresh interval pro konzervativní odhad
+          actualImageTimestamp = timestamp - 5000; // 5s refresh interval
+          console.log('📸 Použit konzervativní odhad timestamp (refresh interval)');
+        }
+      } catch (error) {
+        // Fallback: odečti refresh interval
+        actualImageTimestamp = timestamp - 5000;
+        console.log('📸 Chyba při získávání timestamp, použit konzervativní odhad:', error);
+      }
+      
       imgRef.current.onload = () => {
         hasLoaded = true;
         clearTimeout(fallbackTimeout);
-        const loadTime = Date.now();
         
         // Check if it's real camera (including proxy)
         const isReal = imgRef.current?.src.includes('camera-proxy') || 
@@ -73,7 +93,9 @@ const CameraView: React.FC<CameraViewProps> = () => {
         
         if (isReal) {
           setShowOverlay(false);
-          setLastSuccessfulLoad(loadTime);
+          // Použij skutečný timestamp snímku místo času načtení
+          setLastSuccessfulLoad(actualImageTimestamp);
+          console.log('📸 Snímek načten, timestamp:', new Date(actualImageTimestamp));
         } else {
           setOverlayText('Používám testovací obraz');
         }

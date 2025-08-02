@@ -28,11 +28,23 @@
 - 📊 **Monitoring aktivit** - Kompletní logování akcí
 - ⚙️ **Pokročilá nastavení** - Konfigurovatelné parametry
 
-### Verze: 2.2.0
+### Verze: 2.6.0
+- **Vylepšená webkamera**: Skutečný timestamp snímků místo času načtení
+- **Realistické zobrazení času**: "Před Xs" místo zavádějícího "Nyní"
+- **HTTP Last-Modified**: Inteligentní detekce stáří snímků z kamerového serveru
+- **Fallback mechanismus**: Konzervativní odhad při nedostupnosti metadat
+- **Lepší UX při pomalém připojení**: Uživatel vidí reálné stáří zobrazovaného snímku
+
+### Předchozí verze: 2.5.1
 - Přidáno NICK pole pro uživatele
-- Implementována geografická omezení
+- Implementována geografická omezení s moderním UI
 - Vylepšené blikání timeru
 - Nové nastavení polohy brány
+- Detail dialogy pro logy s GPS souřadnicemi a vzdáleností
+- Zvukový feedback pro všechny akce
+- Cleanup funkce pro správu logů
+- Opraveno resetování časů při reconnectu
+- Zlepšené UX pro geografická omezení (šedá tlačítka místo alertů)
 
 ---
 
@@ -188,15 +200,18 @@ User Interface → React Components → Services → Firebase/MQTT → Hardware
 ### 3. 📹 Webkamera
 
 **Funkce:**
-- Live stream z kamery
-- Automatické obnovování snímků
-- Zobrazení času posledního záznamu
-- Offline detekce
+- Live stream z kamery s přesným timestampem pořízení
+- Automatické obnovování snímků každých 5 sekund
+- Realistické zobrazení stáří snímku ("Před Xs" / "Před Xm")
+- Inteligentní detekce času pořízení z HTTP Last-Modified headerů
+- Offline detekce a fallback mechanismy
 
 **Technické detaily:**
 - URL: konfigurovatelná v kódu
-- Refresh interval: 2 sekundy
-- Fallback při nedostupnosti
+- Refresh interval: 5 sekund
+- Timestamp detection: HTTP HEAD request pro Last-Modified
+- Fallback: konzervativní odhad (čas požadavku - refresh interval)
+- Nikdy nezobrazuje zavádějící "Nyní" - minimálně "Před 1s"
 
 ### 4. 📍 GPS a geografická omezení
 
@@ -680,7 +695,20 @@ useEffect(() => {
 
 ### Changelog
 
-#### v2.2.0 (2025-01-XX)
+#### v2.6.0 (2025-01-02)
+- ✨ **Nové funkce:**
+  - Skutečný timestamp snímků z webkamery
+  - Realistické zobrazení času "Před Xs" místo "Nyní"
+  - HTTP Last-Modified detekce stáří snímků
+  - Lepší UX při pomalém připojení
+  
+- 🔧 **Technické změny:**
+  - Async refreshCamera() funkce
+  - HTTP HEAD request pro metadata
+  - Fallback mechanismus pro timestamp
+  - Konzervativní odhad stáří snímků
+
+#### v2.5.1 (2025-01-XX)
 - ✨ **Nové funkce:**
   - NICK pole pro uživatele
   - Geografická omezení přístupu
@@ -724,5 +752,5 @@ useEffect(() => {
 
 ---
 
-*Dokumentace aktualizována: 2025-01-XX*
-*Verze aplikace: 2.2.0*
+*Dokumentace aktualizována: 2025-01-02*
+*Verze aplikace: 2.6.0*
