@@ -8,6 +8,8 @@ import { activityService } from '../services/activityService';
 import { useGateTimer } from '../hooks/useGateTimer';
 import { locationService } from '../services/locationService';
 import { lastUserService } from '../services/lastUserService';
+import { distanceService } from '../services/distanceService';
+import { settingsService } from '../services/settingsService';
 
 const Dashboard: React.FC = () => {
   const { currentUser, logout } = useAuth();
@@ -20,6 +22,55 @@ const Dashboard: React.FC = () => {
   const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
   const [locationError, setLocationError] = useState<string>('');
   const [currentLocation, setCurrentLocation] = useState<any>(null);
+
+  // Helper function to get user identifier for MQTT messages
+  const getUserIdentifier = (): string => {
+    if (currentUser?.nick && currentUser.nick.trim()) {
+      return currentUser.nick;
+    }
+    return currentUser?.displayName || currentUser?.email || 'Neznámý';
+  };
+
+  // Helper function to check if user is within allowed distance for gate operations
+  const checkLocationProximity = async (): Promise<{ allowed: boolean; message?: string }> => {
+    // If user doesn't have location proximity requirement, allow operation
+    if (!currentUser?.permissions?.requireLocationProximity) {
+      return { allowed: true };
+    }
+
+    try {
+      // Get current user location
+      const userLocation = await locationService.getCurrentLocation();
+      
+      // Get gate settings
+      const settings = await settingsService.getAppSettings();
+      const gateLocation = {
+        latitude: settings.location.gateLatitude,
+        longitude: settings.location.gateLongitude
+      };
+
+      // Check if user is within allowed distance
+      const distance = distanceService.calculateDistance(userLocation, gateLocation);
+      const isWithinDistance = distance <= settings.location.maxDistanceMeters;
+
+      if (isWithinDistance) {
+        return { allowed: true };
+      } else {
+        const formattedDistance = distanceService.formatDistance(distance);
+        const maxDistanceFormatted = distanceService.formatDistance(settings.location.maxDistanceMeters);
+        return { 
+          allowed: false, 
+          message: `Jste příliš daleko od brány (${formattedDistance}). Maximální vzdálenost: ${maxDistanceFormatted}` 
+        };
+      }
+    } catch (error) {
+      console.error('📍 Dashboard: Location proximity check failed:', error);
+      return { 
+        allowed: false, 
+        message: 'Nelze ověřit vaši polohu. Zkuste to znovu.' 
+      };
+    }
+  };
 
   // MQTT Status Subscription (connection managed globally in App.tsx)
   useEffect(() => {
@@ -185,6 +236,13 @@ const Dashboard: React.FC = () => {
       return;
     }
 
+    // Check location proximity if required
+    const proximityCheck = await checkLocationProximity();
+    if (!proximityCheck.allowed) {
+      alert(proximityCheck.message);
+      return;
+    }
+
     setLoading(true);
     let mqttCommandSucceeded = false;
     
@@ -195,7 +253,7 @@ const Dashboard: React.FC = () => {
       await mqttService.publishGateCommand(currentUser.email || '');
       
       // Send user ID to Log/Brana/ID topic (like original HTML)
-      const logMessage = `ID: ${currentUser.displayName || currentUser.email || 'Neznámý'}`;
+      const logMessage = `ID: ${getUserIdentifier()}`;
       await mqttService.publishMessage('Log/Brana/ID', logMessage);
       console.log('🔧 Dashboard: User log sent to Log/Brana/ID:', logMessage);
       
@@ -210,7 +268,7 @@ const Dashboard: React.FC = () => {
         const skipLocation = !currentUser.permissions?.requireLocation;
         await activityService.logActivity({
           user: currentUser.email || '',
-          userDisplayName: currentUser.displayName || currentUser.email || '',
+          userDisplayName: getUserIdentifier(),
           action: 'Pokus o ovládání brány',
           device: 'gate',
           status: 'error',
@@ -232,7 +290,7 @@ const Dashboard: React.FC = () => {
       const skipLocation = !currentUser.permissions?.requireLocation;
       await activityService.logActivity({
         user: currentUser.email || '',
-        userDisplayName: currentUser.displayName || currentUser.email || '',
+        userDisplayName: getUserIdentifier(),
         action,
         device: 'gate',
         status: 'success',
@@ -248,7 +306,7 @@ const Dashboard: React.FC = () => {
     try {
       await lastUserService.logGateActivity(
         currentUser.email || '',
-        currentUser.displayName || currentUser.email || '',
+        getUserIdentifier(),
         action
       );
       
@@ -272,6 +330,13 @@ const Dashboard: React.FC = () => {
       return;
     }
 
+    // Check location proximity if required
+    const proximityCheck = await checkLocationProximity();
+    if (!proximityCheck.allowed) {
+      alert(proximityCheck.message);
+      return;
+    }
+
     setLoading(true);
     let mqttCommandSucceeded = false;
     
@@ -282,7 +347,7 @@ const Dashboard: React.FC = () => {
       
       // Try to publish Log message as part of critical operations
       const action = garageStatus.includes('zavřen') ? 'Otevření garáže' : 'Zavření garáže';
-      const logMessage = `${currentUser.displayName || currentUser.email}: ${action}`;
+      const logMessage = `${getUserIdentifier()}: ${action}`;
       await mqttService.publishMessage('Log/Brana/ID', logMessage);
       
       mqttCommandSucceeded = true;
@@ -304,7 +369,7 @@ const Dashboard: React.FC = () => {
         const skipLocation = !currentUser.permissions?.requireLocation;
         await activityService.logActivity({
           user: currentUser.email || '',
-          userDisplayName: currentUser.displayName || currentUser.email || '',
+          userDisplayName: getUserIdentifier(),
           action,
           device: 'garage',
           status: 'success',
@@ -320,7 +385,7 @@ const Dashboard: React.FC = () => {
       try {
         await lastUserService.logGarageActivity(
           currentUser.email || '',
-          currentUser.displayName || currentUser.email || '',
+          getUserIdentifier(),
           action
         );
         console.log('✅ Dashboard: Garage last user service updated');
@@ -355,7 +420,7 @@ const Dashboard: React.FC = () => {
       await mqttService.publishStopCommand(currentUser.email || '');
       
       // Try to publish Log message as part of critical operations
-      const logMessage = `${currentUser.displayName || currentUser.email}: STOP režim aktivován`;
+      const logMessage = `${getUserIdentifier()}: STOP režim aktivován`;
       await mqttService.publishMessage('Log/Brana/ID', logMessage);
       
       mqttCommandSucceeded = true;
@@ -416,6 +481,21 @@ const Dashboard: React.FC = () => {
               opacity: 0.8; 
               transform: scale(1.05);
             }
+          }
+          
+          @keyframes timer-blink {
+            0%, 100% { 
+              opacity: 1; 
+              box-shadow: var(--md-elevation-4-shadow);
+            }
+            50% { 
+              opacity: 0.7; 
+              box-shadow: var(--md-elevation-2-shadow);
+            }
+          }
+          
+          .timer-blinking {
+            animation: timer-blink 1.2s ease-in-out infinite !important;
           }
         `}
       </style>
@@ -480,7 +560,7 @@ const Dashboard: React.FC = () => {
             <button
               onClick={handleGateControl}
               disabled={loading || !mqttConnected}
-              className={`gate-button-modern ${(gateStatus.includes('se...') || loading) ? 'pulsing' : ''} md-ripple`}
+              className={`gate-button-modern ${(gateStatus.includes('se...') || loading) ? 'pulsing' : ''} ${timerState.type === 'autoClose' && timerState.countdown <= 60 ? 'timer-blinking' : ''} md-ripple`}
               style={{
                 width: '280px',
                 height: '280px',
@@ -550,21 +630,13 @@ const Dashboard: React.FC = () => {
                 {timerState.isActive && (
                   <div 
                     style={{ 
-                      fontSize: timerState.type === 'autoClose' ? '20px' : '16px', 
+                      fontSize: timerState.type === 'autoClose' ? '18px' : '16px', 
                       fontWeight: '800',
-                      color: timerState.type === 'travel' ? '#ffeb3b' : '#ff5722',
+                      color: timerState.type === 'travel' ? '#ffeb3b' : '#ffffff',
                       marginTop: '8px',
                       textShadow: timerState.type === 'travel' ? 
                         '0 0 10px rgba(255, 235, 59, 0.8)' : 
-                        '0 0 15px rgba(255, 87, 34, 0.8), 0 0 25px rgba(255, 87, 34, 0.6)',
-                      background: timerState.type === 'autoClose' ? 
-                        'linear-gradient(45deg, rgba(255, 87, 34, 0.2), rgba(255, 152, 0, 0.2))' : 
-                        'transparent',
-                      padding: timerState.type === 'autoClose' ? '8px 12px' : '4px',
-                      borderRadius: timerState.type === 'autoClose' ? '12px' : '0',
-                      border: timerState.type === 'autoClose' ? '2px solid rgba(255, 87, 34, 0.5)' : 'none',
-                      animation: timerState.type === 'autoClose' && timerState.countdown <= 60 ? 
-                        'pulse 1.5s ease-in-out infinite' : 'none'
+                        '0 0 8px rgba(0, 0, 0, 0.8), 2px 2px 4px rgba(0, 0, 0, 0.6)'
                     }}
                   >
                     {timerState.displayText}
@@ -734,7 +806,7 @@ const Dashboard: React.FC = () => {
               PŘIHLÁŠENÝ UŽIVATEL
             </h3>
             <p className="md-card-title" style={{ margin: 0, fontSize: '0.875rem', fontWeight: 500 }}>
-              {currentUser?.displayName || currentUser?.email}
+              {getUserIdentifier()}
             </p>
             <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: 'var(--md-on-surface-variant)' }}>
               Role: {currentUser?.role}

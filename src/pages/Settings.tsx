@@ -430,6 +430,160 @@ const Settings: React.FC = () => {
         </div>
       )}
 
+      {/* Location Settings */}
+      <div className="md-card" style={{ marginBottom: '16px' }}>
+        <div className="md-card-header">
+          <h2 className="md-card-title">Nastavení polohy brány</h2>
+        </div>
+        
+        <div className="md-card-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ 
+            padding: '12px', 
+            backgroundColor: 'var(--md-surface-variant)', 
+            borderRadius: '8px',
+            border: '1px solid var(--md-outline)'
+          }}>
+            <p style={{ fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', margin: 0 }}>
+              📍 Nastavte polohu brány a maximální vzdálenost pro uživatele s omezením přístupu podle vzdálenosti.
+            </p>
+          </div>
+
+          {/* Gate Location */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', marginBottom: '8px', fontWeight: 500 }}>
+                Zeměpisná šířka
+              </label>
+              <input
+                type="number"
+                step="0.000001"
+                value={settings.location?.gateLatitude || 50.719252}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  location: { 
+                    ...settings.location, 
+                    gateLatitude: parseFloat(e.target.value) || 50.719252 
+                  }
+                })}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  fontSize: '1rem',
+                  borderRadius: '12px',
+                  border: '1px solid var(--md-outline)',
+                  backgroundColor: 'var(--md-surface)',
+                  color: 'var(--md-on-surface)',
+                  outline: 'none',
+                  transition: 'border-color 0.2s ease'
+                }}
+                placeholder="50.719252"
+                onFocus={(e) => e.target.style.borderColor = 'var(--md-primary)'}
+                onBlur={(e) => e.target.style.borderColor = 'var(--md-outline)'}
+              />
+              <div style={{ fontSize: '0.75rem', color: 'var(--md-on-surface-variant)', marginTop: '4px' }}>
+                Latitude (např. 50.719252)
+              </div>
+            </div>
+            
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', marginBottom: '8px', fontWeight: 500 }}>
+                Zeměpisná délka
+              </label>
+              <input
+                type="number"
+                step="0.000001"
+                value={settings.location?.gateLongitude || 15.162632}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  location: { 
+                    ...settings.location, 
+                    gateLongitude: parseFloat(e.target.value) || 15.162632 
+                  }
+                })}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  fontSize: '1rem',
+                  borderRadius: '12px',
+                  border: '1px solid var(--md-outline)',
+                  backgroundColor: 'var(--md-surface)',
+                  color: 'var(--md-on-surface)',
+                  outline: 'none',
+                  transition: 'border-color 0.2s ease'
+                }}
+                placeholder="15.162632"
+                onFocus={(e) => e.target.style.borderColor = 'var(--md-primary)'}
+                onBlur={(e) => e.target.style.borderColor = 'var(--md-outline)'}
+              />
+              <div style={{ fontSize: '0.75rem', color: 'var(--md-on-surface-variant)', marginTop: '4px' }}>
+                Longitude (např. 15.162632)
+              </div>
+            </div>
+          </div>
+
+          {/* Max Distance */}
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', marginBottom: '8px', fontWeight: 500 }}>
+              Maximální vzdálenost (metry)
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="1000"
+              value={settings.location?.maxDistanceMeters || 15}
+              onChange={(e) => setSettings({
+                ...settings,
+                location: { 
+                  ...settings.location, 
+                  maxDistanceMeters: parseInt(e.target.value) || 15 
+                }
+              })}
+              style={{
+                width: '200px',
+                padding: '12px 16px',
+                fontSize: '1rem',
+                borderRadius: '12px',
+                border: '1px solid var(--md-outline)',
+                backgroundColor: 'var(--md-surface)',
+                color: 'var(--md-on-surface)',
+                outline: 'none',
+                transition: 'border-color 0.2s ease'
+              }}
+              placeholder="15"
+              onFocus={(e) => e.target.style.borderColor = 'var(--md-primary)'}
+              onBlur={(e) => e.target.style.borderColor = 'var(--md-outline)'}
+            />
+            <div style={{ fontSize: '0.75rem', color: 'var(--md-on-surface-variant)', marginTop: '4px' }}>
+              Uživatelé s omezením vzdálenosti nemohou ovládat bránu ze vzdálenosti větší než {settings.location?.maxDistanceMeters || 15}m
+            </div>
+          </div>
+
+          {/* Current Location Display */}
+          <div style={{ 
+            padding: '16px', 
+            backgroundColor: 'var(--md-surface-container)', 
+            borderRadius: '12px',
+            border: '1px solid var(--md-outline)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <svg style={{ width: '16px', height: '16px', color: 'var(--md-primary)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <strong style={{ fontSize: '0.875rem', color: 'var(--md-on-surface)' }}>
+                Nastavená poloha brány
+              </strong>
+            </div>
+            <div style={{ fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', fontFamily: 'monospace' }}>
+              📍 {(settings.location?.gateLatitude || 50.719252).toFixed(6)}, {(settings.location?.gateLongitude || 15.162632).toFixed(6)}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--md-on-surface-variant)', marginTop: '4px' }}>
+              Maximální vzdálenost: {settings.location?.maxDistanceMeters || 15} metrů
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Last User Settings */}
       <div className="md-card" style={{ marginBottom: '16px' }}>
         <div className="md-card-header">

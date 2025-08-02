@@ -14,6 +14,7 @@ interface IUserPermissions {
   manageUsers: boolean;
   requireLocation: boolean;
   allowGPS: boolean;
+  requireLocationProximity: boolean;
 }
 
 interface IAppUser {
@@ -97,6 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             manageUsers: false,
             requireLocation: false,
             allowGPS: true,
+            requireLocationProximity: false,
           },
           gpsEnabled: userData?.gpsEnabled || false,
           createdAt: userData?.createdAt?.toDate() || new Date(),
@@ -134,6 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           manageUsers: false,
           requireLocation: false,
           allowGPS: true,
+          requireLocationProximity: false,
         },
         gpsEnabled: false,
         createdAt: new Date(),
@@ -190,6 +193,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               manageUsers: false,
               requireLocation: false,
               allowGPS: true,
+              requireLocationProximity: false,
             },
             gpsEnabled: false,
             createdAt: new Date(),

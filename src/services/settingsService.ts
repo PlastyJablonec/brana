@@ -26,6 +26,11 @@ export interface AppSettings {
     allowedRoles: string[];
     maxAgeHours: number;
   };
+  location: {
+    gateLatitude: number;
+    gateLongitude: number;
+    maxDistanceMeters: number;
+  };
 }
 
 class SettingsService {
@@ -40,16 +45,31 @@ class SettingsService {
       if (docSnap.exists()) {
         const data = docSnap.data() as AppSettings;
         
-        // Migrace starých nastavení - přidáme chybějící lastUser sekci
+        // Migrace starých nastavení - přidáme chybějící sekce
+        let needsMigration = false;
+        
         if (!data.lastUser) {
           data.lastUser = {
             showLastUser: true,
             allowedRoles: ['admin', 'user'],
             maxAgeHours: 24
           };
+          needsMigration = true;
+        }
+        
+        if (!data.location) {
+          data.location = {
+            gateLatitude: 50.719252,
+            gateLongitude: 15.162632,
+            maxDistanceMeters: 15
+          };
+          needsMigration = true;
+        }
+        
+        if (needsMigration) {
           // Uložíme migrovaná nastavení
           await this.saveAppSettings(data);
-          console.log('🔧 SettingsService: Migrated old settings to include lastUser');
+          console.log('🔧 SettingsService: Migrated old settings');
         }
         
         console.log('🔧 SettingsService: Settings loaded:', data);
@@ -72,6 +92,11 @@ class SettingsService {
             showLastUser: true,
             allowedRoles: ['admin', 'user'],
             maxAgeHours: 24
+          },
+          location: {
+            gateLatitude: 50.719252,
+            gateLongitude: 15.162632,
+            maxDistanceMeters: 15
           }
         };
         
@@ -100,6 +125,11 @@ class SettingsService {
           showLastUser: true,
           allowedRoles: ['admin', 'user'],
           maxAgeHours: 24
+        },
+        location: {
+          gateLatitude: 50.719252,
+          gateLongitude: 15.162632,
+          maxDistanceMeters: 15
         }
       };
     }

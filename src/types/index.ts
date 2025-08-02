@@ -15,6 +15,7 @@ export interface User {
   id: string;
   email: string;
   displayName: string;
+  nick?: string;
   role: 'admin' | 'user' | 'viewer';
   permissions: {
     gate: boolean;
@@ -25,6 +26,7 @@ export interface User {
     manageUsers: boolean;
     requireLocation: boolean;
     allowGPS: boolean;
+    requireLocationProximity: boolean;
   };
   gpsEnabled: boolean;
   createdAt: Date;

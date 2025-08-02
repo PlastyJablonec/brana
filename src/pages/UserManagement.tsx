@@ -12,6 +12,7 @@ interface User {
   id: string;
   email: string;
   displayName: string;
+  nick?: string;
   role: 'admin' | 'user' | 'viewer';
   permissions: {
     gate: boolean;
@@ -22,6 +23,7 @@ interface User {
     manageUsers: boolean;
     requireLocation: boolean;
     allowGPS: boolean;
+    requireLocationProximity: boolean;
   };
   createdAt: Date;
   lastLogin?: Date;
@@ -44,6 +46,7 @@ const UserManagement: React.FC = () => {
   const [newUser, setNewUser] = useState({
     email: '',
     displayName: '',
+    nick: '',
     password: '',
     role: 'user' as const,
     permissions: {
@@ -54,7 +57,8 @@ const UserManagement: React.FC = () => {
       viewLogs: true,
       manageUsers: false,
       requireLocation: false,
-      allowGPS: true
+      allowGPS: true,
+      requireLocationProximity: false
     }
   });
 
@@ -133,6 +137,7 @@ const UserManagement: React.FC = () => {
         uid: userCredential.user.uid,
         email: newUser.email,
         displayName: newUser.displayName,
+        nick: newUser.nick || '',
         role: newUser.role,
         permissions: newUser.permissions,
         createdAt: new Date()
@@ -142,6 +147,7 @@ const UserManagement: React.FC = () => {
       setNewUser({
         email: '',
         displayName: '',
+        nick: '',
         password: '',
         role: 'user',
         permissions: {
@@ -152,7 +158,8 @@ const UserManagement: React.FC = () => {
           viewLogs: true,
           manageUsers: false,
           requireLocation: false,
-          allowGPS: true
+          allowGPS: true,
+          requireLocationProximity: false
         }
       });
       
@@ -171,6 +178,7 @@ const UserManagement: React.FC = () => {
       const userDoc = doc(db, 'users', user.id);
       await updateDoc(userDoc, {
         displayName: user.displayName,
+        nick: user.nick || '',
         role: user.role,
         permissions: user.permissions
       });
@@ -330,6 +338,16 @@ const UserManagement: React.FC = () => {
                   <div style={{ flex: 1 }}>
                     <h3 className="md-card-title" style={{ fontSize: '1rem', marginBottom: '4px' }}>
                       {user.displayName}
+                      {user.nick && (
+                        <span style={{ 
+                          fontSize: '0.8rem', 
+                          fontWeight: '500', 
+                          color: 'var(--md-primary)', 
+                          marginLeft: '8px' 
+                        }}>
+                          ({user.nick})
+                        </span>
+                      )}
                     </h3>
                     <p className="md-card-subtitle" style={{ marginBottom: '8px' }}>
                       {user.email}
@@ -464,6 +482,16 @@ const UserManagement: React.FC = () => {
                         backgroundColor: 'var(--md-success)',
                         color: 'white'
                       }}>GPS</span>
+                    )}
+                    {currentUser?.permissions.manageUsers && user.permissions.requireLocationProximity && (
+                      <span style={{ 
+                        padding: '4px 8px', 
+                        borderRadius: '8px', 
+                        fontSize: '0.75rem', 
+                        fontWeight: 500,
+                        backgroundColor: 'var(--md-error)',
+                        color: 'white'
+                      }}>Vzdálenost</span>
                     )}
                   </div>
                 </div>
@@ -613,6 +641,29 @@ const UserManagement: React.FC = () => {
               </div>
               
               <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', marginBottom: '8px', fontWeight: 500 }}>Nick (volitelné)</label>
+                <input
+                  type="text"
+                  value={newUser.nick}
+                  onChange={(e) => setNewUser({...newUser, nick: e.target.value})}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    fontSize: '1rem',
+                    borderRadius: '12px',
+                    border: '1px solid var(--md-outline)',
+                    backgroundColor: 'var(--md-surface)',
+                    color: 'var(--md-on-surface)',
+                    outline: 'none',
+                    transition: 'border-color 0.2s ease'
+                  }}
+                  placeholder="janik"
+                  onFocus={(e) => e.target.style.borderColor = 'var(--md-primary)'}
+                  onBlur={(e) => e.target.style.borderColor = 'var(--md-outline)'}
+                />
+              </div>
+              
+              <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', marginBottom: '8px', fontWeight: 500 }}>Heslo</label>
                 <input
                   type="password"
@@ -672,7 +723,8 @@ const UserManagement: React.FC = () => {
                     manageUsers: 'Správa uživatelů',
                     ...(currentUser?.permissions.manageUsers && {
                       requireLocation: 'Vyžadovat lokaci',
-                      allowGPS: 'GPS lokace'
+                      allowGPS: 'GPS lokace',
+                      requireLocationProximity: 'Omezení vzdáleností'
                     })
                   }).map(([key, label]) => (
                     <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
@@ -766,6 +818,29 @@ const UserManagement: React.FC = () => {
               </div>
               
               <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', marginBottom: '8px', fontWeight: 500 }}>Nick (volitelné)</label>
+                <input
+                  type="text"
+                  value={editingUser.nick || ''}
+                  onChange={(e) => setEditingUser({...editingUser, nick: e.target.value})}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    fontSize: '1rem',
+                    borderRadius: '12px',
+                    border: '1px solid var(--md-outline)',
+                    backgroundColor: 'var(--md-surface)',
+                    color: 'var(--md-on-surface)',
+                    outline: 'none',
+                    transition: 'border-color 0.2s ease'
+                  }}
+                  placeholder="janik"
+                  onFocus={(e) => e.target.style.borderColor = 'var(--md-primary)'}
+                  onBlur={(e) => e.target.style.borderColor = 'var(--md-outline)'}
+                />
+              </div>
+              
+              <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', marginBottom: '8px', fontWeight: 500 }}>Role</label>
                 <select
                   value={editingUser.role}
@@ -802,7 +877,8 @@ const UserManagement: React.FC = () => {
                     manageUsers: 'Správa uživatelů',
                     ...(currentUser?.permissions.manageUsers && {
                       requireLocation: 'Vyžadovat lokaci',
-                      allowGPS: 'GPS lokace'
+                      allowGPS: 'GPS lokace',
+                      requireLocationProximity: 'Omezení vzdáleností'
                     })
                   }).map(([key, label]) => (
                     <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
