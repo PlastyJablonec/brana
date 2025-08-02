@@ -3,6 +3,10 @@ export interface GeoLocation {
   longitude: number;
   accuracy: number;
   timestamp: number;
+  altitude?: number | null;
+  altitudeAccuracy?: number | null;
+  heading?: number | null;
+  speed?: number | null;
 }
 
 export interface LocationError {
@@ -13,78 +17,79 @@ export interface LocationError {
 class LocationService {
   private currentLocation: GeoLocation | null = null;
   private lastUpdateTime: number = 0;
-  private updateInterval: number = 30000; // 30 sekund
   private isWatching: boolean = false;
   private watchId: number | null = null;
 
-  async getCurrentLocation(bypassPermissionCheck: boolean = false): Promise<GeoLocation> {
+  /**
+   * Získá aktuální polohu pomocí GPS podle vzoru z GPS.txt
+   */
+  async getCurrentLocation(): Promise<GeoLocation> {
     console.log('📍 LocationService: getCurrentLocation called');
-    console.log('📍 LocationService: bypassPermissionCheck:', bypassPermissionCheck);
-    console.log('📍 LocationService: navigator.geolocation available:', !!navigator.geolocation);
-    console.log('📍 LocationService: isSecureContext:', window.isSecureContext);
-    console.log('📍 LocationService: protocol:', window.location.protocol);
-    console.log('📍 LocationService: hostname:', window.location.hostname);
     
     return new Promise((resolve, reject) => {
+      // Kontrola, zda prohlížeč podporuje geolokaci
       if (!navigator.geolocation) {
+        const error: LocationError = {
+          code: 0,
+          message: 'Váš prohlížeč nepodporuje geolokaci'
+        };
         console.error('📍 LocationService: Geolocation not supported');
-        reject({ code: 0, message: 'Geolocation není podporována v tomto prohlížeči' });
+        reject(error);
         return;
       }
 
-      // Zkusíme různé strategie podle zařízení
-      const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      
-      const options: PositionOptions = {
-        enableHighAccuracy: false, // Zkusíme nejdřív network-based lokaci 
-        timeout: 10000, // Kratší timeout pro rychlejší fallback
-        maximumAge: 300000 // 5 minut cache pro lepší performance
-      };
-      
-      console.log('📍 LocationService: Device detection - isMobile:', isMobile);
-      console.log('📍 LocationService: Using options:', options);
+      console.log('📍 LocationService: Requesting GPS position...');
 
-      console.log('📍 LocationService: Calling navigator.geolocation.getCurrentPosition with options:', options);
-
+      // Získání aktuální pozice - přesně podle vzoru z GPS.txt
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          console.log('📍 LocationService: SUCCESS - Got position:', position);
+          // Úspěšné získání pozice
+          console.log('📍 LocationService: GPS SUCCESS - Got position:', position);
+          
           const location: GeoLocation = {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
             accuracy: position.coords.accuracy,
+            altitude: position.coords.altitude,
+            altitudeAccuracy: position.coords.altitudeAccuracy,
+            heading: position.coords.heading,
+            speed: position.coords.speed,
             timestamp: Date.now()
           };
           
           this.currentLocation = location;
           this.lastUpdateTime = Date.now();
           
-          console.log('📍 LocationService: Current location:', location);
+          console.log('📍 LocationService: Location stored:', this.formatLocationString(location));
           resolve(location);
         },
         (error) => {
-          console.error('📍 LocationService: ERROR - Geolocation error:', error);
-          console.error('📍 LocationService: Error code:', error.code);
-          console.error('📍 LocationService: Error message:', error.message);
-          
-          // GPS selhalo - BEZ FALLBACK! Reálná poloha nebo nic.
-          console.error('📍 LocationService: GPS nedostupné - žádná falešná lokace!');
-          const locationError: LocationError = {
-            code: error.code,
-            message: this.getDetailedErrorMessage(error) + ' - GPS je vyžadováno!'
-          };
-          console.error('📍 LocationService: Formatted error:', locationError);
+          // Chyba při získávání pozice - zpracování podle vzoru
+          console.error('📍 LocationService: GPS ERROR:', error);
+          const locationError = this.handleLocationError(error);
           reject(locationError);
         },
-        options
+        {
+          // Nastavení pro získání pozice - podle vzoru z GPS.txt
+          enableHighAccuracy: true, // Vysoká přesnost (používá GPS)
+          timeout: 10000, // Timeout 10 sekund
+          maximumAge: 0 // Nepoužívat cache
+        }
       );
     });
   }
 
+  /**
+   * Spustí kontinuální sledování pozice podle vzoru z GPS.txt
+   */
   startWatching(): Promise<void> {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
-        reject({ code: 0, message: 'Geolocation není podporována' });
+        const error: LocationError = {
+          code: 0,
+          message: 'Váš prohlížeč nepodporuje geolokaci'
+        };
+        reject(error);
         return;
       }
 
@@ -93,101 +98,139 @@ class LocationService {
         return;
       }
 
-      const options: PositionOptions = {
-        enableHighAccuracy: false, // Network lokace pro PC
-        timeout: 10000, // Kratší timeout
-        maximumAge: 300000 // 5 minut cache
-      };
+      console.log('📍 LocationService: Starting GPS watching...');
+      this.isWatching = true;
 
-      this.watchId = navigator.geolocation.watchPosition(
+      // Spuštění sledování pozice - podle vzoru z GPS.txt
+      const id = navigator.geolocation.watchPosition(
         (position) => {
+          console.log('📍 LocationService: GPS watch update:', position);
+          
           const location: GeoLocation = {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
             accuracy: position.coords.accuracy,
+            altitude: position.coords.altitude,
+            altitudeAccuracy: position.coords.altitudeAccuracy,
+            heading: position.coords.heading,
+            speed: position.coords.speed,
             timestamp: Date.now()
           };
           
           this.currentLocation = location;
           this.lastUpdateTime = Date.now();
           
-          console.log('📍 LocationService: Location updated:', location);
+          console.log('📍 LocationService: Watch position updated:', this.formatLocationString(location));
         },
         (error) => {
-          console.error('📍 LocationService: Watch error:', this.getErrorMessage(error.code));
-          
-          // Při watch chybě použijeme fallback lokaci
-          if (error.code === 2 || error.code === 3) {
-            console.log('📍 LocationService: Watch failed, using fallback location');
-            const fallback = this.getFallbackLocation();
-            this.currentLocation = fallback;
-            this.lastUpdateTime = Date.now();
-          }
+          console.error('📍 LocationService: GPS watch error:', error);
+          this.handleLocationError(error);
         },
-        options
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0
+        }
       );
 
-      this.isWatching = true;
-      console.log('📍 LocationService: Started watching location');
+      this.watchId = id;
+      console.log('📍 LocationService: GPS watching started with ID:', id);
       resolve();
     });
   }
 
+  /**
+   * Zastaví sledování pozice
+   */
   stopWatching(): void {
     if (this.watchId !== null) {
+      console.log('📍 LocationService: Stopping GPS watch ID:', this.watchId);
       navigator.geolocation.clearWatch(this.watchId);
       this.watchId = null;
+      this.isWatching = false;
+      console.log('📍 LocationService: GPS watching stopped');
     }
-    this.isWatching = false;
-    console.log('📍 LocationService: Stopped watching location');
   }
 
+  /**
+   * Vrátí cached lokaci pokud je dostatečně čerstvá (max 5 minut)
+   */
   getCachedLocation(): GeoLocation | null {
-    // Vrátíme cached lokaci jen pokud není starší než 5 minut
-    if (this.currentLocation && (Date.now() - this.lastUpdateTime) < 300000) {
+    const maxAge = 5 * 60 * 1000; // 5 minut
+    if (this.currentLocation && (Date.now() - this.lastUpdateTime) < maxAge) {
+      console.log('📍 LocationService: Returning cached location:', this.formatLocationString(this.currentLocation));
       return this.currentLocation;
     }
+    console.log('📍 LocationService: No valid cached location available');
     return null;
   }
 
+  /**
+   * Získá lokaci pro aktivitu - buď cached nebo novou
+   */
   async getLocationForActivity(): Promise<GeoLocation | null> {
     try {
+      console.log('📍 LocationService: Getting location for activity...');
+      
       // Zkusíme nejdřív cached lokaci
       const cached = this.getCachedLocation();
       if (cached) {
+        console.log('📍 LocationService: Using cached location for activity');
         return cached;
       }
 
       // Pokud nemáme cached, zkusíme získat novou
+      console.log('📍 LocationService: No cached location, requesting new GPS position...');
       return await this.getCurrentLocation();
     } catch (error: any) {
       console.warn('📍 LocationService: Cannot get location for activity:', error);
-      
-      // Pokud je to Google API rate limit (429), použijeme fallback
-      if (error.message && error.message.includes('429')) {
-        console.log('📍 LocationService: Google API rate limited, using fallback location');
-        return this.getFallbackLocation();
-      }
-      
       return null;
     }
   }
 
-  private getFallbackLocation(): GeoLocation {
-    // Praha centrum jako fallback pro desktop/PC aplikace
-    console.log('📍 LocationService: Using fallback location (Praha centrum pro PC aplikace)');
+  /**
+   * Zpracování chyb podle vzoru z GPS.txt
+   */
+  private handleLocationError(error: GeolocationPositionError): LocationError {
+    let message: string;
+    
+    switch (error.code) {
+      case error.PERMISSION_DENIED:
+        message = 'Přístup k poloze byl zamítnut. Povolte prosím přístup k poloze v nastavení prohlížeče.';
+        break;
+      case error.POSITION_UNAVAILABLE:
+        message = 'Informace o poloze není dostupná. Zkontrolujte, zda máte zapnutou GPS.';
+        break;
+      case error.TIMEOUT:
+        message = 'Časový limit vypršel. Zkuste to prosím znovu.';
+        break;
+      default:
+        message = 'Nastala neznámá chyba při získávání polohy.';
+        break;
+    }
+
+    console.error('📍 LocationService: GPS Error details:', {
+      code: error.code,
+      message: error.message,
+      formattedMessage: message
+    });
+
     return {
-      latitude: 50.0755,
-      longitude: 14.4378,
-      accuracy: 99999, // Vysoké číslo pro rozpoznání fallback
-      timestamp: Date.now()
+      code: error.code,
+      message: message
     };
   }
 
+  /**
+   * Formátuje lokaci jako string
+   */
   formatLocationString(location: GeoLocation): string {
-    return `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`;
+    return `${location.latitude.toFixed(6)}°, ${location.longitude.toFixed(6)}° (±${Math.round(location.accuracy)}m)`;
   }
 
+  /**
+   * Vypočítá vzdálenost mezi dvěma lokacemi
+   */
   getDistanceString(location1: GeoLocation, location2: GeoLocation): string {
     const distance = this.calculateDistance(location1, location2);
     
@@ -218,75 +261,68 @@ class LocationService {
     return deg * (Math.PI/180);
   }
 
-  private getErrorMessage(code: number): string {
-    switch (code) {
-      case 1:
-        return 'Přístup k lokaci byl odepřen uživatelem';
-      case 2:
-        return 'Lokace není dostupná';
-      case 3:
-        return 'Vypršel časový limit pro získání lokace';
-      default:
-        return 'Neznámá chyba při získávání lokace';
-    }
-  }
-
-  private getDetailedErrorMessage(error: GeolocationPositionError): string {
-    const baseMessage = this.getErrorMessage(error.code);
-    
-    switch (error.code) {
-      case 1: // PERMISSION_DENIED
-        return `${baseMessage}. Zkontrolujte oprávnění v prohlížeči (ikona zámku v URL baru) nebo v nastavení stránky.`;
-      case 2: // POSITION_UNAVAILABLE
-        return `${baseMessage}. GPS signál není dostupný. Používám fallback lokaci Praha centrum.`;
-      case 3: // TIMEOUT
-        return `${baseMessage} (${10}s). GPS trvá příliš dlouho. Používám fallback lokaci.`;
-      default:
-        return `${baseMessage}. Detail: ${error.message}`;
-    }
-  }
-
+  /**
+   * Zkontroluje, zda je geolokace podporována
+   */
   isLocationSupported(): boolean {
     return 'geolocation' in navigator;
   }
 
+  /**
+   * Zkontroluje, zda je aplikace v bezpečném kontextu (HTTPS/localhost)
+   */
   isSecureContext(): boolean {
-    const isSecure = window.isSecureContext || 
-                    window.location.protocol === 'https:' || 
-                    window.location.hostname === 'localhost' ||
-                    window.location.hostname === '127.0.0.1';
-    
-    console.log('📍 LocationService: isSecureContext check:', {
-      'window.isSecureContext': window.isSecureContext,
-      'protocol': window.location.protocol,
-      'hostname': window.location.hostname,
-      'result': isSecure
-    });
-    
-    return isSecure;
+    return window.isSecureContext || 
+           window.location.protocol === 'https:' || 
+           window.location.hostname === 'localhost' ||
+           window.location.hostname === '127.0.0.1';
   }
 
+  /**
+   * Vrátí důvod, proč GPS není dostupné
+   */
   getLocationUnavailableReason(): string {
     if (!this.isLocationSupported()) {
       return 'Geolocation není podporována v tomto prohlížeči';
     }
     if (!this.isSecureContext()) {
-      return 'GPS vyžaduje HTTPS nebo localhost. Aktuálně: ' + window.location.protocol;
+      return 'GPS vyžaduje HTTPS nebo localhost';
     }
     return 'GPS není dostupné';
   }
 
+  /**
+   * Požádá o oprávnění k lokaci
+   */
   async requestPermission(): Promise<boolean> {
     if (!this.isLocationSupported() || !this.isSecureContext()) {
+      console.log('📍 LocationService: Permission denied - unsupported or insecure context');
       return false;
     }
 
     try {
+      console.log('📍 LocationService: Requesting GPS permission...');
       await this.getCurrentLocation();
+      console.log('📍 LocationService: GPS permission granted');
       return true;
     } catch (error) {
+      console.error('📍 LocationService: GPS permission denied:', error);
       return false;
     }
+  }
+
+  /**
+   * Vrátí aktuální stav sledování
+   */
+  isCurrentlyWatching(): boolean {
+    return this.isWatching;
+  }
+
+  /**
+   * Vrátí poslední známou lokaci (bez ohledu na stáří)
+   */
+  getLastKnownLocation(): GeoLocation | null {
+    return this.currentLocation;
   }
 }
 
