@@ -12,6 +12,9 @@ import LoadingSpinner from './components/LoadingSpinner';
 import ErrorBoundary from './components/ErrorBoundary';
 import MqttErrorBoundary from './components/MqttErrorBoundary';
 import { mqttService } from './services/mqttService';
+import { locationService } from './services/locationService';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from './firebase/config';
 import AppFooter from './components/AppFooter';
 import { IProtectedRouteProps } from './types';
 
@@ -41,15 +44,17 @@ const ProtectedRoute: React.FC<IProtectedRouteProps> = ({ children }) => {
 const AppRoutes: React.FC = () => {
   const { currentUser, loading } = useAuth();
 
-  // Initialize MQTT globally when user is authenticated
+  // Initialize MQTT and GPS globally when user is authenticated
   useEffect(() => {
     let isComponentMounted = true;
 
-    const initializeMqtt = async (): Promise<void> => {
+    const initializeServices = async (): Promise<void> => {
       if (!isComponentMounted) return;
 
       if (currentUser) {
-        console.log('🔧 App: User logged in, initializing global MQTT connection');
+        console.log('🔧 App: User logged in, initializing global services');
+        
+        // Initialize MQTT
         try {
           await mqttService.connect();
           if (isComponentMounted) {
@@ -61,13 +66,37 @@ const AppRoutes: React.FC = () => {
             // Error will be handled by MqttErrorBoundary in components
           }
         }
+
+        // Auto-save GPS location on login/refresh (no alerts)
+        if (currentUser.permissions?.allowGPS && isComponentMounted) {
+          console.log('📍 App: Auto-updating user GPS location...');
+          try {
+            const location = await locationService.getCurrentLocation();
+            
+            // Update user's location in Firestore silently
+            const userDoc = doc(db, 'users', currentUser.id);
+            await updateDoc(userDoc, {
+              lastLocation: {
+                latitude: location.latitude,
+                longitude: location.longitude,
+                accuracy: location.accuracy,
+                timestamp: new Date()
+              }
+            });
+            
+            console.log('📍 App: GPS location auto-saved:', locationService.formatLocationString(location));
+          } catch (gpsError) {
+            console.log('📍 App: GPS auto-save failed (no alert):', gpsError);
+            // Silent failure - no user notification
+          }
+        }
       } else {
-        console.log('🔧 App: User logged out, disconnecting MQTT');
+        console.log('🔧 App: User logged out, disconnecting services');
         mqttService.disconnect();
       }
     };
 
-    initializeMqtt();
+    initializeServices();
 
     return () => {
       isComponentMounted = false;

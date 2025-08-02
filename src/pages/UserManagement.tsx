@@ -115,11 +115,9 @@ const UserManagement: React.FC = () => {
       
       // Reload users to show updated location
       await loadUsers();
-      
-      alert('GPS lokace byla aktualizována!');
     } catch (error: any) {
       console.error('📍 GPS refresh failed:', error);
-      alert('Nepodařilo se získat GPS lokaci: ' + error.message);
+      // No alert - just log the error
     }
   };
 
