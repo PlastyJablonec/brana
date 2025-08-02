@@ -8,9 +8,63 @@ const CameraView: React.FC<CameraViewProps> = () => {
   const [overlayText, setOverlayText] = useState('Načítání kamery...');
   const [timestampText, setTimestampText] = useState('--');
   const [isRealCamera, setIsRealCamera] = useState(false);
+  const [currentTime, setCurrentTime] = useState(Date.now());
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const timestampIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  const previousImageHashRef = useRef<string | null>(null);
+
+  // Aktualizace současného času každých 100ms pro plynulé zobrazení  
+  useEffect(() => {
+    timeUpdateIntervalRef.current = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 100);
+    
+    return () => {
+      if (timeUpdateIntervalRef.current) {
+        clearInterval(timeUpdateIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Funkce pro detekci změny obrazu pomocí hash pixelů
+  const hasImageChanged = useCallback(async (img: HTMLImageElement): Promise<boolean> => {
+    try {
+      // Vytvoříme canvas pro porovnání pixelů
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return true;
+      
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      
+      // Získáme data obrazu
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      
+      // Vypočítáme hash pro rychlé porovnání (každý 40. pixel)
+      let hash = 0;
+      for (let i = 0; i < data.length; i += 40) {
+        hash = ((hash << 5) - hash) + data[i];
+        hash = hash & hash; // Convert to 32bit integer
+      }
+      
+      const currentHash = hash.toString();
+      
+      if (previousImageHashRef.current !== currentHash) {
+        previousImageHashRef.current = currentHash;
+        console.log('📸 Detekována změna snímku - nový hash:', currentHash.substring(0, 8));
+        return true;
+      }
+      
+      console.log('📸 Stejný snímek - hash nezměněn:', currentHash.substring(0, 8));
+      return false;
+    } catch (error) {
+      console.error('📸 Chyba při porovnávání obrazu:', error);
+      return true; // při chybě předpokládáme změnu
+    }
+  }, []);
 
   const updateTimestampDisplay = useCallback(() => {
     if (lastSuccessfulLoad === 0) {
@@ -18,21 +72,23 @@ const CameraView: React.FC<CameraViewProps> = () => {
       return;
     }
     
-    const secondsAgo = Math.floor((Date.now() - lastSuccessfulLoad) / 1000);
+    const diff = currentTime - lastSuccessfulLoad;
     let newTimestamp = '';
     
-    // Zobraz "Live" pro čerstvé snímky, pak přejdi na "Před Xs"
-    if (secondsAgo <= 2) {
+    // Zobrazení podle reference kódu
+    if (diff < 1000) {
       newTimestamp = 'Live';
-    } else if (secondsAgo < 60) {
-      newTimestamp = `Před ${secondsAgo}s`;
+    } else if (diff < 2000) {
+      newTimestamp = 'Před 1s';
+    } else if (diff < 60000) {
+      newTimestamp = `Před ${Math.floor(diff / 1000)}s`;
     } else {
-      const minutesAgo = Math.floor(secondsAgo / 60);
+      const minutesAgo = Math.floor(diff / 60000);
       newTimestamp = `Před ${minutesAgo}m`;
     }
     
     setTimestampText(newTimestamp);
-  }, [lastSuccessfulLoad]);
+  }, [lastSuccessfulLoad, currentTime]);
 
   const refreshCamera = useCallback(async () => {
     const timestamp = Date.now();
@@ -51,94 +107,74 @@ const CameraView: React.FC<CameraViewProps> = () => {
       console.log('🎥 HTTP detected - direct camera connection:', realUrl);
     }
     
-    if (imgRef.current) {
-      let hasLoaded = false;
+    try {
+      // Vytvoříme nový Image objekt pro testování
+      const testImg = new Image();
+      testImg.crossOrigin = 'anonymous';
       
-      const fallbackTimeout = setTimeout(() => {
-        if (!hasLoaded && imgRef.current) {
-          setOverlayText('Kamera nedostupná');
+      await new Promise<void>((resolve, reject) => {
+        testImg.onload = async () => {
+          try {
+            // Kontrola, zda se obraz skutečně změnil
+            const changed = await hasImageChanged(testImg);
+            
+            if (changed) {
+              // Pouze při změně obsahu aktualizujeme timestamp a zobrazení
+              const changeTime = Date.now();
+              setLastSuccessfulLoad(changeTime);
+              console.log('📸 ZMĚNA DETEKOVÁNA - aktualizace timestamp:', new Date(changeTime));
+              
+              // Aktualizuj zobrazený obrázek
+              if (imgRef.current) {
+                imgRef.current.src = realUrl;
+              }
+              setShowOverlay(false);
+              setIsRealCamera(true);
+            } else {
+              console.log('📸 Žádná změna - timestamp se neaktualizuje');
+            }
+            
+            resolve();
+          } catch (error) {
+            console.error('📸 Chyba při detekci změny:', error);
+            reject(error);
+          }
+        };
+        
+        testImg.onerror = () => {
+          console.error('📸 Chyba při načítání testovacího snímku');
+          setOverlayText(isHttps ? 'Proxy kamera nedostupná' : 'Chyba načítání kamery');
           setIsRealCamera(false);
-        }
-      }, 10000); // Increased timeout for proxy
-      
-      // Pro nový snímek nastavíme timestamp na aktuální čas - začínáme od "Live"
-      let actualImageTimestamp = timestamp; // Začni od času načtení = "Live"
-      
-      try {
-        // Fetch pro získání HTTP headers s časem posledního snímku (jen pro info)
-        const response = await fetch(realUrl, { method: 'HEAD' });
-        const lastModified = response.headers.get('Last-Modified');
-        if (lastModified) {
-          const serverTimestamp = new Date(lastModified).getTime();
-          console.log('📸 Server timestamp snímku:', new Date(serverTimestamp));
-          console.log('📸 Rozdíl server vs načtení:', Math.floor((timestamp - serverTimestamp) / 1000) + 's');
-          // Použijeme čas načtení, aby začal od "Live"
-          actualImageTimestamp = timestamp;
-        } else {
-          console.log('📸 Last-Modified nedostupný, začínáme od "Live"');
-          actualImageTimestamp = timestamp;
-        }
-      } catch (error) {
-        console.log('📸 Chyba při získávání timestamp, začínáme od "Live":', error);
-        actualImageTimestamp = timestamp;
-      }
-      
-      imgRef.current.onload = () => {
-        hasLoaded = true;
-        clearTimeout(fallbackTimeout);
+          reject(new Error('Failed to load image'));
+        };
         
-        // Check if it's real camera (including proxy)
-        const isReal = imgRef.current?.src.includes('camera-proxy') || 
-                       imgRef.current?.src.includes('89.24.76.191') || 
-                       imgRef.current?.src.includes('photo.jpg') || false;
-        setIsRealCamera(isReal);
-        
-        if (isReal) {
-          setShowOverlay(false);
-          // Použij skutečný timestamp snímku místo času načtení
-          setLastSuccessfulLoad(actualImageTimestamp);
-          console.log('📸 Snímek načten, timestamp:', new Date(actualImageTimestamp));
-        } else {
-          setOverlayText('Používám testovací obraz');
-        }
-      };
+        testImg.src = realUrl;
+      });
       
-      imgRef.current.onerror = () => {
-        hasLoaded = true;
-        clearTimeout(fallbackTimeout);
-        if (isHttps) {
-          setOverlayText('Proxy kamera nedostupná');
-        } else {
-          setOverlayText('Chyba načítání kamery');
-        }
-        setIsRealCamera(false);
-      };
-      
-      imgRef.current.src = realUrl;
+    } catch (error) {
+      console.error('📸 Chyba v refreshCamera:', error);
+      setOverlayText('Chyba kamery');
+      setIsRealCamera(false);
     }
-  }, []);
+  }, [hasImageChanged]);
 
 
-  // Spusť aktualizaci timestamp pokaždé když se změní lastSuccessfulLoad
+  // Aktualizuj timestamp displej při změnách
   useEffect(() => {
     updateTimestampDisplay();
   }, [updateTimestampDisplay]);
 
-  // Nastav intervaly pro refresh kamery a aktualizaci timestamp
+  // Nastav interval pro refresh kamery (každou sekundu)
   useEffect(() => {
-    timestampIntervalRef.current = setInterval(updateTimestampDisplay, 1000);
-    intervalRef.current = setInterval(refreshCamera, 5000); // Každých 5 sekund
+    intervalRef.current = setInterval(refreshCamera, 1000); // Každou sekundu kontrola změn
     refreshCamera(); // Initial load
     
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
-      if (timestampIntervalRef.current) {
-        clearInterval(timestampIntervalRef.current);
-      }
     };
-  }, [updateTimestampDisplay, refreshCamera]);
+  }, [refreshCamera]);
 
   return (
     <div className="camera-container" style={{ position: 'relative' }}>
