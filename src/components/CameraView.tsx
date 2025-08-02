@@ -90,7 +90,7 @@ const CameraView: React.FC<CameraViewProps> = () => {
     setTimestampText(newTimestamp);
   }, [lastSuccessfulLoad, currentTime]);
 
-  const refreshCamera = useCallback(async () => {
+  const refreshCamera = useCallback(() => {
     const timestamp = Date.now();
     const isHttps = window.location.protocol === 'https:';
     
@@ -107,75 +107,40 @@ const CameraView: React.FC<CameraViewProps> = () => {
       console.log('🎥 HTTP detected - direct camera connection:', realUrl);
     }
     
-    try {
-      // Vytvoříme nový Image objekt pro testování
-      const testImg = new Image();
-      if (!isHttps) {
-        testImg.crossOrigin = 'anonymous'; // Jen pro HTTP, HTTPS proxy nepotřebuje
-      }
+    if (!imgRef.current) return;
+    
+    // 🚀 INSTANT LOADING - okamžité zobrazení bez čekání na detekci změn
+    const previousSrc = imgRef.current.src;
+    
+    imgRef.current.onload = () => {
+      console.log('📸 Obrázek načten - aktualizuji timestamp na Live');
+      setLastSuccessfulLoad(Date.now()); // Vždy aktualizuj na Live při načtení
+      setShowOverlay(false);
+      setIsRealCamera(true);
       
-      await new Promise<void>((resolve, reject) => {
-        testImg.onload = async () => {
-          try {
-            // Kontrola, zda se obraz skutečně změnil
-            const changed = await hasImageChanged(testImg);
-            
-            if (changed) {
-              // Pouze při změně obsahu aktualizujeme timestamp a zobrazení
-              const changeTime = Date.now();
-              setLastSuccessfulLoad(changeTime);
-              console.log('📸 ZMĚNA DETEKOVÁNA - aktualizace timestamp:', new Date(changeTime));
-              
-              // Aktualizuj zobrazený obrázek s fallback
-              if (imgRef.current) {
-                // Nastav onload handler pro imgRef před změnou src
-                imgRef.current.onload = () => {
-                  console.log('📸 Obrázek úspěšně zobrazen');
-                  setShowOverlay(false);
-                  setIsRealCamera(true);
-                };
-                
-                imgRef.current.onerror = () => {
-                  console.error('📸 Chyba při zobrazení v imgRef');
-                  setOverlayText(isHttps ? 'Proxy kamera nedostupná' : 'Chyba načítání kamery');
-                  setIsRealCamera(false);
-                };
-                
-                imgRef.current.src = realUrl;
-              }
-            } else {
-              console.log('📸 Žádná změna - timestamp se neaktualizuje');
-              // Ale pokud ještě není zobrazen žádný obrázek, zkus ho zobrazit
-              if (imgRef.current && !imgRef.current.src.includes('photo.jpg') && !imgRef.current.src.includes('camera-proxy')) {
-                console.log('📸 První zobrazení - načítám i bez změny');
-                imgRef.current.src = realUrl;
-                setShowOverlay(false);
-                setIsRealCamera(true);
-              }
-            }
-            
-            resolve();
-          } catch (error) {
-            console.error('📸 Chyba při detekci změny:', error);
-            reject(error);
+      // Detekce změny na pozadí (neblokující)
+      if (previousSrc && previousSrc !== imgRef.current?.src) {
+        hasImageChanged(imgRef.current!).then(changed => {
+          if (changed) {
+            console.log('📸 Detekována změna obsahu na pozadí');
+          } else {
+            console.log('📸 Stejný obsah - ale už je zobrazen');
           }
-        };
-        
-        testImg.onerror = () => {
-          console.error('📸 Chyba při načítání testovacího snímku');
-          setOverlayText(isHttps ? 'Proxy kamera nedostupná' : 'Chyba načítání kamery');
-          setIsRealCamera(false);
-          reject(new Error('Failed to load image'));
-        };
-        
-        testImg.src = realUrl;
-      });
-      
-    } catch (error) {
-      console.error('📸 Chyba v refreshCamera:', error);
-      setOverlayText('Chyba kamery');
+        }).catch(err => {
+          console.log('📸 Chyba při detekci změny na pozadí:', err);
+        });
+      }
+    };
+    
+    imgRef.current.onerror = () => {
+      console.error('📸 Chyba při načítání obrázku');
+      setOverlayText(isHttps ? 'Proxy kamera nedostupná' : 'Chyba načítání kamery');
       setIsRealCamera(false);
-    }
+    };
+    
+    // ⚡ OKAMŽITÉ nastavení src - žádné čekání!
+    imgRef.current.src = realUrl;
+    console.log('📸 Spouštím okamžité načtení:', realUrl.substring(0, 50) + '...');
   }, [hasImageChanged]);
 
 
@@ -184,10 +149,10 @@ const CameraView: React.FC<CameraViewProps> = () => {
     updateTimestampDisplay();
   }, [updateTimestampDisplay]);
 
-  // Nastav interval pro refresh kamery (každou sekundu)
+  // Nastav interval pro refresh kamery (každých 5 sekund)
   useEffect(() => {
-    intervalRef.current = setInterval(refreshCamera, 1000); // Každou sekundu kontrola změn
-    refreshCamera(); // Initial load
+    refreshCamera(); // ⚡ OKAMŽITÉ první načtení
+    intervalRef.current = setInterval(refreshCamera, 5000); // Každých 5 sekund refresh
     
     return () => {
       if (intervalRef.current) {
