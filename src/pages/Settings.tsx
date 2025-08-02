@@ -16,6 +16,7 @@ const Settings: React.FC = () => {
   const [lastUser, setLastUser] = useState<LastUserInfo | null>(null);
   const [testingGPS, setTestingGPS] = useState(false);
   const [gpsTestResult, setGpsTestResult] = useState<string>('');
+  const [maxDistanceInput, setMaxDistanceInput] = useState<string>('');
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -48,6 +49,13 @@ const Settings: React.FC = () => {
 
     loadSettings();
   }, [currentUser]);
+
+  // Initialize maxDistanceInput when settings load
+  useEffect(() => {
+    if (settings?.location?.maxDistanceMeters) {
+      setMaxDistanceInput(settings.location.maxDistanceMeters.toString());
+    }
+  }, [settings?.location?.maxDistanceMeters]);
 
   const handleSaveSettings = async () => {
     if (!settings || !currentUser) return;
@@ -530,14 +538,24 @@ const Settings: React.FC = () => {
               type="number"
               min="1"
               max="1000"
-              value={settings.location?.maxDistanceMeters || ''}
-              onChange={(e) => setSettings({
-                ...settings,
-                location: { 
-                  ...settings.location, 
-                  maxDistanceMeters: e.target.value === '' ? 15 : parseInt(e.target.value) || 15
-                }
-              })}
+              value={maxDistanceInput}
+              onChange={(e) => {
+                setMaxDistanceInput(e.target.value);
+              }}
+              onBlur={(e) => {
+                // Update settings
+                const value = e.target.value === '' ? 15 : parseInt(e.target.value) || 15;
+                setSettings({
+                  ...settings,
+                  location: { 
+                    ...settings.location, 
+                    maxDistanceMeters: value
+                  }
+                });
+                setMaxDistanceInput(value.toString());
+                // Reset border color
+                e.target.style.borderColor = 'var(--md-outline)';
+              }}
               style={{
                 width: '200px',
                 padding: '12px 16px',
@@ -551,7 +569,6 @@ const Settings: React.FC = () => {
               }}
               placeholder="15"
               onFocus={(e) => e.target.style.borderColor = 'var(--md-primary)'}
-              onBlur={(e) => e.target.style.borderColor = 'var(--md-outline)'}
             />
             <div style={{ fontSize: '0.75rem', color: 'var(--md-on-surface-variant)', marginTop: '4px' }}>
               Uživatelé s omezením vzdálenosti nemohou ovládat bránu ze vzdálenosti větší než {settings.location?.maxDistanceMeters || 15}m
