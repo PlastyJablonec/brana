@@ -186,8 +186,12 @@ const Dashboard: React.FC = () => {
     }
 
     setLoading(true);
+    let mqttCommandSucceeded = false;
+    
     try {
       console.log('🔧 Dashboard: Sending gate command...');
+      
+      // Step 1: Send MQTT commands (critical part)
       await mqttService.publishGateCommand(currentUser.email || '');
       
       // Send user ID to Log/Brana/ID topic (like original HTML)
@@ -195,9 +199,36 @@ const Dashboard: React.FC = () => {
       await mqttService.publishMessage('Log/Brana/ID', logMessage);
       console.log('🔧 Dashboard: User log sent to Log/Brana/ID:', logMessage);
       
-      const action = gateStatus.includes('zavřen') ? 'Otevření brány' : 'Zavření brány';
+      mqttCommandSucceeded = true; // MQTT commands succeeded
+      console.log('✅ Dashboard: MQTT commands sent successfully');
       
-      // Log the activity (skip GPS if not required for this user)
+    } catch (mqttError) {
+      console.error('❌ Dashboard: MQTT command failed:', mqttError);
+      
+      // Log MQTT failure
+      try {
+        const skipLocation = !currentUser.permissions?.requireLocation;
+        await activityService.logActivity({
+          user: currentUser.email || '',
+          userDisplayName: currentUser.displayName || currentUser.email || '',
+          action: 'Pokus o ovládání brány',
+          device: 'gate',
+          status: 'error',
+          details: `Chyba při MQTT příkazu: ${(mqttError as Error).message}`
+        }, skipLocation);
+      } catch (logError) {
+        console.error('Failed to log MQTT error:', logError);
+      }
+      
+      alert('Chyba při odesílání příkazu');
+      setLoading(false);
+      return;
+    }
+    
+    // Step 2: Log activity (non-critical - don't show error to user if this fails)
+    const action = gateStatus.includes('zavřen') ? 'Otevření brány' : 'Zavření brány';
+    
+    try {
       const skipLocation = !currentUser.permissions?.requireLocation;
       await activityService.logActivity({
         user: currentUser.email || '',
@@ -208,36 +239,26 @@ const Dashboard: React.FC = () => {
         details: `Brána byla ${gateStatus.includes('zavřen') ? 'otevřena' : 'zavřena'} uživatelem`
       }, skipLocation);
       
-      // Update last user service
+      console.log('📝 Dashboard: Activity logged successfully');
+    } catch (activityError) {
+      console.warn('⚠️ Dashboard: Activity logging failed (non-critical):', activityError);
+    }
+    
+    // Step 3: Update last user service (non-critical)
+    try {
       await lastUserService.logGateActivity(
         currentUser.email || '',
         currentUser.displayName || currentUser.email || '',
         action
       );
       
-      console.log('🔧 Dashboard: Gate activity logged');
-    } catch (error) {
-      console.error('Failed to send gate command:', error);
-      
-      // Log the failed activity (skip GPS if not required for this user)
-      try {
-        const skipLocation = !currentUser.permissions?.requireLocation;
-        await activityService.logActivity({
-          user: currentUser.email || '',
-          userDisplayName: currentUser.displayName || currentUser.email || '',
-          action: 'Pokus o ovládání brány',
-          device: 'gate',
-          status: 'error',
-          details: `Chyba při ovládání brány: ${(error as Error).message}`
-        }, skipLocation);
-      } catch (logError) {
-        console.error('Failed to log error activity:', logError);
-      }
-      
-      alert('Chyba při odesílání příkazu');
-    } finally {
-      setLoading(false);
+      console.log('📝 Dashboard: Last user service updated');
+    } catch (lastUserError) {
+      console.warn('⚠️ Dashboard: Last user service failed (non-critical):', lastUserError);
     }
+    
+    console.log('🎉 Dashboard: Gate command completed successfully');
+    setLoading(false);
   };
 
   const handleGarageControl = async () => {
@@ -252,51 +273,66 @@ const Dashboard: React.FC = () => {
     }
 
     setLoading(true);
+    let mqttCommandSucceeded = false;
+    
+    // Critical MQTT operations - must succeed for the command to work
     try {
       console.log('🔧 Dashboard: Sending garage command...');
       await mqttService.publishGarageCommand(currentUser.email || '');
       
+      // Try to publish Log message as part of critical operations
+      const action = garageStatus.includes('zavřen') ? 'Otevření garáže' : 'Zavření garáže';
+      const logMessage = `${currentUser.displayName || currentUser.email}: ${action}`;
+      await mqttService.publishMessage('Log/Brana/ID', logMessage);
+      
+      mqttCommandSucceeded = true;
+      console.log('✅ Dashboard: Garage MQTT command sent successfully');
+      
+    } catch (mqttError) {
+      console.error('❌ Dashboard: Garage MQTT command failed:', mqttError);
+      alert('Chyba při odesílání příkazu');
+      setLoading(false);
+      return;
+    }
+    
+    // Non-critical logging operations - should not cause error alerts
+    if (mqttCommandSucceeded) {
       const action = garageStatus.includes('zavřen') ? 'Otevření garáže' : 'Zavření garáže';
       
-      // Log the activity (GPS will be added automatically by activityService)
-      await activityService.logActivity({
-        user: currentUser.email || '',
-        userDisplayName: currentUser.displayName || currentUser.email || '',
-        action,
-        device: 'garage',
-        status: 'success',
-        details: `Garáž byla ${garageStatus.includes('zavřen') ? 'otevřena' : 'zavřena'} uživatelem`
-      });
-      
-      // Update last user service for garage
-      await lastUserService.logGarageActivity(
-        currentUser.email || '',
-        currentUser.displayName || currentUser.email || '',
-        action
-      );
-      
-      console.log('🔧 Dashboard: Garage activity logged');
-    } catch (error) {
-      console.error('Failed to send garage command:', error);
-      
-      // Log the failed activity
+      // Non-critical Firestore activity logging
       try {
+        const skipLocation = !currentUser.permissions?.requireLocation;
         await activityService.logActivity({
           user: currentUser.email || '',
           userDisplayName: currentUser.displayName || currentUser.email || '',
-          action: 'Pokus o ovládání garáže',
+          action,
           device: 'garage',
-          status: 'error',
-          details: `Chyba při ovládání garáže: ${(error as Error).message}`
-        });
-      } catch (logError) {
-        console.error('Failed to log error activity:', logError);
+          status: 'success',
+          details: `Garáž byla ${garageStatus.includes('zavřen') ? 'otevřena' : 'zavřena'} uživatelem`
+        }, skipLocation);
+        console.log('✅ Dashboard: Garage activity logged to Firestore');
+      } catch (activityError) {
+        console.warn('⚠️ Dashboard: Failed to log garage activity to Firestore (non-critical):', activityError);
+        // Don't show error alert for non-critical logging failures
       }
       
-      alert('Chyba při odesílání příkazu');
-    } finally {
-      setLoading(false);
+      // Non-critical last user service logging
+      try {
+        await lastUserService.logGarageActivity(
+          currentUser.email || '',
+          currentUser.displayName || currentUser.email || '',
+          action
+        );
+        console.log('✅ Dashboard: Garage last user service updated');
+      } catch (lastUserError) {
+        console.warn('⚠️ Dashboard: Failed to update garage last user service (non-critical):', lastUserError);
+        // Don't show error alert for non-critical logging failures
+      }
+      
+      console.log('🎉 Dashboard: Garage command completed successfully');
     }
+    
+    setLoading(false);
   };
 
   const handleStopMode = async () => {
@@ -311,14 +347,49 @@ const Dashboard: React.FC = () => {
     }
 
     setLoading(true);
+    let mqttCommandSucceeded = false;
+    
+    // Critical MQTT operations - must succeed for the command to work
     try {
+      console.log('🔧 Dashboard: Sending STOP command...');
       await mqttService.publishStopCommand(currentUser.email || '');
-    } catch (error) {
-      console.error('Failed to send stop command:', error);
+      
+      // Try to publish Log message as part of critical operations
+      const logMessage = `${currentUser.displayName || currentUser.email}: STOP režim aktivován`;
+      await mqttService.publishMessage('Log/Brana/ID', logMessage);
+      
+      mqttCommandSucceeded = true;
+      console.log('✅ Dashboard: STOP MQTT command sent successfully');
+      
+    } catch (mqttError) {
+      console.error('❌ Dashboard: STOP MQTT command failed:', mqttError);
       alert('Chyba při odesílání STOP příkazu');
-    } finally {
       setLoading(false);
+      return;
     }
+    
+    // Non-critical logging operations - should not cause error alerts
+    if (mqttCommandSucceeded) {
+      try {
+        const skipLocation = !currentUser.permissions?.requireLocation;
+        await activityService.logActivity({
+          user: currentUser.email || '',
+          userDisplayName: currentUser.displayName || 'Unknown',
+          action: 'STOP režim',
+          device: 'gate',
+          status: 'success',
+          details: `Příkaz: STOP režim aktivován`
+        }, skipLocation);
+        console.log('✅ Dashboard: STOP activity logged to Firestore');
+      } catch (activityError) {
+        console.warn('⚠️ Dashboard: Failed to log STOP activity to Firestore (non-critical):', activityError);
+        // Don't show error alert for non-critical logging failures
+      }
+      
+      console.log('🎉 Dashboard: STOP command completed successfully');
+    }
+    
+    setLoading(false);
   };
 
   const getStatusVariant = (status: string) => {

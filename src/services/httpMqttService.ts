@@ -124,6 +124,12 @@ export class HttpMqttService {
       'Zavírá se...', 'Zastavena', 'STOP režim'
     ];
     
+    // Handle alternative text formats
+    if (status === 'Otevírám bránu') {
+      console.log(`🔄 HTTP MQTT: Parsed gate status: ${status} → Otevírá se... (alternative format)`);
+      return 'Otevírá se...';
+    }
+    
     for (const validStatus of validStatuses) {
       if (status === validStatus) {
         console.log(`🔄 HTTP MQTT: Parsed gate status: ${status} (direct match)`);
