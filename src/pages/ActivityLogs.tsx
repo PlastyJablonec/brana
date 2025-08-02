@@ -256,8 +256,26 @@ const ActivityLogs: React.FC = () => {
                       <div style={{ fontSize: '0.875rem', color: 'var(--md-on-surface-variant)' }}>
                         {log.userDisplayName || log.user} • {formatTime(log.timestamp)}
                         {log.location && (
-                          <div style={{ fontSize: '0.75rem', color: 'var(--md-on-surface-variant)', fontFamily: 'monospace', marginTop: '2px' }}>
-                            📍 {log.location.latitude.toFixed(6)}, {log.location.longitude.toFixed(6)}
+                          <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>
+                            <a 
+                              href={`https://maps.google.com/maps?q=${log.location.latitude},${log.location.longitude}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ 
+                                color: 'var(--md-primary)', 
+                                textDecoration: 'none',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                              onMouseEnter={(e) => (e.target as HTMLElement).style.textDecoration = 'underline'}
+                              onMouseLeave={(e) => (e.target as HTMLElement).style.textDecoration = 'none'}
+                            >
+                              📍 Zobrazit na mapě
+                              <svg style={{ width: '12px', height: '12px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </a>
                           </div>
                         )}
                       </div>

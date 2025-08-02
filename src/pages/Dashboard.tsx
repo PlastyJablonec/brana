@@ -439,8 +439,8 @@ const Dashboard: React.FC = () => {
         const skipLocation = !currentUser.permissions?.requireLocation;
         await activityService.logActivity({
           user: currentUser.email || '',
-          userDisplayName: currentUser.displayName || 'Unknown',
-          action: 'STOP režim',
+          userDisplayName: getUserIdentifier(),
+          action: 'Aktivace STOP režimu',
           device: 'gate',
           status: 'success',
           details: `Příkaz: STOP režim aktivován`
