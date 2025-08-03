@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import CameraView from '../components/CameraView';
 import ThemeToggle from '../components/ThemeToggle';
+import ConnectionLoader from '../components/ConnectionLoader';
 import { mqttService } from '../services/mqttService';
 import { activityService } from '../services/activityService';
 import { useGateTimer } from '../hooks/useGateTimer';
@@ -24,6 +25,42 @@ const Dashboard: React.FC = () => {
   const [currentLocation, setCurrentLocation] = useState<any>(null);
   const [distanceFromGate, setDistanceFromGate] = useState<number | null>(null);
   const [isLocationProximityAllowed, setIsLocationProximityAllowed] = useState<boolean>(true);
+
+  // Connection loading states
+  const [showConnectionLoader, setShowConnectionLoader] = useState(true);
+  const [connectionSteps, setConnectionSteps] = useState<Array<{
+    label: string;
+    status: 'pending' | 'loading' | 'success' | 'error';
+    description: string;
+  }>>([
+    { label: 'Autentifikace uživatele', status: 'success', description: 'Ověřování přihlášení' },
+    { label: 'MQTT připojení', status: 'loading', description: 'Připojuji se k IoT brokeru' },
+    { label: 'Načítání stavu brány', status: 'pending', description: 'Čekání na status zprávy' },
+    { label: 'GPS lokalizace', status: 'pending', description: 'Určování polohy' },
+    { label: 'Ověření oprávnění', status: 'pending', description: 'Kontrola přístupových práv' }
+  ]);
+
+  // Helper function to update connection step status
+  const updateConnectionStep = (stepIndex: number, status: 'pending' | 'loading' | 'success' | 'error', description?: string) => {
+    setConnectionSteps(prev => prev.map((step, index) => {
+      if (index === stepIndex) {
+        return { ...step, status, ...(description && { description }) };
+      }
+      return step;
+    }));
+  };
+
+  // Check if all critical steps are completed (hide loader)
+  const checkConnectionComplete = () => {
+    const criticalSteps = [0, 1, 2]; // Auth, MQTT, Gate Status
+    const allCriticalComplete = criticalSteps.every(index => 
+      connectionSteps[index]?.status === 'success'
+    );
+    
+    if (allCriticalComplete && showConnectionLoader) {
+      setTimeout(() => setShowConnectionLoader(false), 1000); // Small delay for smooth UX
+    }
+  };
 
   // Helper function to play sound feedback
   const playSound = (type: 'click' | 'success' | 'error') => {
@@ -170,6 +207,18 @@ const Dashboard: React.FC = () => {
     setGarageStatus(initialStatus.garageStatus);
     setMqttConnected(initialStatus.isConnected);
 
+    // Update connection steps based on initial status
+    if (initialStatus.isConnected) {
+      updateConnectionStep(1, 'success', 'Připojeno k MQTT brokeru');
+      if (initialStatus.gateStatus !== 'Neznámý stav') {
+        updateConnectionStep(2, 'success', 'Stav brány načten');
+      } else {
+        updateConnectionStep(2, 'loading', 'Čekání na stav brány...');
+      }
+    } else {
+      updateConnectionStep(1, 'loading', 'Připojuji se k IoT brokeru...');
+    }
+
     // Subscribe to status changes (don't manage connection here)
     const unsubscribe = mqttService.onStatusChange((status) => {
       console.log('🔧 Dashboard: MQTT status changed:', status);
@@ -179,6 +228,17 @@ const Dashboard: React.FC = () => {
       setGateStatus(status.gateStatus);
       setGarageStatus(status.garageStatus); 
       setMqttConnected(status.isConnected);
+
+      // Update connection steps
+      if (status.isConnected) {
+        updateConnectionStep(1, 'success', 'Připojeno k MQTT brokeru');
+        if (status.gateStatus !== 'Neznámý stav') {
+          updateConnectionStep(2, 'success', `Stav: ${status.gateStatus}`);
+        }
+      } else {
+        updateConnectionStep(1, 'error', 'Chyba připojení k MQTT');
+        updateConnectionStep(2, 'pending', 'Čekání na MQTT připojení');
+      }
       
       // Handle timer logic based on gate status changes
       const isMoving = status.gateStatus.includes('se...') || status.gateStatus.includes('Otevírá') || status.gateStatus.includes('Zavírá');
@@ -226,13 +286,17 @@ const Dashboard: React.FC = () => {
         console.log('📍 Dashboard: GPS not required for this user, skipping');
         setLocationPermission(true); // Set as "allowed" so UI doesn't show error
         setLocationError('');
+        updateConnectionStep(3, 'success', 'GPS není vyžadováno');
         return;
       }
+
+      updateConnectionStep(3, 'loading', 'Žádám o oprávnění GPS...');
 
       if (!locationService.isLocationSupported() || !locationService.isSecureContext()) {
         const reason = locationService.getLocationUnavailableReason();
         setLocationError(reason);
         setLocationPermission(false);
+        updateConnectionStep(3, 'error', reason);
         console.log('📍 Dashboard: GPS unavailable:', reason);
         return;
       }
@@ -243,6 +307,7 @@ const Dashboard: React.FC = () => {
         
         if (hasPermission) {
           console.log('📍 Dashboard: GPS permission granted, starting location tracking');
+          updateConnectionStep(3, 'loading', 'Získávám polohu...');
           await locationService.startWatching();
           
           // Získáme aktuální lokaci hned
@@ -252,8 +317,10 @@ const Dashboard: React.FC = () => {
             
             if (currentLoc.accuracy > 50000) {
               setLocationError('Fallback lokace (Praha centrum)');
+              updateConnectionStep(3, 'success', 'Fallback Praha centrum');
             } else {
               setLocationError('');
+              updateConnectionStep(3, 'success', `GPS aktivní (±${Math.round(currentLoc.accuracy)}m)`);
             }
             
             // Update distance from gate for the first time
@@ -261,10 +328,12 @@ const Dashboard: React.FC = () => {
           } catch (error: any) {
             console.warn('📍 Dashboard: Could not get initial location:', error);
             setLocationError('GPS nedostupné');
+            updateConnectionStep(3, 'error', 'Nepodařilo se získat polohu');
           }
         } else {
           console.log('📍 Dashboard: GPS permission denied');
           setLocationError('Oprávnění k lokaci bylo odepřeno');
+          updateConnectionStep(3, 'error', 'Oprávnění GPS odepřeno');
         }
       } catch (error: any) {
         console.warn('📍 Dashboard: GPS permission error:', error);
@@ -280,6 +349,7 @@ const Dashboard: React.FC = () => {
         }
         
         setLocationError(errorMsg);
+        updateConnectionStep(3, 'error', errorMsg);
       }
     };
 
@@ -289,6 +359,18 @@ const Dashboard: React.FC = () => {
       locationService.stopWatching();
     };
   }, []);
+
+  // Check permissions and finalize connection steps
+  useEffect(() => {
+    if (currentUser) {
+      updateConnectionStep(4, 'success', `Role: ${currentUser.role}`);
+    }
+  }, [currentUser]);
+
+  // Monitor connection completion
+  useEffect(() => {
+    checkConnectionComplete();
+  }, [connectionSteps]);
 
   // Periodically update distance from gate for location-restricted users
   useEffect(() => {
@@ -599,6 +681,8 @@ const Dashboard: React.FC = () => {
 
   return (
     <>
+      {/* Connection Loader */}
+      <ConnectionLoader steps={connectionSteps} isVisible={showConnectionLoader} />
       <style>
         {`
           @keyframes pulse {
