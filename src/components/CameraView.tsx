@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
-interface CameraViewProps {}
+interface CameraViewProps {
+  onCameraStatusChange?: (status: 'loading' | 'success' | 'error', message?: string) => void;
+}
 
-const CameraView: React.FC<CameraViewProps> = () => {
+const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
   const [lastSuccessfulLoad, setLastSuccessfulLoad] = useState<number>(0);
   const [showOverlay, setShowOverlay] = useState(true);
   const [overlayText, setOverlayText] = useState('Načítání kamery...');
@@ -123,6 +125,9 @@ const CameraView: React.FC<CameraViewProps> = () => {
     const loadStartTime = performance.now();
     console.log('🚀 Spouštím smart fallback FETCH načtení...');
     
+    // Callback loading start
+    onCameraStatusChange?.('loading', 'Načítání snímku kamery...');
+    
     // 🔄 Smart fallback: zkus postupně všechny endpointy
     for (let i = 0; i < cameraEndpoints.length; i++) {
       const currentUrl = cameraEndpoints[i];
@@ -168,6 +173,9 @@ const CameraView: React.FC<CameraViewProps> = () => {
           setShowOverlay(false);
           setIsRealCamera(true);
           
+          // Callback pro Dashboard
+          onCameraStatusChange?.('success', `Kamera načtena za ${totalTime.toFixed(0)}ms`);
+          
           // Detekce změny na pozadí
           hasImageChanged(imgRef.current!).then(changed => {
             if (changed) {
@@ -185,6 +193,7 @@ const CameraView: React.FC<CameraViewProps> = () => {
           URL.revokeObjectURL(objectUrl);
           setOverlayText('Chyba zobrazení obrázku');
           setIsRealCamera(false);
+          onCameraStatusChange?.('error', 'Chyba zobrazení obrázku');
         };
         
         // Nastav blob URL
@@ -201,8 +210,10 @@ const CameraView: React.FC<CameraViewProps> = () => {
           // Poslední endpoint selhal - zobraz chybu
           const totalTime = performance.now() - loadStartTime;
           console.error(`📸 ❌ Všechny endpointy selhaly za ${totalTime.toFixed(0)}ms`);
-          setOverlayText(isHttps ? 'Kamera nedostupná (všechny cesty)' : 'Kamera nedostupná (síť)');
+          const errorMsg = isHttps ? 'Kamera nedostupná (všechny cesty)' : 'Kamera nedostupná (síť)';
+          setOverlayText(errorMsg);
           setIsRealCamera(false);
+          onCameraStatusChange?.('error', errorMsg);
           
           // Poslední fallback - IMG element s primárním URL
           console.log('📸 Poslední fallback na IMG element...');
@@ -210,7 +221,7 @@ const CameraView: React.FC<CameraViewProps> = () => {
         }
       }
     }
-  }, [hasImageChanged]);
+  }, [hasImageChanged, onCameraStatusChange]);
 
 
   // Aktualizuj timestamp displej při změnách
