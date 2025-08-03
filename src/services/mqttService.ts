@@ -199,7 +199,7 @@ export class MqttService {
             console.error(`❌ Failed to subscribe to ${name}:`, err);
             reject(new Error(`Failed to subscribe to ${topic}: ${err.message}`));
           } else {
-            console.log(`✅ Subscribed to ${topic}`);
+            console.log(`✅ Subscribed to ${topic} (requesting retained messages)`);
             resolve();
           }
         });
@@ -207,6 +207,31 @@ export class MqttService {
     );
 
     await Promise.all(subscriptionPromises);
+    
+    // Požádáme o aktuální status po úspěšném subscribe
+    console.log('📡 Requesting current status from hardware...');
+    try {
+      // Pošleme request na status - některé systémy to podporují
+      await this.publishMessage('IoT/Brana/StatusRequest', '1');
+      console.log('✅ Status request sent');
+    } catch (error) {
+      console.log('⚠️ Status request failed (hardware may not support it):', error);
+      // Není kritická chyba - hardware možná nepodporuje status request
+    }
+    
+    // Fallback: Pokud po 3 sekundách stále máme "Neznámý stav", zkusíme jinou metodu
+    setTimeout(() => {
+      if (this.currentStatus.gateStatus === 'Neznámý stav') {
+        console.log('🔄 Still unknown status after 3s, trying fallback status probe...');
+        try {
+          // Zkusíme poslat "dummy" příkaz který možná vyvolá status response
+          // Některé systémy odpovídají statusem po jakémkoliv příkazu
+          this.publishMessage('IoT/Brana/Ping', 'status_request');
+        } catch (err) {
+          console.log('⚠️ Fallback status probe failed:', err);
+        }
+      }
+    }, 3000);
   }
 
   public disconnect(): void {
