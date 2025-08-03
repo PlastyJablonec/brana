@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import CameraView from '../components/CameraView';
 import ThemeToggle from '../components/ThemeToggle';
 import ConnectionLoader from '../components/ConnectionLoader';
+import MqttDebug from '../components/MqttDebug';
 import { mqttService } from '../services/mqttService';
 import { activityService } from '../services/activityService';
 import { useGateTimer } from '../hooks/useGateTimer';
@@ -25,6 +26,7 @@ const Dashboard: React.FC = () => {
   const [currentLocation, setCurrentLocation] = useState<any>(null);
   const [distanceFromGate, setDistanceFromGate] = useState<number | null>(null);
   const [isLocationProximityAllowed, setIsLocationProximityAllowed] = useState<boolean>(true);
+  const [showMqttDebug, setShowMqttDebug] = useState(false);
 
   // Connection loading states
   const [showConnectionLoader, setShowConnectionLoader] = useState(true);
@@ -695,6 +697,9 @@ const Dashboard: React.FC = () => {
     <>
       {/* Connection Loader */}
       <ConnectionLoader steps={connectionSteps} isVisible={showConnectionLoader} />
+      
+      {/* MQTT Debug Modal */}
+      <MqttDebug isVisible={showMqttDebug} onClose={() => setShowMqttDebug(false)} />
       <style>
         {`
           @keyframes pulse {
@@ -741,6 +746,23 @@ const Dashboard: React.FC = () => {
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <ThemeToggle />
+            
+            {/* MQTT Debug Toggle */}
+            <button 
+              onClick={() => setShowMqttDebug(true)}
+              className="btn-icon md-ripple"
+              style={{ 
+                background: mqttConnected ? 'var(--md-success-container)' : 'var(--md-error-container)', 
+                border: '1px solid var(--md-outline)',
+                borderRadius: '12px',
+                color: mqttConnected ? 'var(--md-on-success-container)' : 'var(--md-on-error-container)',
+                width: '44px',
+                height: '44px'
+              }}
+              title={mqttConnected ? 'MQTT připojeno - klikni pro debug' : 'MQTT nepřipojeno - klikni pro debug'}
+            >
+              🔧
+            </button>
             
             {/* Admin Toggle - Navigation Menu */}
             <button 

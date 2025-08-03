@@ -12,15 +12,15 @@ const firebaseConfig = {
   measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
-// Validate Firebase config
+// Validate Firebase config - DOČASNĚ VYPNUTO PRO MQTT TEST
 if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('YOUR_ACTUAL')) {
-  console.error('🔥 Firebase: API Key není nastaven! Zkontroluj .env soubor');
-  alert('Firebase konfigurace chybí! Zkontroluj .env soubor a nastav správné Firebase hodnoty.');
+  console.warn('🔥 Firebase: API Key není nastaven - pokračujeme v testovacím režimu');
+  // alert('Firebase konfigurace chybí! Zkontroluj .env soubor a nastav správné Firebase hodnoty.');
 }
 
 if (!firebaseConfig.projectId) {
-  console.error('🔥 Firebase: Project ID není nastaven!');
-  alert('Firebase Project ID chybí v .env souboru!');
+  console.warn('🔥 Firebase: Project ID není nastaven - pokračujeme v testovacím režimu');
+  // alert('Firebase Project ID chybí v .env souboru!');
 }
 
 // Debug Firebase config
@@ -35,8 +35,8 @@ try {
   firebase.initializeApp(firebaseConfig);
   console.log('🔥 Firebase initialized successfully');
 } catch (error) {
-  console.error('🔥 Firebase initialization failed:', error);
-  alert('Firebase se nepodařilo inicializovat! Zkontroluj konfiguraci.');
+  console.warn('🔥 Firebase initialization failed - pokračujeme v testovacím režimu:', error);
+  // alert('Firebase se nepodařilo inicializovat! Zkontroluj konfiguraci.');
 }
 export const auth = firebase.auth();
 export const db = firebase.firestore();
