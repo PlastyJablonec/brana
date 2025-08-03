@@ -49,7 +49,9 @@ export class MqttService {
   };
 
   constructor(
-    private readonly brokerUrl: string = process.env.REACT_APP_MQTT_URL || 'ws://89.24.76.191:9001',
+    private readonly brokerUrl: string = typeof window !== 'undefined' && window.location.protocol === 'https:' 
+      ? (process.env.REACT_APP_MQTT_WSS_URL || 'wss://89.24.76.191:9002')
+      : (process.env.REACT_APP_MQTT_URL || 'ws://89.24.76.191:9001'),
     private readonly options: IMqttConnectionOptions = {
       clientId: `gate-control-${Math.random().toString(16).substring(2, 8)}`,
       clean: true,  // ⚡ TRUE pro okamžité retained messages

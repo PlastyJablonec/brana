@@ -9,9 +9,10 @@ interface ConnectionStep {
 interface ConnectionLoaderProps {
   steps: ConnectionStep[];
   isVisible: boolean;
+  onShowDebug?: () => void;
 }
 
-const ConnectionLoader: React.FC<ConnectionLoaderProps> = ({ steps, isVisible }) => {
+const ConnectionLoader: React.FC<ConnectionLoaderProps> = ({ steps, isVisible, onShowDebug }) => {
   if (!isVisible) return null;
 
   const getStepIcon = (status: ConnectionStep['status']) => {
@@ -271,6 +272,30 @@ const ConnectionLoader: React.FC<ConnectionLoaderProps> = ({ steps, isVisible })
               }}>
                 {steps.filter(s => s.status === 'success').length} z {steps.length} dokončeno
               </div>
+              
+              {/* Debug tlačítko pro případ problémů s připojením */}
+              {(steps.some(s => s.status === 'error') || steps.some(s => s.status === 'loading')) && onShowDebug && (
+                <div style={{ marginTop: '16px', textAlign: 'center' }}>
+                  <button
+                    onClick={onShowDebug}
+                    style={{
+                      background: 'var(--md-error)',
+                      color: 'white',
+                      border: 'none',
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      fontSize: '0.875rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      margin: '0 auto'
+                    }}
+                  >
+                    🔧 Diagnostika připojení
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

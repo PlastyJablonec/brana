@@ -42,8 +42,8 @@ const MqttDebug: React.FC<MqttDebugProps> = ({ isVisible, onClose }) => {
         addDebugLog('Network', `Type: ${connection.effectiveType || 'unknown'}, Downlink: ${connection.downlink || 'unknown'}Mbps`, 'info');
       }
 
-      // Test WebSocket connection directly
-      const wsUrl = 'ws://89.24.76.191:9001';
+      // Test WebSocket connection directly (use correct protocol for HTTPS)
+      const wsUrl = isHttps ? 'wss://89.24.76.191:9002' : 'ws://89.24.76.191:9001';
       addDebugLog('WebSocket', `Testování ${wsUrl}...`, 'info');
       
       const ws = new WebSocket(wsUrl);

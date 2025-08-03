@@ -696,7 +696,11 @@ const Dashboard: React.FC = () => {
   return (
     <>
       {/* Connection Loader */}
-      <ConnectionLoader steps={connectionSteps} isVisible={showConnectionLoader} />
+      <ConnectionLoader 
+        steps={connectionSteps} 
+        isVisible={showConnectionLoader} 
+        onShowDebug={() => setShowMqttDebug(true)}
+      />
       
       {/* MQTT Debug Modal */}
       <MqttDebug isVisible={showMqttDebug} onClose={() => setShowMqttDebug(false)} />
