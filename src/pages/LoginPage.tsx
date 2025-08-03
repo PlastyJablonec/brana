@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../firebase/config';
+import GoogleOAuthButton from '../components/GoogleOAuthButton';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -8,7 +9,7 @@ const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
 
   // Test Firebase connection on component mount
   useEffect(() => {
@@ -196,6 +197,44 @@ const LoginPage: React.FC = () => {
         
         {/* Form Section */}
         <form onSubmit={handleSubmit} style={{ padding: '32px' }}>
+          {/* Google OAuth Button */}
+          <GoogleOAuthButton
+            onClick={loginWithGoogle}
+            onSuccess={() => {
+              console.log('Google OAuth úspěšné!');
+            }}
+            onError={(error) => {
+              setError(error);
+            }}
+            disabled={loading}
+          />
+          
+          {/* OR Divider */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            margin: '16px 0',
+            gap: '16px'
+          }}>
+            <div style={{
+              flex: 1,
+              height: '1px',
+              background: 'var(--md-outline-variant)'
+            }}></div>
+            <span style={{
+              fontSize: '14px',
+              color: 'var(--md-on-surface-variant)',
+              fontWeight: '500'
+            }}>
+              nebo
+            </span>
+            <div style={{
+              flex: 1,
+              height: '1px',
+              background: 'var(--md-outline-variant)'
+            }}></div>
+          </div>
+          
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {/* Email Field */}
             <div>

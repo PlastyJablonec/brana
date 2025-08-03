@@ -11,6 +11,7 @@ import Settings from './pages/Settings';
 import LoadingSpinner from './components/LoadingSpinner';
 import ErrorBoundary from './components/ErrorBoundary';
 import MqttErrorBoundary from './components/MqttErrorBoundary';
+import PendingApprovalScreen from './components/PendingApprovalScreen';
 import { mqttService } from './services/mqttService';
 import { locationService } from './services/locationService';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -29,6 +30,53 @@ const ProtectedRoute: React.FC<IProtectedRouteProps> = ({ children }) => {
     return <Navigate to="/login" replace />;
   }
 
+  // Check if user is pending approval
+  if (currentUser.status === 'pending') {
+    return <PendingApprovalScreen user={currentUser} />;
+  }
+
+  // Check if user was rejected
+  if (currentUser.status === 'rejected') {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        textAlign: 'center'
+      }}>
+        <div className="md-card" style={{ maxWidth: '400px', padding: '32px' }}>
+          <h2 style={{ color: 'var(--md-error)', marginBottom: '16px' }}>
+            ❌ Přístup zamítnut
+          </h2>
+          <p style={{ marginBottom: '24px', color: 'var(--md-on-surface-variant)' }}>
+            Váš požadavek o přístup byl administrátorem zamítnut.
+            {currentUser.rejectedReason && (
+              <>
+                <br /><br />
+                <strong>Důvod:</strong> {currentUser.rejectedReason}
+              </>
+            )}
+          </p>
+          <button 
+            onClick={() => window.location.href = '/login'}
+            style={{
+              background: 'var(--md-primary)',
+              color: 'var(--md-on-primary)',
+              border: 'none',
+              padding: '12px 24px',
+              borderRadius: '8px'
+            }}
+          >
+            Zpět na přihlášení
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // User is approved - allow access
   return (
     <MqttErrorBoundary
       onMqttError={(error) => {
