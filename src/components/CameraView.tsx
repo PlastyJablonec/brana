@@ -94,87 +94,120 @@ const CameraView: React.FC<CameraViewProps> = () => {
     const timestamp = Date.now();
     const isHttps = window.location.protocol === 'https:';
     
-    let realUrl: string;
+    // 🌐 Multiple camera endpoints pro různé sítě
+    const cameraEndpoints = [
+      // Primární endpoint
+      isHttps 
+        ? `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`
+        : `${process.env.REACT_APP_CAMERA_URL || 'http://89.24.76.191:10180'}/photo.jpg?t=${timestamp}&cache=${Math.random()}`,
+      
+      // Fallback endpoints pro různé síťové situace
+      ...(isHttps ? [
+        // HTTPS fallbacky
+        `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}&fallback=1`,
+        `/api/camera-proxy-backup?t=${timestamp}&cache=${Math.random()}`,
+      ] : [
+        // HTTP fallbacky - různé IP/porty
+        `http://89.24.76.191:8080/photo.jpg?t=${timestamp}&cache=${Math.random()}`,
+        `http://89.24.76.191:80/photo.jpg?t=${timestamp}&cache=${Math.random()}`,
+        `http://192.168.1.100:10180/photo.jpg?t=${timestamp}&cache=${Math.random()}`, // Lokální síť
+        `http://camera.local:10180/photo.jpg?t=${timestamp}&cache=${Math.random()}`,   // mDNS
+      ])
+    ];
     
-    if (isHttps) {
-      // Use proxy on HTTPS
-      realUrl = `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`;
-      console.log('🌐 HTTPS detected - using camera proxy:', realUrl);
-    } else {
-      // Direct connection on HTTP
-      const cameraBase = process.env.REACT_APP_CAMERA_URL || 'http://89.24.76.191:10180';
-      realUrl = `${cameraBase}/photo.jpg?t=${timestamp}&cache=${Math.random()}`;
-      console.log('🎥 HTTP detected - direct camera connection:', realUrl);
-    }
+    console.log(`🌐 ${isHttps ? 'HTTPS' : 'HTTP'} detected - trying ${cameraEndpoints.length} camera endpoints`);
     
     if (!imgRef.current) return;
     
     const loadStartTime = performance.now();
-    console.log('🚀 Spouštím FETCH-based načtení:', realUrl.substring(0, 50) + '...');
+    console.log('🚀 Spouštím smart fallback FETCH načtení...');
     
-    try {
-      // ⚡ FETCH API - nejrychlejší podle testů!
-      const response = await fetch(realUrl, {
-        method: 'GET',
-        mode: isHttps ? 'same-origin' : 'cors', // HTTPS = same-origin, HTTP = cors
-        cache: 'no-cache',
-        credentials: 'omit'
-      });
+    // 🔄 Smart fallback: zkus postupně všechny endpointy
+    for (let i = 0; i < cameraEndpoints.length; i++) {
+      const currentUrl = cameraEndpoints[i];
+      const endpointStartTime = performance.now();
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const blob = await response.blob();
-      const loadTime = performance.now() - loadStartTime;
-      
-      // Vytvoř object URL a zobraz okamžitě
-      const objectUrl = URL.createObjectURL(blob);
-      const previousSrc = imgRef.current.src;
-      
-      // Cleanup předchozího URL
-      if (previousSrc && previousSrc.startsWith('blob:')) {
-        URL.revokeObjectURL(previousSrc);
-      }
-      
-      imgRef.current.onload = () => {
-        console.log(`📸 FETCH načtení dokončeno za ${loadTime.toFixed(0)}ms (${blob.size} bytes)`);
-        setLastSuccessfulLoad(Date.now()); // Live timestamp
-        setShowOverlay(false);
-        setIsRealCamera(true);
+      try {
+        console.log(`📡 Zkouším endpoint ${i + 1}/${cameraEndpoints.length}: ${currentUrl.substring(0, 60)}...`);
         
-        // Detekce změny na pozadí
-        hasImageChanged(imgRef.current!).then(changed => {
-          if (changed) {
-            console.log('📸 Detekována změna obsahu');
-          } else {
-            console.log('📸 Stejný obsah');
-          }
-        }).catch(err => {
-          console.log('📸 Chyba při detekci změny:', err);
+        // ⚡ FETCH API s timeoutem pro rychlé fallbacky
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+        
+        const response = await fetch(currentUrl, {
+          method: 'GET',
+          mode: isHttps ? 'same-origin' : 'cors',
+          cache: 'no-cache',
+          credentials: 'omit',
+          signal: controller.signal
         });
-      };
-      
-      imgRef.current.onerror = () => {
-        console.error('📸 Chyba při zobrazení blob URL');
-        URL.revokeObjectURL(objectUrl);
-        setOverlayText('Chyba zobrazení obrázku');
-        setIsRealCamera(false);
-      };
-      
-      // Nastav blob URL
-      imgRef.current.src = objectUrl;
-      
-    } catch (error) {
-      const loadTime = performance.now() - loadStartTime;
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`📸 FETCH chyba za ${loadTime.toFixed(0)}ms:`, errorMessage);
-      setOverlayText(isHttps ? 'Proxy kamera nedostupná' : 'Chyba načítání kamery');
-      setIsRealCamera(false);
-      
-      // Fallback na IMG element
-      console.log('📸 Fallback na IMG element...');
-      imgRef.current.src = realUrl;
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const blob = await response.blob();
+        const endpointTime = performance.now() - endpointStartTime;
+        const totalTime = performance.now() - loadStartTime;
+        
+        // ✅ Úspěch! Zobraz obrázek
+        const objectUrl = URL.createObjectURL(blob);
+        const previousSrc = imgRef.current.src;
+        
+        // Cleanup předchozího URL
+        if (previousSrc && previousSrc.startsWith('blob:')) {
+          URL.revokeObjectURL(previousSrc);
+        }
+        
+        imgRef.current.onload = () => {
+          console.log(`📸 ✅ ÚSPĚCH endpoint ${i + 1}: ${endpointTime.toFixed(0)}ms (total: ${totalTime.toFixed(0)}ms, ${blob.size} bytes)`);
+          setLastSuccessfulLoad(Date.now());
+          setShowOverlay(false);
+          setIsRealCamera(true);
+          
+          // Detekce změny na pozadí
+          hasImageChanged(imgRef.current!).then(changed => {
+            if (changed) {
+              console.log('📸 Detekována změna obsahu');
+            } else {
+              console.log('📸 Stejný obsah');
+            }
+          }).catch(err => {
+            console.log('📸 Chyba při detekci změny:', err);
+          });
+        };
+        
+        imgRef.current.onerror = () => {
+          console.error('📸 Chyba při zobrazení blob URL');
+          URL.revokeObjectURL(objectUrl);
+          setOverlayText('Chyba zobrazení obrázku');
+          setIsRealCamera(false);
+        };
+        
+        // Nastav blob URL
+        imgRef.current.src = objectUrl;
+        return; // ✅ Úspěch - ukončí smyčku
+        
+      } catch (error) {
+        const endpointTime = performance.now() - endpointStartTime;
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.warn(`📸 ❌ Endpoint ${i + 1} selhal za ${endpointTime.toFixed(0)}ms: ${errorMessage}`);
+        
+        // Pokračuj na další endpoint (kromě posledního)
+        if (i === cameraEndpoints.length - 1) {
+          // Poslední endpoint selhal - zobraz chybu
+          const totalTime = performance.now() - loadStartTime;
+          console.error(`📸 ❌ Všechny endpointy selhaly za ${totalTime.toFixed(0)}ms`);
+          setOverlayText(isHttps ? 'Kamera nedostupná (všechny cesty)' : 'Kamera nedostupná (síť)');
+          setIsRealCamera(false);
+          
+          // Poslední fallback - IMG element s primárním URL
+          console.log('📸 Poslední fallback na IMG element...');
+          imgRef.current.src = cameraEndpoints[0];
+        }
+      }
     }
   }, [hasImageChanged]);
 
