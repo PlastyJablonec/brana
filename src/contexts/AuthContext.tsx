@@ -156,7 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const userData = userDoc.data();
         console.log('✅ User found in Firestore (legacy):', userData?.email);
         
-        user = {
+        const legacyUser: User = {
           id: firebaseUser.uid,
           email: userData?.email || firebaseUser.email || '',
           displayName: userData?.displayName || firebaseUser.displayName || firebaseUser.email || 'User',
@@ -181,7 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
         
         console.log('🔧 AuthContext: User data loaded from Firestore (legacy)');
-        setCurrentUser(user);
+        setCurrentUser(legacyUser);
         
         // Only update lastLogin on actual login, not refresh
         if (isInitialLogin) {
@@ -197,11 +197,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Fallback: Create user with minimal data
       console.log('📝 Creating default user profile for:', firebaseUser.email);
-      const user: User = {
+      const minimalUser: User = {
         id: firebaseUser.uid,
         email: firebaseUser.email || '',
         displayName: firebaseUser.displayName || firebaseUser.email || 'User',
+        photoURL: firebaseUser.photoURL || undefined,
         role: 'viewer',
+        status: 'pending', // New users need approval
+        authProvider: 'email', // Fallback auth provider
         permissions: {
           gate: false,
           garage: false,
@@ -219,16 +222,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       
       console.log('🔧 AuthContext: Default user created');
-      setCurrentUser(user);
+      setCurrentUser(minimalUser);
       
       // Try to save to Firestore for future use
       try {
         await db.collection('users').doc(firebaseUser.uid).set({
-          email: user.email,
-          displayName: user.displayName,
-          role: user.role,
-          permissions: user.permissions,
-          gpsEnabled: user.gpsEnabled,
+          email: minimalUser.email,
+          displayName: minimalUser.displayName,
+          role: minimalUser.role,
+          permissions: minimalUser.permissions,
+          gpsEnabled: minimalUser.gpsEnabled,
           createdAt: new Date(),
           lastLogin: new Date()
         });
@@ -254,11 +257,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (error) {
           console.error('❌ Failed to fetch user data, creating minimal user:', error);
           // Create minimal user as fallback
-          const minimalUser: User = {
+          const fallbackUser: User = {
             id: firebaseUser.uid,
             email: firebaseUser.email || '',
             displayName: firebaseUser.displayName || 'User',
+            photoURL: firebaseUser.photoURL || undefined,
             role: 'viewer',
+            status: 'pending', // New users need approval
+            authProvider: 'email', // Fallback auth provider
             permissions: {
               gate: false,
               garage: false,
@@ -274,8 +280,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             createdAt: new Date(),
             lastLogin: new Date(),
           };
-          console.log('⚠️ Using minimal user profile');
-          setCurrentUser(minimalUser);
+          console.log('⚠️ Using fallback user profile');
+          setCurrentUser(fallbackUser);
         }
       } else {
         console.log('🚪 User signed out');
