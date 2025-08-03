@@ -143,14 +143,25 @@ const UserManagement: React.FC = () => {
   };
 
   const handleAddUser = async () => {
+    console.log('🚀 handleAddUser started');
+    console.log('📋 New user data:', newUser);
+    console.log('👤 Current user:', currentUser);
+    
     try {
       setLoading(true);
+      console.log('⏳ Loading state set to true');
       
+      // Validate input data
+      if (!newUser.email || !newUser.displayName || !newUser.password) {
+        throw new Error('Chybí povinné údaje (email, jméno nebo heslo)');
+      }
+      
+      console.log('🔐 Creating Firebase Auth user...');
       // Create Firebase Auth user
       const userCredential = await createUserWithEmailAndPassword(auth, newUser.email, newUser.password);
+      console.log('✅ Firebase Auth user created:', userCredential.user.uid);
       
-      // Add user document to Firestore with all required fields
-      await addDoc(collection(db, 'users'), {
+      const userData = {
         uid: userCredential.user.uid,
         email: newUser.email,
         displayName: newUser.displayName,
@@ -166,8 +177,16 @@ const UserManagement: React.FC = () => {
         requestedAt: new Date(), // Same as creation time for manual users
         approvedAt: new Date(), // Auto-approved
         approvedBy: currentUser?.id || 'admin' // Current admin who created the user
-      });
+      };
+      
+      console.log('📄 User document data:', userData);
+      console.log('💾 Adding user document to Firestore...');
+      
+      // Add user document to Firestore with all required fields
+      const docRef = await addDoc(collection(db, 'users'), userData);
+      console.log('✅ Firestore document created with ID:', docRef.id);
 
+      alert('✅ Uživatel byl úspěšně vytvořen!');
       console.log('✅ Manual user created successfully and auto-approved');
 
       setShowAddDialog(false);
@@ -190,11 +209,30 @@ const UserManagement: React.FC = () => {
         }
       });
       
+      console.log('🔄 Reloading users list...');
       await loadUsers();
-    } catch (error) {
+      console.log('✅ Users list reloaded');
+    } catch (error: any) {
       console.error('❌ Error adding user:', error);
-      alert('Chyba při vytváření uživatele: ' + (error as Error).message);
+      console.error('❌ Error code:', error.code);
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Full error object:', error);
+      
+      let errorMessage = 'Neznámá chyba při vytváření uživatele';
+      
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'Uživatel s tímto emailem již existuje';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'Heslo je příliš slabé (minimálně 6 znaků)';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Neplatný formát emailu';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      alert('❌ Chyba při vytváření uživatele: ' + errorMessage);
     } finally {
+      console.log('🏁 handleAddUser finished, setting loading to false');
       setLoading(false);
     }
   };
@@ -819,7 +857,16 @@ const UserManagement: React.FC = () => {
                   Zrušit
                 </button>
                 <button
-                  onClick={handleAddUser}
+                  onClick={() => {
+                    console.log('🖱️ Add User button clicked!');
+                    console.log('📝 Form validation:', {
+                      email: !!newUser.email,
+                      displayName: !!newUser.displayName,
+                      password: !!newUser.password,
+                      isDisabled: !newUser.email || !newUser.displayName || !newUser.password
+                    });
+                    handleAddUser();
+                  }}
                   disabled={!newUser.email || !newUser.displayName || !newUser.password}
                   className="md-fab md-fab-extended md-ripple"
                   style={{
@@ -829,7 +876,7 @@ const UserManagement: React.FC = () => {
                     opacity: (!newUser.email || !newUser.displayName || !newUser.password) ? 0.6 : 1
                   }}
                 >
-                  Přidat
+                  {loading ? 'Vytváří se...' : 'Přidat'}
                 </button>
               </div>
             </div>
