@@ -48,6 +48,14 @@ export interface User {
   rejectedAt?: Date; // When admin rejected
   rejectedBy?: string; // Which admin rejected
   rejectedReason?: string; // Why rejected
+  
+  // Location tracking
+  lastLocation?: {
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+    timestamp: Date;
+  };
 }
 
 export interface IAuthContext {

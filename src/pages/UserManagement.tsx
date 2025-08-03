@@ -2,43 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
+import UserApprovalPanel from '../components/UserApprovalPanel';
 import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { locationService } from '../services/locationService';
-
-interface User {
-  id: string;
-  email: string;
-  displayName: string;
-  nick?: string;
-  role: 'admin' | 'user' | 'viewer';
-  permissions: {
-    gate: boolean;
-    garage: boolean;
-    camera: boolean;
-    stopMode: boolean;
-    viewLogs: boolean;
-    manageUsers: boolean;
-    requireLocation: boolean;
-    allowGPS: boolean;
-    requireLocationProximity: boolean;
-  };
-  createdAt: Date;
-  lastLogin?: Date;
-  lastLocation?: {
-    latitude: number;
-    longitude: number;
-    accuracy: number;
-    timestamp: Date;
-  };
-}
+import { User } from '../types';
 
 const UserManagement: React.FC = () => {
-  const { currentUser, refreshUser, logout } = useAuth();
+  const { currentUser, refreshUser, logout, getPendingUsers } = useAuth();
   const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -64,6 +40,7 @@ const UserManagement: React.FC = () => {
 
   useEffect(() => {
     loadUsers();
+    loadPendingCount();
     
     // Handle window resize for responsive design
     const handleResize = () => {
@@ -74,22 +51,62 @@ const UserManagement: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const loadPendingCount = async () => {
+    try {
+      if (currentUser?.role === 'admin') {
+        const pendingUsers = await getPendingUsers();
+        setPendingCount(pendingUsers.length);
+      }
+    } catch (error) {
+      console.error('Error loading pending count:', error);
+    }
+  };
+
   const loadUsers = async () => {
     try {
       setLoading(true);
       const usersCollection = collection(db, 'users');
       const usersSnapshot = await getDocs(usersCollection);
-      const usersList = usersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date(),
-        lastLogin: doc.data().lastLogin?.toDate(),
-        lastLocation: doc.data().lastLocation ? {
-          ...doc.data().lastLocation,
-          timestamp: doc.data().lastLocation.timestamp?.toDate() || new Date()
-        } : undefined
-      })) as User[];
+      const usersList = usersSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          email: data.email || '',
+          displayName: data.displayName || '',
+          photoURL: data.photoURL || undefined,
+          nick: data.nick || '',
+          role: data.role || 'user',
+          status: data.status || 'approved', // Default for existing users
+          authProvider: data.authProvider || 'email', // Default for existing users
+          permissions: data.permissions || {
+            gate: false,
+            garage: false,
+            camera: false,
+            stopMode: false,
+            viewLogs: true,
+            manageUsers: false,
+            requireLocation: false,
+            allowGPS: true,
+            requireLocationProximity: false
+          },
+          gpsEnabled: data.gpsEnabled !== undefined ? data.gpsEnabled : true,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          lastLogin: data.lastLogin?.toDate() || new Date(),
+          requestedAt: data.requestedAt?.toDate(),
+          approvedAt: data.approvedAt?.toDate(),
+          approvedBy: data.approvedBy,
+          rejectedAt: data.rejectedAt?.toDate(),
+          rejectedBy: data.rejectedBy,
+          rejectedReason: data.rejectedReason,
+          lastLocation: data.lastLocation ? {
+            ...data.lastLocation,
+            timestamp: data.lastLocation.timestamp?.toDate() || new Date()
+          } : undefined
+        } as User;
+      });
       setUsers(usersList);
+      // Refresh pending count when users list is loaded
+      await loadPendingCount();
     } catch (error) {
       console.error('Error loading users:', error);
     } finally {
@@ -132,16 +149,26 @@ const UserManagement: React.FC = () => {
       // Create Firebase Auth user
       const userCredential = await createUserWithEmailAndPassword(auth, newUser.email, newUser.password);
       
-      // Add user document to Firestore
+      // Add user document to Firestore with all required fields
       await addDoc(collection(db, 'users'), {
         uid: userCredential.user.uid,
         email: newUser.email,
         displayName: newUser.displayName,
+        photoURL: null, // No photo for manually created users
         nick: newUser.nick || '',
         role: newUser.role,
+        status: 'approved', // Manual users are auto-approved by admin
+        authProvider: 'email', // Manual registration via email
         permissions: newUser.permissions,
-        createdAt: new Date()
+        gpsEnabled: newUser.permissions.allowGPS,
+        createdAt: new Date(),
+        lastLogin: new Date(),
+        requestedAt: new Date(), // Same as creation time for manual users
+        approvedAt: new Date(), // Auto-approved
+        approvedBy: currentUser?.id || 'admin' // Current admin who created the user
       });
+
+      console.log('✅ Manual user created successfully and auto-approved');
 
       setShowAddDialog(false);
       setNewUser({
@@ -165,7 +192,7 @@ const UserManagement: React.FC = () => {
       
       await loadUsers();
     } catch (error) {
-      console.error('Error adding user:', error);
+      console.error('❌ Error adding user:', error);
       alert('Chyba při vytváření uživatele: ' + (error as Error).message);
     } finally {
       setLoading(false);
@@ -271,7 +298,25 @@ const UserManagement: React.FC = () => {
       <div className="md-card md-card-elevated" style={{ marginBottom: '16px' }}>
         <div className="md-card-content" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ flex: 1 }}>
-            <h1 className="md-card-title" style={{ marginBottom: '4px' }}>Správa uživatelů</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
+              <h1 className="md-card-title" style={{ margin: 0 }}>Správa uživatelů</h1>
+              {currentUser?.role === 'admin' && pendingCount > 0 && (
+                <div style={{
+                  background: 'var(--md-warning)',
+                  color: 'white',
+                  padding: '4px 12px',
+                  borderRadius: '16px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  animation: 'pulse 2s ease-in-out infinite'
+                }}>
+                  ⏳ {pendingCount} čeká na schválení
+                </div>
+              )}
+            </div>
             <p className="md-card-subtitle">
               Spravujte uživatele a jejich oprávnění v systému
             </p>
@@ -297,6 +342,13 @@ const UserManagement: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* User Approval Panel - only for admins */}
+      {currentUser?.role === 'admin' && (
+        <div style={{ marginBottom: '16px' }}>
+          <UserApprovalPanel />
+        </div>
+      )}
 
       {/* Add User Button */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
@@ -938,6 +990,16 @@ const UserManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* CSS for animations */}
+      <style>
+        {`
+          @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+          }
+        `}
+      </style>
     </div>
   );
 };
