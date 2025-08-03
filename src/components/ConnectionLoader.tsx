@@ -195,22 +195,24 @@ const ConnectionLoader: React.FC<ConnectionLoaderProps> = ({ steps, isVisible })
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '16px',
-                    padding: '12px 16px',
-                    borderRadius: '12px',
+                    gap: '12px',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
                     background: step.status === 'loading' ? 'var(--md-primary-container)' : 'transparent',
                     border: step.status === 'loading' ? '1px solid var(--md-primary)' : '1px solid transparent',
-                    transition: 'all 0.3s ease'
+                    transition: 'all 0.3s ease',
+                    minHeight: '40px'
                   }}
                 >
                   {getStepIcon(step.status)}
                   
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
                       fontSize: '0.875rem',
                       fontWeight: 500,
                       color: getStepColor(step.status),
-                      marginBottom: step.description ? '4px' : 0
+                      lineHeight: '1.2',
+                      marginBottom: step.description ? '2px' : 0
                     }}>
                       {step.label}
                     </div>
@@ -218,7 +220,11 @@ const ConnectionLoader: React.FC<ConnectionLoaderProps> = ({ steps, isVisible })
                       <div style={{
                         fontSize: '0.75rem',
                         color: 'var(--md-on-surface-variant)',
-                        opacity: 0.8
+                        opacity: 0.8,
+                        lineHeight: '1.2',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
                       }}>
                         {step.description}
                       </div>

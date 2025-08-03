@@ -242,7 +242,16 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
   }, [refreshCamera]);
 
   return (
-    <div className="camera-container" style={{ position: 'relative' }}>
+    <>
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}
+      </style>
+      <div className="camera-container" style={{ position: 'relative' }}>
       {/* Camera Image */}
       <img
         ref={imgRef}
@@ -275,7 +284,20 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
             zIndex: 1
           }}
         >
-          {overlayText}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+            {/* Loading spinner */}
+            <div style={{
+              width: '32px',
+              height: '32px',
+              border: '3px solid var(--md-outline)',
+              borderTop: '3px solid var(--md-primary)',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+            <div style={{ textAlign: 'center' }}>
+              {overlayText}
+            </div>
+          </div>
         </div>
       )}
       
@@ -384,6 +406,7 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 
