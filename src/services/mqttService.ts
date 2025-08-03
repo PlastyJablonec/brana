@@ -52,12 +52,12 @@ export class MqttService {
     private readonly brokerUrl: string = process.env.REACT_APP_MQTT_URL || 'ws://89.24.76.191:9001',
     private readonly options: IMqttConnectionOptions = {
       clientId: `gate-control-${Math.random().toString(16).substring(2, 8)}`,
-      clean: false,
-      reconnectPeriod: 5000,
-      connectTimeout: 15000,
-      keepalive: 60,
+      clean: true,  // ⚡ TRUE pro okamžité retained messages
+      reconnectPeriod: 3000,  // ⚡ Rychlejší reconnect
+      connectTimeout: 8000,   // ⚡ Kratší timeout 
+      keepalive: 30,          // ⚡ Rychlejší keepalive jako v simple HTML
       resubscribe: true,
-      queueQoSZero: false,
+      queueQoSZero: true,     // ⚡ Optimalizace pro rychlé zprávy
       will: {
         topic: 'Log/Brana/Disconnect',
         payload: 'Client disconnected',
@@ -194,12 +194,12 @@ export class MqttService {
 
     const subscriptionPromises = subscriptions.map(({ topic, name }) => 
       new Promise<void>((resolve, reject) => {
-        this.client!.subscribe(topic, { qos: 1 }, (err) => {
+        this.client!.subscribe(topic, { qos: 0 }, (err) => {  // ⚡ QoS 0 pro rychlost
           if (err) {
             console.error(`❌ Failed to subscribe to ${name}:`, err);
             reject(new Error(`Failed to subscribe to ${topic}: ${err.message}`));
           } else {
-            console.log(`✅ Subscribed to ${topic} (requesting retained messages)`);
+            console.log(`✅ Subscribed to ${topic} (clean session: immediate retained)`);
             resolve();
           }
         });
@@ -208,30 +208,41 @@ export class MqttService {
 
     await Promise.all(subscriptionPromises);
     
-    // Požádáme o aktuální status po úspěšném subscribe
-    console.log('📡 Requesting current status from hardware...');
+    // ⚡ Okamžité agresivní status requesting
+    console.log('📡 Immediate status request sequence...');
     try {
-      // Pošleme request na status - některé systémy to podporují
+      // Pošleme hned několik requests - některé systémy reagují lépe
       await this.publishMessage('IoT/Brana/StatusRequest', '1');
-      console.log('✅ Status request sent');
+      console.log('✅ Primary status request sent');
+      
+      // Okamžitý fallback pro starší systémy  
+      setTimeout(async () => {
+        try {
+          await this.publishMessage('IoT/Brana/Ping', 'status_request');
+          console.log('✅ Ping status request sent');
+        } catch (err) {
+          console.log('⚠️ Ping request failed:', err);
+        }
+      }, 200);  // ⚡ Rychlejší fallback - 200ms místo 3s
+      
     } catch (error) {
-      console.log('⚠️ Status request failed (hardware may not support it):', error);
-      // Není kritická chyba - hardware možná nepodporuje status request
+      console.log('⚠️ Primary status request failed:', error);
     }
     
-    // Fallback: Pokud po 3 sekundách stále máme "Neznámý stav", zkusíme jinou metodu
+    // Kratší timeout check - pokud stále neznámý po 1.5s
     setTimeout(() => {
       if (this.currentStatus.gateStatus === 'Neznámý stav') {
-        console.log('🔄 Still unknown status after 3s, trying fallback status probe...');
+        console.log('🔄 Still unknown after 1.5s, trying alternative methods...');
         try {
-          // Zkusíme poslat "dummy" příkaz který možná vyvolá status response
-          // Některé systémy odpovídají statusem po jakémkoliv příkazu
-          this.publishMessage('IoT/Brana/Ping', 'status_request');
+          // Zkusíme více variant status requestů
+          this.publishMessage('IoT/Brana/Status', '?');      // Dotaz na status
+          this.publishMessage('IoT/Brana/GetStatus', '1');   // Get status varianta
+          this.publishMessage('IoT/Brana/Request', 'status'); // Request varianta
         } catch (err) {
-          console.log('⚠️ Fallback status probe failed:', err);
+          console.log('⚠️ Alternative status methods failed:', err);
         }
       }
-    }, 3000);
+    }, 1500);  // ⚡ Rychlejší timeout check
   }
 
   public disconnect(): void {
@@ -374,7 +385,7 @@ export class MqttService {
         return;
       }
 
-      this.client.publish('IoT/Brana/Ovladani', command, { qos: 1 }, (publishError) => {
+      this.client.publish('IoT/Brana/Ovladani', command, { qos: 0 }, (publishError) => {  // ⚡ QoS 0 pro rychlost
         if (publishError) {
           console.error('❌ MQTT Publish error:', publishError);
           reject(publishError);
@@ -424,7 +435,7 @@ export class MqttService {
         return;
       }
 
-      this.client.publish(topic, message, { qos: 1 }, (publishError) => {
+      this.client.publish(topic, message, { qos: 0 }, (publishError) => {  // ⚡ QoS 0 pro rychlost
         if (publishError) {
           console.error('❌ MQTT Publish error:', publishError);
           reject(publishError);
