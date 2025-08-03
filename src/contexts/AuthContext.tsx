@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import firebase from 'firebase/compat/app';
-import { auth, db } from '../firebase/config';
+import { auth, db, googleProvider } from '../firebase/config';
 import { IAuthContext, User } from '../types';
+import { userService } from '../services/userService';
 
 type FirebaseUser = firebase.User;
 
@@ -56,6 +57,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithGoogle = async (): Promise<void> => {
+    try {
+      console.log('🔐 Attempting Google OAuth login...');
+      setIsInitialLogin(true);
+      
+      const result = await auth.signInWithPopup(googleProvider);
+      const firebaseUser = result.user;
+      
+      if (!firebaseUser) {
+        throw new Error('Google authentication failed');
+      }
+
+      console.log('✅ Google OAuth successful:', firebaseUser.email);
+      
+      // Create or get user with Google data
+      await userService.createGoogleUser(firebaseUser);
+      
+    } catch (error: any) {
+      setIsInitialLogin(false);
+      console.error('❌ Google OAuth error:', error.code, error.message);
+      
+      if (error.code === 'auth/popup-closed-by-user') {
+        throw new Error('Přihlášení bylo zrušeno');
+      } else if (error.code === 'auth/popup-blocked') {
+        throw new Error('Popup blokován prohlížečem');
+      } else {
+        throw new Error(`Google přihlášení selhalo: ${error.message}`);
+      }
+    }
+  };
+
   const logout = async (): Promise<void> => {
     try {
       console.log('🚪 Logging out user...');
@@ -74,21 +106,64 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Admin functions for user approval
+  const approveUser = async (userId: string): Promise<void> => {
+    if (!currentUser || !userService.isAdmin(currentUser)) {
+      throw new Error('Insufficient permissions');
+    }
+    await userService.approveUser(userId, currentUser.id);
+  };
+
+  const rejectUser = async (userId: string, reason?: string): Promise<void> => {
+    if (!currentUser || !userService.isAdmin(currentUser)) {
+      throw new Error('Insufficient permissions');
+    }
+    await userService.rejectUser(userId, currentUser.id, reason);
+  };
+
+  const getPendingUsers = async (): Promise<User[]> => {
+    if (!currentUser || !userService.isAdmin(currentUser)) {
+      throw new Error('Insufficient permissions');
+    }
+    return await userService.getPendingUsers();
+  };
+
   const fetchUserData = async (firebaseUser: FirebaseUser): Promise<void> => {
     try {
       console.log('📊 Fetching user data from Firestore for:', firebaseUser.uid);
       
+      // Try to get user by email first (new userService approach)
+      let user = await userService.getUserByEmail(firebaseUser.email || '');
+      
+      if (user) {
+        console.log('✅ User found via userService:', user.email, 'Status:', user.status);
+        
+        // Update last login if this is initial login
+        if (isInitialLogin) {
+          console.log('🔧 AuthContext: Updating lastLogin for initial login');
+          await userService.updateLastLogin(user.id);
+          setIsInitialLogin(false);
+        }
+        
+        setCurrentUser(user);
+        return;
+      }
+      
+      // Fallback: Check old document structure by uid
       const userDoc = await db.collection('users').doc(firebaseUser.uid).get();
       
       if (userDoc.exists) {
         const userData = userDoc.data();
-        console.log('✅ User found in Firestore:', userData?.email);
+        console.log('✅ User found in Firestore (legacy):', userData?.email);
         
-        const user: User = {
+        user = {
           id: firebaseUser.uid,
           email: userData?.email || firebaseUser.email || '',
           displayName: userData?.displayName || firebaseUser.displayName || firebaseUser.email || 'User',
+          photoURL: firebaseUser.photoURL || undefined,
           role: userData?.role || 'viewer',
+          status: userData?.status || 'approved', // Legacy users are auto-approved
+          authProvider: userData?.authProvider || 'email', // Legacy users are email
           permissions: userData?.permissions || {
             gate: false,
             garage: false,
@@ -105,7 +180,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           lastLogin: userData?.lastLogin?.toDate() || new Date(),
         };
         
-        console.log('🔧 AuthContext: User data loaded from Firestore');
+        console.log('🔧 AuthContext: User data loaded from Firestore (legacy)');
         setCurrentUser(user);
         
         // Only update lastLogin on actual login, not refresh
@@ -219,8 +294,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     currentUser,
     loading,
     login,
+    loginWithGoogle,
     logout,
-    refreshUser
+    refreshUser,
+    approveUser,
+    rejectUser,
+    getPendingUsers
   };
 
   return (

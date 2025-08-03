@@ -10,13 +10,22 @@ export interface IAuthUser extends FirebaseUser {
   displayName: string | null;
 }
 
-// Legacy User interface for backward compatibility
+// User approval status types
+export type UserStatus = 'pending' | 'approved' | 'rejected';
+
+export type AuthProvider = 'google' | 'email';
+
+// User interface with Google OAuth + approval workflow
 export interface User {
   id: string;
   email: string;
   displayName: string;
+  photoURL?: string; // Google profile picture
   nick?: string;
   role: 'admin' | 'user' | 'viewer';
+  status: UserStatus; // New: approval status
+  authProvider: AuthProvider; // New: how user registered
+  
   permissions: {
     gate: boolean;
     garage: boolean;
@@ -29,16 +38,30 @@ export interface User {
     requireLocationProximity: boolean;
   };
   gpsEnabled: boolean;
+  
+  // Approval workflow timestamps
   createdAt: Date;
   lastLogin: Date;
+  requestedAt?: Date; // When user requested access
+  approvedAt?: Date; // When admin approved
+  approvedBy?: string; // Which admin approved
+  rejectedAt?: Date; // When admin rejected
+  rejectedBy?: string; // Which admin rejected
+  rejectedReason?: string; // Why rejected
 }
 
 export interface IAuthContext {
   currentUser: User | null;  // Return legacy User for compatibility
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>; // New: Google OAuth login
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  
+  // User management methods for admins
+  approveUser: (userId: string) => Promise<void>;
+  rejectUser: (userId: string, reason?: string) => Promise<void>;
+  getPendingUsers: () => Promise<User[]>;
 }
 
 // ===== THEME TYPES =====

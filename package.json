@@ -1,6 +1,6 @@
 {
   "name": "gate-control",
-  "version": "2.12.1",
+  "version": "2.13.0",
   "private": true,
   "dependencies": {
     "@tanstack/react-query": "^5.84.0",

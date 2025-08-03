@@ -42,6 +42,11 @@ export const auth = firebase.auth();
 export const db = firebase.firestore();
 const app = firebase.app();
 
+// Google OAuth provider
+export const googleProvider = new firebase.auth.GoogleAuthProvider();
+googleProvider.addScope('email');
+googleProvider.addScope('profile');
+
 // Test Firebase connection
 auth.onAuthStateChanged((user) => {
   if (user) {
