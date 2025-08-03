@@ -107,11 +107,12 @@ const CameraView: React.FC<CameraViewProps> = () => {
         `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}&fallback=1`,
         `/api/camera-proxy-backup?t=${timestamp}&cache=${Math.random()}`,
       ] : [
-        // HTTP fallbacky - různé IP/porty
-        `http://89.24.76.191:8080/photo.jpg?t=${timestamp}&cache=${Math.random()}`,
-        `http://89.24.76.191:80/photo.jpg?t=${timestamp}&cache=${Math.random()}`,
-        `http://192.168.1.100:10180/photo.jpg?t=${timestamp}&cache=${Math.random()}`, // Lokální síť
-        `http://camera.local:10180/photo.jpg?t=${timestamp}&cache=${Math.random()}`,   // mDNS
+        // HTTP fallbacky - optimalizované pořadí pro různé sítě
+        `http://172.19.3.222:8080/photo.jpg?t=${timestamp}&cache=${Math.random()}`,   // 🏠 WiFi specifická adresa (priorita!)
+        `http://89.24.76.191:8080/photo.jpg?t=${timestamp}&cache=${Math.random()}`,   // 📱 Mobilní data alt port
+        `http://192.168.1.100:10180/photo.jpg?t=${timestamp}&cache=${Math.random()}`, // 🏠 Lokální síť obecná
+        `http://89.24.76.191:80/photo.jpg?t=${timestamp}&cache=${Math.random()}`,     // 📱 Standard port
+        `http://camera.local:10180/photo.jpg?t=${timestamp}&cache=${Math.random()}`,   // 🔍 mDNS discovery
       ])
     ];
     
