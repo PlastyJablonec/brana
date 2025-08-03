@@ -117,7 +117,10 @@ export class MqttService {
         console.log('🔗 MQTT client created:', !!this.client);
 
         this.client.on('connect', (connack: IConnackPacket) => {
-          console.log('✅ MQTT Connected successfully', connack);
+          const timestamp = new Date().toISOString();
+          console.log(`✅ [${timestamp}] MQTT Connected successfully`, connack);
+          console.log(`🔍 [${timestamp}] Session present: ${connack.sessionPresent}`);
+          console.log(`🔍 [${timestamp}] Return code: ${connack.returnCode}`);
           this.currentStatus.isConnected = true;
           console.log('🔄 MQTT status updated:', this.currentStatus);
           this.notifyStatusChange();
@@ -208,41 +211,23 @@ export class MqttService {
 
     await Promise.all(subscriptionPromises);
     
-    // ⚡ Okamžité agresivní status requesting
-    console.log('📡 Immediate status request sequence...');
-    try {
-      // Pošleme hned několik requests - některé systémy reagují lépe
-      await this.publishMessage('IoT/Brana/StatusRequest', '1');
-      console.log('✅ Primary status request sent');
-      
-      // Okamžitý fallback pro starší systémy  
-      setTimeout(async () => {
-        try {
-          await this.publishMessage('IoT/Brana/Ping', 'status_request');
-          console.log('✅ Ping status request sent');
-        } catch (err) {
-          console.log('⚠️ Ping request failed:', err);
-        }
-      }, 200);  // ⚡ Rychlejší fallback - 200ms místo 3s
-      
-    } catch (error) {
-      console.log('⚠️ Primary status request failed:', error);
-    }
+    // 🧪 EXPERIMENT: Simple HTML approach + Smart Trigger
+    console.log('🧪 Using simple HTML approach - no status requests, waiting for automatic messages...');
+    console.log('📡 Subscribed to topics, waiting for hardware to send status automatically...');
     
-    // Kratší timeout check - pokud stále neznámý po 1.5s
-    setTimeout(() => {
+    // 💡 Možná hardware posílá status jen když se něco stane
+    // Zkusíme "neškodný" ping který možná triggers status response
+    setTimeout(async () => {
       if (this.currentStatus.gateStatus === 'Neznámý stav') {
-        console.log('🔄 Still unknown after 1.5s, trying alternative methods...');
+        console.log('🔔 Still unknown after 2s, trying gentle trigger...');
         try {
-          // Zkusíme více variant status requestů
-          this.publishMessage('IoT/Brana/Status', '?');      // Dotaz na status
-          this.publishMessage('IoT/Brana/GetStatus', '1');   // Get status varianta
-          this.publishMessage('IoT/Brana/Request', 'status'); // Request varianta
+          // Pošleme prázdný nebo neškodný příkaz který možná způsobí status broadcast
+          await this.publishMessage('IoT/Brana/Heartbeat', 'ping');
         } catch (err) {
-          console.log('⚠️ Alternative status methods failed:', err);
+          console.log('⚠️ Gentle trigger failed:', err);
         }
       }
-    }, 1500);  // ⚡ Rychlejší timeout check
+    }, 2000);
   }
 
   public disconnect(): void {
@@ -263,7 +248,8 @@ export class MqttService {
   }
 
   private handleMessage(topic: string, message: string): void {
-    console.log(`📨 MQTT Message: ${topic} = ${message}`);
+    const timestamp = new Date().toISOString();
+    console.log(`📨 [${timestamp}] MQTT Message: ${topic} = ${message}`);
     
     switch (topic) {
       case 'IoT/Brana/Status':
