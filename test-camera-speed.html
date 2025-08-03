@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test rychlosti kamery - Reference</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .fast { background: #d4edda; color: #155724; }
+        .medium { background: #fff3cd; color: #856404; }
+        .slow { background: #f8d7da; color: #721c24; }
+        .error { background: #f8d7da; color: #721c24; }
+        
+        img {
+            max-width: 100%;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        
+        .stats {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Test rychlosti načítání kamery</h1>
+        <p><strong>Reference URL:</strong> https://89.24.76.191:10180/photo.jpg</p>
+        
+        <div class="stats">
+            <h3>Statistiky:</h3>
+            <div id="stats">
+                <div>Počet testů: <span id="testCount">0</span></div>
+                <div>Průměrný čas: <span id="avgTime">--</span></div>
+                <div>Nejrychlejší: <span id="minTime">--</span></div>
+                <div>Nejpomalejší: <span id="maxTime">--</span></div>
+                <div>Úspěšnost: <span id="successRate">--</span></div>
+            </div>
+        </div>
+        
+        <div>
+            <button onclick="runSingleTest()">Jeden test</button>
+            <button onclick="runMultipleTests(10)">10 testů</button>
+            <button onclick="runMultipleTests(50)">50 testů</button>
+            <button onclick="clearResults()">Vymazat</button>
+            <button onclick="testDifferentMethods()">Test různých metod</button>
+        </div>
+        
+        <div id="results"></div>
+        <div class="log" id="log"></div>
+        
+        <div style="margin-top: 20px;">
+            <h3>Poslední načtený obrázek:</h3>
+            <img id="testImage" src="" alt="Test image" style="display: none;">
+        </div>
+    </div>
+
+    <script>
+        let testResults = [];
+        let testInProgress = false;
+
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString('cs-CZ');
+            logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        function getTestClass(time) {
+            if (time < 500) return 'fast';
+            if (time < 1500) return 'medium';
+            return 'slow';
+        }
+
+        function updateStats() {
+            const successful = testResults.filter(r => r.success);
+            const times = successful.map(r => r.time);
+            
+            document.getElementById('testCount').textContent = testResults.length;
+            document.getElementById('successRate').textContent = 
+                testResults.length > 0 ? `${(successful.length / testResults.length * 100).toFixed(1)}%` : '--';
+            
+            if (times.length > 0) {
+                const avg = times.reduce((a, b) => a + b, 0) / times.length;
+                const min = Math.min(...times);
+                const max = Math.max(...times);
+                
+                document.getElementById('avgTime').textContent = `${avg.toFixed(0)}ms`;
+                document.getElementById('minTime').textContent = `${min}ms`;
+                document.getElementById('maxTime').textContent = `${max}ms`;
+            } else {
+                document.getElementById('avgTime').textContent = '--';
+                document.getElementById('minTime').textContent = '--';
+                document.getElementById('maxTime').textContent = '--';
+            }
+        }
+
+        async function runSingleTest(method = 'img') {
+            if (testInProgress) return;
+            testInProgress = true;
+            
+            const startTime = performance.now();
+            const cacheBreaker = Date.now() + Math.random();
+            const url = `https://89.24.76.191:10180/photo.jpg?t=${cacheBreaker}`;
+            
+            log(`🚀 Spouštím test metoda: ${method}, URL: ${url.substring(0, 60)}...`);
+            
+            try {
+                let loadTime;
+                
+                if (method === 'img') {
+                    // Test s IMG elementem (jako v naší aplikaci)
+                    loadTime = await testWithImgElement(url);
+                } else if (method === 'fetch') {
+                    // Test s Fetch API
+                    loadTime = await testWithFetch(url);
+                } else if (method === 'xhr') {
+                    // Test s XMLHttpRequest
+                    loadTime = await testWithXHR(url);
+                }
+                
+                const totalTime = performance.now() - startTime;
+                
+                testResults.push({ 
+                    time: totalTime, 
+                    loadTime: loadTime,
+                    success: true, 
+                    method: method,
+                    timestamp: new Date() 
+                });
+                
+                const resultClass = getTestClass(totalTime);
+                const resultDiv = document.createElement('div');
+                resultDiv.className = `test-result ${resultClass}`;
+                resultDiv.innerHTML = `
+                    ✅ Test #${testResults.length} (${method}): ${totalTime.toFixed(0)}ms 
+                    (load: ${loadTime.toFixed(0)}ms) - ${resultClass.toUpperCase()}
+                `;
+                document.getElementById('results').prepend(resultDiv);
+                
+                log(`✅ Test dokončen za ${totalTime.toFixed(0)}ms (${resultClass})`);
+                
+            } catch (error) {
+                const totalTime = performance.now() - startTime;
+                testResults.push({ 
+                    time: totalTime, 
+                    success: false, 
+                    error: error.message,
+                    method: method,
+                    timestamp: new Date() 
+                });
+                
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'test-result error';
+                resultDiv.innerHTML = `❌ Test #${testResults.length} (${method}): CHYBA za ${totalTime.toFixed(0)}ms - ${error.message}`;
+                document.getElementById('results').prepend(resultDiv);
+                
+                log(`❌ Test selhal: ${error.message}`);
+            }
+            
+            updateStats();
+            testInProgress = false;
+        }
+
+        function testWithImgElement(url) {
+            return new Promise((resolve, reject) => {
+                const startTime = performance.now();
+                const img = new Image();
+                
+                img.onload = () => {
+                    const loadTime = performance.now() - startTime;
+                    document.getElementById('testImage').src = url;
+                    document.getElementById('testImage').style.display = 'block';
+                    log(`📸 IMG onload za ${loadTime.toFixed(0)}ms`);
+                    resolve(loadTime);
+                };
+                
+                img.onerror = () => {
+                    const loadTime = performance.now() - startTime;
+                    log(`❌ IMG onerror za ${loadTime.toFixed(0)}ms`);
+                    reject(new Error('IMG load failed'));
+                };
+                
+                // Přidáme CORS handling
+                img.crossOrigin = 'anonymous';
+                img.src = url;
+                log(`📤 IMG src nastaveno: ${url.substring(0, 50)}...`);
+            });
+        }
+
+        function testWithFetch(url) {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    const startTime = performance.now();
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        mode: 'cors',
+                        cache: 'no-cache'
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const blob = await response.blob();
+                    const loadTime = performance.now() - startTime;
+                    
+                    // Zobraz obrázek
+                    const objectUrl = URL.createObjectURL(blob);
+                    document.getElementById('testImage').src = objectUrl;
+                    document.getElementById('testImage').style.display = 'block';
+                    
+                    log(`📥 FETCH completed za ${loadTime.toFixed(0)}ms (${blob.size} bytes)`);
+                    resolve(loadTime);
+                } catch (error) {
+                    log(`❌ FETCH error: ${error.message}`);
+                    reject(error);
+                }
+            });
+        }
+
+        function testWithXHR(url) {
+            return new Promise((resolve, reject) => {
+                const startTime = performance.now();
+                const xhr = new XMLHttpRequest();
+                
+                xhr.onload = () => {
+                    const loadTime = performance.now() - startTime;
+                    if (xhr.status === 200) {
+                        const blob = new Blob([xhr.response], { type: 'image/jpeg' });
+                        const objectUrl = URL.createObjectURL(blob);
+                        document.getElementById('testImage').src = objectUrl;
+                        document.getElementById('testImage').style.display = 'block';
+                        
+                        log(`📊 XHR completed za ${loadTime.toFixed(0)}ms (${xhr.response.byteLength} bytes)`);
+                        resolve(loadTime);
+                    } else {
+                        log(`❌ XHR HTTP error: ${xhr.status}`);
+                        reject(new Error(`HTTP ${xhr.status}`));
+                    }
+                };
+                
+                xhr.onerror = () => {
+                    const loadTime = performance.now() - startTime;
+                    log(`❌ XHR network error za ${loadTime.toFixed(0)}ms`);
+                    reject(new Error('XHR network error'));
+                };
+                
+                xhr.responseType = 'arraybuffer';
+                xhr.open('GET', url, true);
+                xhr.send();
+                log(`📡 XHR sent: ${url.substring(0, 50)}...`);
+            });
+        }
+
+        async function runMultipleTests(count) {
+            if (testInProgress) return;
+            
+            log(`🚀 Spouštím ${count} testů...`);
+            
+            for (let i = 0; i < count; i++) {
+                await runSingleTest('img');
+                // Krátká pauza mezi testy
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            log(`✅ Dokončeno ${count} testů`);
+        }
+
+        async function testDifferentMethods() {
+            if (testInProgress) return;
+            
+            log(`🧪 Testuju různé metody načítání...`);
+            
+            await runSingleTest('img');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            await runSingleTest('fetch');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            await runSingleTest('xhr');
+            
+            log(`✅ Test různých metod dokončen`);
+        }
+
+        function clearResults() {
+            testResults = [];
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('log').innerHTML = '';
+            document.getElementById('testImage').style.display = 'none';
+            updateStats();
+            log(`🧹 Výsledky vymazány`);
+        }
+
+        // Spustit první test při načtení stránky
+        window.onload = () => {
+            log(`🏁 Test stránka načtena, připraven k testování`);
+            log(`🎯 Cíl: měření rychlosti https://89.24.76.191:10180/photo.jpg`);
+        };
+    </script>
+</body>
+</html>
