@@ -16,6 +16,7 @@ const UserManagement: React.FC = () => {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [showPassword, setShowPassword] = useState(false);
   const [newUser, setNewUser] = useState({
     email: '',
     displayName: '',
@@ -187,6 +188,7 @@ const UserManagement: React.FC = () => {
       console.log('✅ Manual user created successfully and auto-approved');
 
       setShowAddDialog(false);
+      setShowPassword(false); // Reset password visibility
       setNewUser({
         email: '',
         displayName: '',
@@ -682,11 +684,16 @@ const UserManagement: React.FC = () => {
           <div className="md-card" style={{ width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="md-card-header">
               <h3 className="md-card-title">Přidat nového uživatele</h3>
+              <p style={{ fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', margin: '8px 0 0' }}>
+                Pole označená <span style={{ color: 'var(--md-error)' }}>*</span> jsou povinná
+              </p>
             </div>
             
             <div className="md-card-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', marginBottom: '8px', fontWeight: 500 }}>Email</label>
+                <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', marginBottom: '8px', fontWeight: 500 }}>
+                  Email <span style={{ color: 'var(--md-error)', fontSize: '1rem' }}>*</span>
+                </label>
                 <input
                   type="email"
                   value={newUser.email}
@@ -699,7 +706,7 @@ const UserManagement: React.FC = () => {
                     padding: '12px 16px',
                     fontSize: '1rem',
                     borderRadius: '12px',
-                    border: '1px solid var(--md-outline)',
+                    border: `1px solid ${!newUser.email ? 'var(--md-error)' : 'var(--md-outline)'}`,
                     backgroundColor: 'var(--md-surface)',
                     color: 'var(--md-on-surface)',
                     outline: 'none',
@@ -707,12 +714,19 @@ const UserManagement: React.FC = () => {
                   }}
                   placeholder="uzivatel@email.com"
                   onFocus={(e) => e.target.style.borderColor = 'var(--md-primary)'}
-                  onBlur={(e) => e.target.style.borderColor = 'var(--md-outline)'}
+                  onBlur={(e) => e.target.style.borderColor = !newUser.email ? 'var(--md-error)' : 'var(--md-outline)'}
                 />
+                {!newUser.email && (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--md-error)', marginTop: '4px', marginBottom: 0 }}>
+                    Email je povinný
+                  </p>
+                )}
               </div>
               
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', marginBottom: '8px', fontWeight: 500 }}>Jméno</label>
+                <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', marginBottom: '8px', fontWeight: 500 }}>
+                  Jméno <span style={{ color: 'var(--md-error)', fontSize: '1rem' }}>*</span>
+                </label>
                 <input
                   type="text"
                   value={newUser.displayName}
@@ -725,7 +739,7 @@ const UserManagement: React.FC = () => {
                     padding: '12px 16px',
                     fontSize: '1rem',
                     borderRadius: '12px',
-                    border: '1px solid var(--md-outline)',
+                    border: `1px solid ${!newUser.displayName ? 'var(--md-error)' : 'var(--md-outline)'}`,
                     backgroundColor: 'var(--md-surface)',
                     color: 'var(--md-on-surface)',
                     outline: 'none',
@@ -733,8 +747,13 @@ const UserManagement: React.FC = () => {
                   }}
                   placeholder="Jan Novák"
                   onFocus={(e) => e.target.style.borderColor = 'var(--md-primary)'}
-                  onBlur={(e) => e.target.style.borderColor = 'var(--md-outline)'}
+                  onBlur={(e) => e.target.style.borderColor = !newUser.displayName ? 'var(--md-error)' : 'var(--md-outline)'}
                 />
+                {!newUser.displayName && (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--md-error)', marginTop: '4px', marginBottom: 0 }}>
+                    Jméno je povinné
+                  </p>
+                )}
               </div>
               
               <div>
@@ -761,29 +780,70 @@ const UserManagement: React.FC = () => {
               </div>
               
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', marginBottom: '8px', fontWeight: 500 }}>Heslo</label>
-                <input
-                  type="password"
-                  value={newUser.password}
-                  onChange={(e) => {
-                    console.log('🔐 Password changed, length:', e.target.value.length);
-                    setNewUser({...newUser, password: e.target.value});
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    fontSize: '1rem',
-                    borderRadius: '12px',
-                    border: '1px solid var(--md-outline)',
-                    backgroundColor: 'var(--md-surface)',
-                    color: 'var(--md-on-surface)',
-                    outline: 'none',
-                    transition: 'border-color 0.2s ease'
-                  }}
-                  placeholder="••••••••"
-                  onFocus={(e) => e.target.style.borderColor = 'var(--md-primary)'}
-                  onBlur={(e) => e.target.style.borderColor = 'var(--md-outline)'}
-                />
+                <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', marginBottom: '8px', fontWeight: 500 }}>
+                  Heslo <span style={{ color: 'var(--md-error)', fontSize: '1rem' }}>*</span>
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={newUser.password}
+                    onChange={(e) => {
+                      console.log('🔐 Password changed, length:', e.target.value.length);
+                      setNewUser({...newUser, password: e.target.value});
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '12px 48px 12px 16px',
+                      fontSize: '1rem',
+                      borderRadius: '12px',
+                      border: `1px solid ${!newUser.password ? 'var(--md-error)' : 'var(--md-outline)'}`,
+                      backgroundColor: 'var(--md-surface)',
+                      color: 'var(--md-on-surface)',
+                      outline: 'none',
+                      transition: 'border-color 0.2s ease'
+                    }}
+                    placeholder="••••••••"
+                    onFocus={(e) => e.target.style.borderColor = 'var(--md-primary)'}
+                    onBlur={(e) => e.target.style.borderColor = !newUser.password ? 'var(--md-error)' : 'var(--md-outline)'}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--md-on-surface-variant)',
+                      padding: '4px',
+                      borderRadius: '4px'
+                    }}
+                    title={showPassword ? 'Skrýt heslo' : 'Zobrazit heslo'}
+                  >
+                    {showPassword ? (
+                      <svg style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z"/>
+                      </svg>
+                    ) : (
+                      <svg style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.09L19.73,22L21,20.73L3.27,3M12,7A5,5 0 0,1 17,12C17,12.64 16.87,13.26 16.64,13.82L19.57,16.75C21.07,15.5 22.27,13.86 23,12C21.27,7.61 17,4.5 12,4.5C10.6,4.5 9.26,4.75 8,5.2L10.17,7.35C10.76,7.13 11.37,7 12,7Z"/>
+                      </svg>
+                    )}
+                  </button>
+                </div>
+                {!newUser.password && (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--md-error)', marginTop: '4px', marginBottom: 0 }}>
+                    Heslo je povinné (minimálně 6 znaků)
+                  </p>
+                )}
+                {newUser.password && newUser.password.length < 6 && (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--md-error)', marginTop: '4px', marginBottom: 0 }}>
+                    Heslo musí mít minimálně 6 znaků
+                  </p>
+                )}
               </div>
               
               <div>
@@ -855,7 +915,29 @@ const UserManagement: React.FC = () => {
               
               <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                 <button
-                  onClick={() => setShowAddDialog(false)}
+                  onClick={() => {
+                    console.log('❌ Cancel button clicked - closing dialog');
+                    setShowAddDialog(false);
+                    setShowPassword(false);
+                    setNewUser({
+                      email: '',
+                      displayName: '',
+                      nick: '',
+                      password: '',
+                      role: 'user',
+                      permissions: {
+                        gate: false,
+                        garage: false,
+                        camera: false,
+                        stopMode: false,
+                        viewLogs: true,
+                        manageUsers: false,
+                        requireLocation: false,
+                        allowGPS: true,
+                        requireLocationProximity: false
+                      }
+                    });
+                  }}
                   className="md-fab md-fab-extended md-ripple"
                   style={{
                     flex: 1,
@@ -882,23 +964,27 @@ const UserManagement: React.FC = () => {
                     console.log('🎯 Event target:', e.target);
                     console.log('🔧 Loading state:', loading);
                     
-                    if (!newUser.email || !newUser.displayName || !newUser.password) {
-                      console.error('❌ FORM VALIDATION FAILED - missing required fields');
-                      alert('❌ Vyplň prosím všechna povinná pole (email, jméno, heslo)');
+                    if (!newUser.email || !newUser.displayName || !newUser.password || newUser.password.length < 6) {
+                      console.error('❌ FORM VALIDATION FAILED - missing required fields or weak password');
+                      if (!newUser.email || !newUser.displayName || !newUser.password) {
+                        alert('❌ Vyplň prosím všechna povinná pole (email, jméno, heslo)');
+                      } else if (newUser.password.length < 6) {
+                        alert('❌ Heslo musí mít minimálně 6 znaků');
+                      }
                       return;
                     }
                     
                     console.log('✅ Form validation passed, calling handleAddUser...');
                     handleAddUser();
                   }}
-                  disabled={!newUser.email || !newUser.displayName || !newUser.password}
+                  disabled={!newUser.email || !newUser.displayName || !newUser.password || newUser.password.length < 6}
                   className="md-fab md-fab-extended md-ripple"
                   style={{
                     flex: 1,
-                    background: (!newUser.email || !newUser.displayName || !newUser.password) ? '#cccccc' : 'var(--md-primary)',
-                    color: (!newUser.email || !newUser.displayName || !newUser.password) ? '#666666' : 'var(--md-on-primary)',
-                    opacity: (!newUser.email || !newUser.displayName || !newUser.password) ? 0.6 : 1,
-                    cursor: (!newUser.email || !newUser.displayName || !newUser.password) ? 'not-allowed' : 'pointer',
+                    background: (!newUser.email || !newUser.displayName || !newUser.password || newUser.password.length < 6) ? '#cccccc' : 'var(--md-primary)',
+                    color: (!newUser.email || !newUser.displayName || !newUser.password || newUser.password.length < 6) ? '#666666' : 'var(--md-on-primary)',
+                    opacity: (!newUser.email || !newUser.displayName || !newUser.password || newUser.password.length < 6) ? 0.6 : 1,
+                    cursor: (!newUser.email || !newUser.displayName || !newUser.password || newUser.password.length < 6) ? 'not-allowed' : 'pointer',
                     border: '2px solid red' // TEMPORARY - to see if button is visible
                   }}
                 >
