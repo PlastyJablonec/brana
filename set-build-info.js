@@ -14,13 +14,33 @@ try {
   const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
   const version = packageJson.version;
 
-  // Create .env file for build
-  const envContent = `REACT_APP_BUILD_TIME=${buildTime}
-REACT_APP_VERSION=${version}
-REACT_APP_COMMIT_HASH=${commitHash}
-`;
-
-  fs.writeFileSync(path.join(__dirname, '.env'), envContent);
+  // Read existing .env file and update only build info
+  const envPath = path.join(__dirname, '.env');
+  let existingContent = '';
+  
+  if (fs.existsSync(envPath)) {
+    existingContent = fs.readFileSync(envPath, 'utf8');
+  }
+  
+  // Remove old build info lines
+  const lines = existingContent.split('\n').filter(line => 
+    !line.startsWith('REACT_APP_BUILD_TIME=') &&
+    !line.startsWith('REACT_APP_VERSION=') &&
+    !line.startsWith('REACT_APP_COMMIT_HASH=') &&
+    line.trim() !== ''
+  );
+  
+  // Add build info at the beginning
+  const buildInfoLines = [
+    '# Build info (auto-generated)',
+    `REACT_APP_BUILD_TIME=${buildTime}`,
+    `REACT_APP_VERSION=${version}`,
+    `REACT_APP_COMMIT_HASH=${commitHash}`,
+    ''
+  ];
+  
+  const finalContent = buildInfoLines.concat(lines).join('\n');
+  fs.writeFileSync(envPath, finalContent);
   
   console.log('✅ Build info set:');
   console.log(`   Version: ${version}`);
@@ -30,12 +50,30 @@ REACT_APP_COMMIT_HASH=${commitHash}
 } catch (error) {
   console.error('❌ Failed to set build info:', error.message);
   
-  // Fallback values
-  const fallbackContent = `REACT_APP_BUILD_TIME=2025-02-08T09:00:00.000Z
-REACT_APP_VERSION=2.1.0
-REACT_APP_COMMIT_HASH=dev
-`;
+  // Fallback: Only update build info, preserve existing .env
+  const envPath = path.join(__dirname, '.env');
+  let existingContent = '';
   
-  fs.writeFileSync(path.join(__dirname, '.env'), fallbackContent);
-  console.log('⚠️ Using fallback build info');
+  if (fs.existsSync(envPath)) {
+    existingContent = fs.readFileSync(envPath, 'utf8');
+  }
+  
+  const lines = existingContent.split('\n').filter(line => 
+    !line.startsWith('REACT_APP_BUILD_TIME=') &&
+    !line.startsWith('REACT_APP_VERSION=') &&
+    !line.startsWith('REACT_APP_COMMIT_HASH=') &&
+    line.trim() !== ''
+  );
+  
+  const fallbackLines = [
+    '# Build info (fallback)',
+    'REACT_APP_BUILD_TIME=2025-02-08T09:00:00.000Z',
+    'REACT_APP_VERSION=2.1.0',
+    'REACT_APP_COMMIT_HASH=dev',
+    ''
+  ];
+  
+  const finalContent = fallbackLines.concat(lines).join('\n');
+  fs.writeFileSync(envPath, finalContent);
+  console.log('⚠️ Using fallback build info (preserving existing .env)');
 }
