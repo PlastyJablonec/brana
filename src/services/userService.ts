@@ -129,13 +129,28 @@ export class UserService {
    */
   async getPendingUsers(): Promise<User[]> {
     try {
-      const querySnapshot = await db.collection(this.COLLECTION)
-        .where('status', '==', 'pending')
-        .orderBy('requestedAt', 'desc')
-        .get();
+      console.log('🔍 UserService: Getting pending users...');
+      
+      let querySnapshot;
+      try {
+        // Try with orderBy first
+        querySnapshot = await db.collection(this.COLLECTION)
+          .where('status', '==', 'pending')
+          .orderBy('requestedAt', 'desc')
+          .get();
+      } catch (indexError) {
+        console.warn('⚠️ UserService: OrderBy failed (index missing?), trying without orderBy:', indexError);
+        // Fallback without orderBy
+        querySnapshot = await db.collection(this.COLLECTION)
+          .where('status', '==', 'pending')
+          .get();
+      }
+
+      console.log('🔍 UserService: Found', querySnapshot.size, 'pending users');
 
       return querySnapshot.docs.map((doc: any) => {
         const data = doc.data();
+        console.log('👤 Pending user:', { id: doc.id, email: data.email, status: data.status, requestedAt: data.requestedAt });
         return {
           id: doc.id,
           email: data.email,

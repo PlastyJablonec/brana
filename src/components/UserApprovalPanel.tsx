@@ -13,10 +13,12 @@ const UserApprovalPanel: React.FC = () => {
   const loadPendingUsers = async () => {
     try {
       setLoading(true);
+      console.log('🔍 UserApprovalPanel: Loading pending users...');
       const users = await getPendingUsers();
+      console.log('🔍 UserApprovalPanel: Received pending users:', users.length, users);
       setPendingUsers(users);
     } catch (error) {
-      console.error('Error loading pending users:', error);
+      console.error('❌ UserApprovalPanel: Error loading pending users:', error);
     } finally {
       setLoading(false);
     }
