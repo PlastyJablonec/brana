@@ -75,28 +75,7 @@ export class MqttService {
         console.log(`🔌 Connecting to MQTT broker: ${this.brokerUrl}`);
         console.log('⚙️ MQTT options:', this.options);
         
-        // Check if we should use mock mode (default broker IP suggests no real MQTT config)
-        const isDefaultBroker = this.brokerUrl.includes('89.24.76.191');
-        const hasMqttEnvVars = process.env.REACT_APP_MQTT_URL || process.env.REACT_APP_MQTT_WSS_URL;
-        
-        if (isDefaultBroker && !hasMqttEnvVars) {
-          console.warn('⚠️ MQTT: Používám default broker bez env konfiguraces - přepínám na MOCK režim');
-          console.warn('💡 Tip: Nastav REACT_APP_MQTT_URL nebo REACT_APP_MQTT_WSS_URL v .env pro reálné MQTT');
-          
-          // Mock MQTT connection
-          setTimeout(() => {
-            console.log('🔧 Mock MQTT: Simulace úspěšného připojení');
-            this.currentStatus = {
-              isConnected: true,
-              gateStatus: 'Brána zavřena',
-              garageStatus: 'Garáž zavřena'
-            };
-            this.notifyStatusChange();
-            resolve();
-          }, 1000);
-          
-          return;
-        }
+        // MOCK REŽIM KOMPLETNĚ ODSTRANĚN - VŽDY SE PŘIPOJ KE SKUTEČNÉMU MQTT BROKERU!
         
         // Handle protocol selection
         const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
@@ -337,33 +316,7 @@ export class MqttService {
     console.log('🔌 MQTT client exists:', !!this.client);
     console.log('🔌 MQTT connected status:', this.currentStatus.isConnected);
     
-    // Check if we're in mock mode
-    if (!this.client && this.currentStatus.isConnected) {
-      console.log('🔧 Mock MQTT: Simuluji ovládání brány');
-      
-      // Simulate gate operation sequence
-      setTimeout(() => {
-        if (this.currentStatus.gateStatus === 'Brána zavřena') {
-          this.currentStatus.gateStatus = 'Otevírá se...';
-          this.notifyStatusChange();
-          
-          setTimeout(() => {
-            this.currentStatus.gateStatus = 'Brána otevřena';
-            this.notifyStatusChange();
-          }, 3000);
-        } else {
-          this.currentStatus.gateStatus = 'Zavírá se...';
-          this.notifyStatusChange();
-          
-          setTimeout(() => {
-            this.currentStatus.gateStatus = 'Brána zavřena';
-            this.notifyStatusChange();
-          }, 3000);
-        }
-      }, 100);
-      
-      return;
-    }
+    // MOCK REŽIM KOMPLETNĚ ODSTRANĚN - VŽDY SKUTEČNÉ MQTT PŘIPOJENÍ!
     
     const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
     
@@ -382,33 +335,7 @@ export class MqttService {
   public async publishGarageCommand(userEmail: string): Promise<void> {
     console.log('🏠 publishGarageCommand called for:', userEmail);
     
-    // Check if we're in mock mode
-    if (!this.client && this.currentStatus.isConnected) {
-      console.log('🔧 Mock MQTT: Simuluji ovládání garáže');
-      
-      // Simulate garage operation sequence
-      setTimeout(() => {
-        if (this.currentStatus.garageStatus === 'Garáž zavřena') {
-          this.currentStatus.garageStatus = 'Garáž - otevírá se...';
-          this.notifyStatusChange();
-          
-          setTimeout(() => {
-            this.currentStatus.garageStatus = 'Garáž otevřena';
-            this.notifyStatusChange();
-          }, 3000);
-        } else {
-          this.currentStatus.garageStatus = 'Garáž - zavírá se...';
-          this.notifyStatusChange();
-          
-          setTimeout(() => {
-            this.currentStatus.garageStatus = 'Garáž zavřena';
-            this.notifyStatusChange();
-          }, 3000);
-        }
-      }, 100);
-      
-      return;
-    }
+    // MOCK REŽIM KOMPLETNĚ ODSTRANĚN - VŽDY SKUTEČNÉ MQTT PŘIPOJENÍ!
     
     const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
     
