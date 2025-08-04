@@ -57,25 +57,35 @@
 - Firebase projekt
 - MQTT broker
 
-### Lokální vývoj
+### ⚠️ KRITICKÉ - Konfigurace před spuštěním
+
+**🚨 BEZ SPRÁVNÉ KONFIGURACE APLIKACE BĚŽÍ V MOCK REŽIMU!**
 
 ```bash
 # Klonování repository
-git clone https://github.com/vas-repo/gate-control.git
+git clone https://github.com/PlastyJablonec/brana.git
 cd gate-control
 
 # Instalace závislostí
 npm install
 
-# Kopírování konfigurace
+# POVINNÉ: Konfigurace .env souboru
 cp .env.example .env
 
-# Konfigurace Firebase (src/firebase/config.ts)
-# Konfigurace MQTT (src/services/mqttService.ts)
+# DŮLEŽITÉ: Uprav .env s reálnými IP adresami:
+nano .env
+```
 
-# Spuštění vývojového serveru
+**Viz detailní návod:** [KONFIGURACE.md](./KONFIGURACE.md)
+
+### Lokální vývoj
+
+```bash
+# Po dokončení konfigurace .env:
 npm start
 ```
+
+**📋 Kompletní troubleshooting:** [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)
 
 ### Produkční build
 

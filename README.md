@@ -114,11 +114,37 @@ V Firestore vytvořte dokument v kolekci `users` s následující strukturou:
 
 3. **Nastavte proxy pro MQTT WebSocket** (pokud potřebujete)
 
+## ⚠️ DŮLEŽITÉ - PŘED SPUŠTĚNÍM!
+
+**🚨 APLIKACE POUŽÍVÁ MOCK REŽIM POKUD NENÍ SPRÁVNĚ NAKONFIGUROVÁNA!**
+
+1. **Zkopíruj a uprav `.env` soubor:**
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Nastav SKUTEČNÉ IP adresy v `.env`:**
+   ```bash
+   # MQTT Configuration - ZMĚŇ NA SVOU IP!
+   REACT_APP_MQTT_URL=ws://192.168.1.100:9001
+   
+   # Camera Configuration - ZMĚŇ NA SVOU IP!  
+   REACT_APP_CAMERA_URL=http://192.168.1.100:8080
+   
+   # Firebase Configuration (zkopíruj z brana.json)
+   REACT_APP_FIREBASE_PROJECT_ID=brana-a71fe
+   # ... další Firebase konfigurace
+   ```
+
+3. **Bez této konfigurace NEBUDEŠ MOCT OVLÁDAT SKUTEČNOU BRÁNU!**
+
+📋 **Kompletní troubleshooting:** Viz [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)
+
 ## Troubleshooting
 
-- **MQTT se nepřipojuje:** Zkontrolujte firewall a WebSocket podporu brokeru
-- **Firebase chyby:** Ověřte konfigurace v .env souboru  
-- **Kamera nefunguje:** Zkontrolujte CORS nastavení camera serveru
+- **MQTT mock režim:** Chybí `REACT_APP_MQTT_URL` v `.env` → Viz [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)
+- **Firebase chyby:** Chybí Firebase konfigurace v `.env` souboru
+- **Kamera nefunguje:** Zkontrolujte IP kamery v `.env` a CORS nastavení
 
 ## Licence
 
