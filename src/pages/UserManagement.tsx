@@ -388,7 +388,11 @@ const UserManagement: React.FC = () => {
       {/* Add User Button */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
         <button 
-          onClick={() => setShowAddDialog(true)}
+          onClick={() => {
+            console.log('🆕 Opening Add User dialog');
+            console.log('📊 Current newUser state before opening:', newUser);
+            setShowAddDialog(true);
+          }}
           className="md-fab md-fab-extended md-ripple"
           style={{
             background: 'var(--md-primary)',
@@ -686,7 +690,10 @@ const UserManagement: React.FC = () => {
                 <input
                   type="email"
                   value={newUser.email}
-                  onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                  onChange={(e) => {
+                    console.log('📧 Email changed to:', e.target.value);
+                    setNewUser({...newUser, email: e.target.value});
+                  }}
                   style={{
                     width: '100%',
                     padding: '12px 16px',
@@ -709,7 +716,10 @@ const UserManagement: React.FC = () => {
                 <input
                   type="text"
                   value={newUser.displayName}
-                  onChange={(e) => setNewUser({...newUser, displayName: e.target.value})}
+                  onChange={(e) => {
+                    console.log('👤 Display Name changed to:', e.target.value);
+                    setNewUser({...newUser, displayName: e.target.value});
+                  }}
                   style={{
                     width: '100%',
                     padding: '12px 16px',
@@ -755,7 +765,10 @@ const UserManagement: React.FC = () => {
                 <input
                   type="password"
                   value={newUser.password}
-                  onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                  onChange={(e) => {
+                    console.log('🔐 Password changed, length:', e.target.value.length);
+                    setNewUser({...newUser, password: e.target.value});
+                  }}
                   style={{
                     width: '100%',
                     padding: '12px 16px',
@@ -854,23 +867,39 @@ const UserManagement: React.FC = () => {
                   Zrušit
                 </button>
                 <button
-                  onClick={() => {
-                    console.log('🖱️ Add User button clicked!');
+                  onClick={(e) => {
+                    console.log('🖱️🖱️🖱️ BUTTON CLICKED - EVENT FIRED!');
+                    console.log('📝 Current newUser state:', JSON.stringify(newUser, null, 2));
                     console.log('📝 Form validation:', {
                       email: !!newUser.email,
                       displayName: !!newUser.displayName,
                       password: !!newUser.password,
-                      isDisabled: !newUser.email || !newUser.displayName || !newUser.password
+                      isDisabled: !newUser.email || !newUser.displayName || !newUser.password,
+                      emailValue: newUser.email,
+                      displayNameValue: newUser.displayName,
+                      passwordValue: newUser.password
                     });
+                    console.log('🎯 Event target:', e.target);
+                    console.log('🔧 Loading state:', loading);
+                    
+                    if (!newUser.email || !newUser.displayName || !newUser.password) {
+                      console.error('❌ FORM VALIDATION FAILED - missing required fields');
+                      alert('❌ Vyplň prosím všechna povinná pole (email, jméno, heslo)');
+                      return;
+                    }
+                    
+                    console.log('✅ Form validation passed, calling handleAddUser...');
                     handleAddUser();
                   }}
                   disabled={!newUser.email || !newUser.displayName || !newUser.password}
                   className="md-fab md-fab-extended md-ripple"
                   style={{
                     flex: 1,
-                    background: 'var(--md-primary)',
-                    color: 'var(--md-on-primary)',
-                    opacity: (!newUser.email || !newUser.displayName || !newUser.password) ? 0.6 : 1
+                    background: (!newUser.email || !newUser.displayName || !newUser.password) ? '#cccccc' : 'var(--md-primary)',
+                    color: (!newUser.email || !newUser.displayName || !newUser.password) ? '#666666' : 'var(--md-on-primary)',
+                    opacity: (!newUser.email || !newUser.displayName || !newUser.password) ? 0.6 : 1,
+                    cursor: (!newUser.email || !newUser.displayName || !newUser.password) ? 'not-allowed' : 'pointer',
+                    border: '2px solid red' // TEMPORARY - to see if button is visible
                   }}
                 >
                   {loading ? 'Vytváří se...' : 'Přidat'}
