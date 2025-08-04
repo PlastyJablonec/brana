@@ -3,10 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
 import UserApprovalPanel from '../components/UserApprovalPanel';
-import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebase/config';
+import { auth, db } from '../firebase/config';
 import { locationService } from '../services/locationService';
 import { User } from '../types';
 
@@ -65,9 +62,9 @@ const UserManagement: React.FC = () => {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const usersCollection = collection(db, 'users');
-      const usersSnapshot = await getDocs(usersCollection);
-      const usersList = usersSnapshot.docs.map(doc => {
+      const usersCollection = db.collection('users');
+      const usersSnapshot = await usersCollection.get();
+      const usersList = usersSnapshot.docs.map((doc: any) => {
         const data = doc.data();
         return {
           id: doc.id,
@@ -122,8 +119,8 @@ const UserManagement: React.FC = () => {
       const location = await locationService.getCurrentLocation();
       
       // Update user's location in Firestore
-      const userDoc = doc(db, 'users', userId);
-      await updateDoc(userDoc, {
+      const userDoc = db.collection('users').doc(userId);
+      await userDoc.update({
         lastLocation: {
           latitude: location.latitude,
           longitude: location.longitude,
@@ -158,7 +155,7 @@ const UserManagement: React.FC = () => {
       
       console.log('🔐 Creating Firebase Auth user...');
       // Create Firebase Auth user
-      const userCredential = await createUserWithEmailAndPassword(auth, newUser.email, newUser.password);
+      const userCredential = await auth.createUserWithEmailAndPassword(newUser.email, newUser.password);
       console.log('✅ Firebase Auth user created:', userCredential.user.uid);
       
       const userData = {
@@ -183,7 +180,7 @@ const UserManagement: React.FC = () => {
       console.log('💾 Adding user document to Firestore...');
       
       // Add user document to Firestore with all required fields
-      const docRef = await addDoc(collection(db, 'users'), userData);
+      const docRef = await db.collection('users').add(userData);
       console.log('✅ Firestore document created with ID:', docRef.id);
 
       alert('✅ Uživatel byl úspěšně vytvořen!');
@@ -240,8 +237,8 @@ const UserManagement: React.FC = () => {
   const handleUpdateUser = async (user: User) => {
     try {
       setLoading(true);
-      const userDoc = doc(db, 'users', user.id);
-      await updateDoc(userDoc, {
+      const userDoc = db.collection('users').doc(user.id);
+      await userDoc.update({
         displayName: user.displayName,
         nick: user.nick || '',
         role: user.role,
@@ -268,8 +265,8 @@ const UserManagement: React.FC = () => {
     
     try {
       setLoading(true);
-      const userDoc = doc(db, 'users', userId);
-      await deleteDoc(userDoc);
+      const userDoc = db.collection('users').doc(userId);
+      await userDoc.delete();
       await loadUsers();
     } catch (error) {
       console.error('Error deleting user:', error);

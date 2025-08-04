@@ -134,7 +134,7 @@ export class UserService {
         .orderBy('requestedAt', 'desc')
         .get();
 
-      return querySnapshot.docs.map(doc => {
+      return querySnapshot.docs.map((doc: any) => {
         const data = doc.data();
         return {
           id: doc.id,
@@ -220,8 +220,8 @@ export class UserService {
         .get();
 
       const adminEmails = adminQuery.docs
-        .map(doc => doc.data().email)
-        .filter(email => email);
+        .map((doc: any) => doc.data().email)
+        .filter((email: any) => email);
 
       console.log('📧 New user notification should be sent to admins:', adminEmails);
       console.log(`📝 New user: ${displayName} (${userEmail}) is waiting for approval`);

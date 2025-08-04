@@ -22,7 +22,7 @@ const LoginPage: React.FC = () => {
     });
     
     // Test Firebase connection
-    auth.onAuthStateChanged((user) => {
+    auth.onAuthStateChanged((user: any) => {
       console.log('Firebase auth state changed:', user ? `User: ${user.email}` : 'No user');
     });
   }, []);
