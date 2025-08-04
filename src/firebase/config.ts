@@ -40,16 +40,14 @@ if (hasValidConfig) {
     
     console.log('✅ Firebase initialized successfully');
     
-    // Test Firebase connection only if we have valid config
-    if (auth && typeof auth.onAuthStateChanged === 'function') {
-      auth.onAuthStateChanged((user: any) => {
-        if (user) {
-          console.log('Firebase Auth: User logged in -', user.email);
-        } else {
-          console.log('Firebase Auth: No user logged in');
-        }
-      });
-    }
+    // Test Firebase connection
+    auth.onAuthStateChanged((user: any) => {
+      if (user) {
+        console.log('Firebase Auth: User logged in -', user.email);
+      } else {
+        console.log('Firebase Auth: No user logged in');
+      }
+    });
     
   } catch (error) {
     console.error('❌ Firebase initialization failed:', error);
@@ -59,13 +57,12 @@ if (hasValidConfig) {
     googleProvider = null;
   }
 } else {
-  // FIREBASE MOCK REŽIM KOMPLETNĚ ODSTRANĚN!
-  // APLIKACE VYŽADUJE SPRÁVNOU FIREBASE KONFIGURACI!
-  const error = new Error('❌ FIREBASE KONFIGURACE CHYBÍ! Zkontroluj .env soubor a nastav správné Firebase hodnoty.');
-  console.error('❌ Firebase: Neplatná nebo chybějící konfigurace!');
+  console.error('❌ Firebase: Neplatná konfigurace!');
   console.error('💡 POVINNÉ: Zkopíruj .env.example do .env a nastav správné Firebase hodnoty');
   console.error('🔧 Kontroluj proměnné: REACT_APP_FIREBASE_API_KEY, REACT_APP_FIREBASE_PROJECT_ID');
-  throw error;
+  
+  // Application will not work without proper Firebase config
+  throw new Error('Firebase konfigurace chybí nebo je neplatná! Nastav správné hodnoty v .env souboru.');
 }
 
 export { auth, db, googleProvider };

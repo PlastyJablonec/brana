@@ -75,8 +75,6 @@ export class MqttService {
         console.log(`🔌 Connecting to MQTT broker: ${this.brokerUrl}`);
         console.log('⚙️ MQTT options:', this.options);
         
-        // MOCK REŽIM KOMPLETNĚ ODSTRANĚN - VŽDY SE PŘIPOJ KE SKUTEČNÉMU MQTT BROKERU!
-        
         // Handle protocol selection
         const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
         
@@ -316,8 +314,6 @@ export class MqttService {
     console.log('🔌 MQTT client exists:', !!this.client);
     console.log('🔌 MQTT connected status:', this.currentStatus.isConnected);
     
-    // MOCK REŽIM KOMPLETNĚ ODSTRANĚN - VŽDY SKUTEČNÉ MQTT PŘIPOJENÍ!
-    
     const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
     
     if (isHttps) {
@@ -333,10 +329,6 @@ export class MqttService {
   }
 
   public async publishGarageCommand(userEmail: string): Promise<void> {
-    console.log('🏠 publishGarageCommand called for:', userEmail);
-    
-    // MOCK REŽIM KOMPLETNĚ ODSTRANĚN - VŽDY SKUTEČNÉ MQTT PŘIPOJENÍ!
-    
     const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
     
     if (isHttps) {
