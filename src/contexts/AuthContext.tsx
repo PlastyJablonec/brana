@@ -122,9 +122,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const getPendingUsers = async (): Promise<User[]> => {
+    console.log('🔍 AuthContext: getPendingUsers called');
+    console.log('🔍 AuthContext: currentUser:', currentUser ? { email: currentUser.email, role: currentUser.role } : 'NULL');
+    
     if (!currentUser || !userService.isAdmin(currentUser)) {
+      console.error('❌ AuthContext: Insufficient permissions for getPendingUsers');
       throw new Error('Insufficient permissions');
     }
+    
+    console.log('✅ AuthContext: Admin verified, calling userService.getPendingUsers');
     return await userService.getPendingUsers();
   };
 

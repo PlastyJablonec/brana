@@ -172,8 +172,15 @@ export class UserService {
           rejectedReason: data.rejectedReason,
         };
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error getting pending users:', error);
+      console.error('❌ Error code:', error.code);
+      console.error('❌ Error message:', error.message);
+      
+      if (error.code === 'permission-denied') {
+        console.error('❌ Firebase Permission Denied - možná problém s auth nebo rules');
+      }
+      
       return [];
     }
   }
