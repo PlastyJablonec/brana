@@ -5,6 +5,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import UserApprovalPanel from '../components/UserApprovalPanel';
 import { auth, db } from '../firebase/config';
 import { locationService } from '../services/locationService';
+import { userService } from '../services/userService';
 import { User } from '../types';
 
 const UserManagement: React.FC = () => {
@@ -63,46 +64,11 @@ const UserManagement: React.FC = () => {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const usersCollection = db.collection('users');
-      const usersSnapshot = await usersCollection.get();
-      const usersList = usersSnapshot.docs.map((doc: any) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          email: data.email || '',
-          displayName: data.displayName || '',
-          photoURL: data.photoURL || undefined,
-          nick: data.nick || '',
-          role: data.role || 'user',
-          status: data.status || 'approved', // Default for existing users
-          authProvider: data.authProvider || 'email', // Default for existing users
-          permissions: data.permissions || {
-            gate: false,
-            garage: false,
-            camera: false,
-            stopMode: false,
-            viewLogs: true,
-            manageUsers: false,
-            requireLocation: false,
-            allowGPS: true,
-            requireLocationProximity: false
-          },
-          gpsEnabled: data.gpsEnabled !== undefined ? data.gpsEnabled : true,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          lastLogin: data.lastLogin?.toDate() || new Date(),
-          requestedAt: data.requestedAt?.toDate(),
-          approvedAt: data.approvedAt?.toDate(),
-          approvedBy: data.approvedBy,
-          rejectedAt: data.rejectedAt?.toDate(),
-          rejectedBy: data.rejectedBy,
-          rejectedReason: data.rejectedReason,
-          lastLocation: data.lastLocation ? {
-            ...data.lastLocation,
-            timestamp: data.lastLocation.timestamp?.toDate() || new Date()
-          } : undefined
-        } as User;
-      });
+      
+      // OPRAVA: Používat userService pro konzistenci místo přímého Firestore dotazu
+      const usersList = await userService.getAllUsers();
       setUsers(usersList);
+      
       // Refresh pending count when users list is loaded
       await loadPendingCount();
     } catch (error) {

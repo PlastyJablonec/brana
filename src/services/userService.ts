@@ -247,6 +247,112 @@ export class UserService {
   canAccess(user: User | null): boolean {
     return user?.status === 'approved';
   }
+
+  /**
+   * Get all users for admin interface
+   * Prioritizes new system over legacy users
+   */
+  async getAllUsers(): Promise<User[]> {
+    try {
+      console.log('📊 UserService: Loading all users for admin interface');
+      
+      // Get all users from new system
+      const newSystemQuery = await db.collection(this.COLLECTION).get();
+      const newSystemUsers = new Map<string, User>();
+      
+      newSystemQuery.docs.forEach((doc: any) => {
+        const data = doc.data();
+        const user: User = {
+          id: doc.id,
+          email: data.email,
+          displayName: data.displayName,
+          photoURL: data.photoURL,
+          nick: data.nick,
+          role: data.role,
+          status: data.status,
+          authProvider: data.authProvider || 'email',
+          permissions: data.permissions,
+          gpsEnabled: data.gpsEnabled || false,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          lastLogin: data.lastLogin?.toDate() || new Date(),
+          requestedAt: data.requestedAt?.toDate(),
+          approvedAt: data.approvedAt?.toDate(),
+          approvedBy: data.approvedBy,
+          rejectedAt: data.rejectedAt?.toDate(),
+          rejectedBy: data.rejectedBy,
+          rejectedReason: data.rejectedReason,
+          lastLocation: data.lastLocation ? {
+            ...data.lastLocation,
+            timestamp: data.lastLocation.timestamp?.toDate() || new Date()
+          } : undefined
+        };
+        
+        // Index by email for deduplication
+        newSystemUsers.set(user.email.toLowerCase(), user);
+      });
+      
+      // Get legacy users (only those not already in new system)
+      const legacyUsersQuery = await db.collection('users').get();
+      const allUsers: User[] = [];
+      
+      legacyUsersQuery.docs.forEach((doc: any) => {
+        const data = doc.data();
+        const email = (data.email || '').toLowerCase();
+        
+        // Skip if user already exists in new system
+        if (newSystemUsers.has(email)) {
+          console.log('🔄 Skipping legacy user (exists in new system):', email);
+          return;
+        }
+        
+        // Add legacy user with default status
+        const legacyUser: User = {
+          id: doc.id, // Use Firebase Auth UID as ID for legacy users
+          email: data.email || '',
+          displayName: data.displayName || '',
+          photoURL: data.photoURL,
+          nick: data.nick || '',
+          role: data.role || 'user',
+          status: data.status || 'approved', // Legacy users default to approved
+          authProvider: data.authProvider || 'email',
+          permissions: data.permissions || {
+            gate: false,
+            garage: false,
+            camera: false,
+            stopMode: false,
+            viewLogs: true,
+            manageUsers: false,
+            requireLocation: false,
+            allowGPS: true,
+            requireLocationProximity: false
+          },
+          gpsEnabled: data.gpsEnabled !== undefined ? data.gpsEnabled : true,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          lastLogin: data.lastLogin?.toDate() || new Date(),
+          lastLocation: data.lastLocation ? {
+            ...data.lastLocation,
+            timestamp: data.lastLocation.timestamp?.toDate() || new Date()
+          } : undefined
+        };
+        
+        allUsers.push(legacyUser);
+      });
+      
+      // Add all new system users
+      allUsers.push(...Array.from(newSystemUsers.values()));
+      
+      // Sort by email
+      allUsers.sort((a, b) => a.email.localeCompare(b.email));
+      
+      console.log(`✅ UserService: Loaded ${allUsers.length} users (${newSystemUsers.size} new system, ${allUsers.length - newSystemUsers.size} legacy)`);
+      
+      return allUsers;
+      
+    } catch (error) {
+      console.error('❌ Error loading all users:', error);
+      throw new Error('Failed to load users');
+    }
+  }
 }
 
 // Export singleton instance
