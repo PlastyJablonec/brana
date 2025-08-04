@@ -40,14 +40,16 @@ if (hasValidConfig) {
     
     console.log('✅ Firebase initialized successfully');
     
-    // Test Firebase connection
-    auth.onAuthStateChanged((user: any) => {
-      if (user) {
-        console.log('Firebase Auth: User logged in -', user.email);
-      } else {
-        console.log('Firebase Auth: No user logged in');
-      }
-    });
+    // Test Firebase connection only if we have valid config
+    if (auth && typeof auth.onAuthStateChanged === 'function') {
+      auth.onAuthStateChanged((user: any) => {
+        if (user) {
+          console.log('Firebase Auth: User logged in -', user.email);
+        } else {
+          console.log('Firebase Auth: No user logged in');
+        }
+      });
+    }
     
   } catch (error) {
     console.error('❌ Firebase initialization failed:', error);
