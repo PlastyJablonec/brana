@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Debug Tool - Firebase</title>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 16px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 4px;
+        }
+        button:hover {
+            background: #1565c0;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 12px;
+            border-radius: 4px;
+            margin: 8px 0;
+        }
+        .success {
+            background: #e8f5e8;
+            color: #2e7d32;
+            padding: 12px;
+            border-radius: 4px;
+            margin: 8px 0;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 12px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        input {
+            width: 300px;
+            padding: 8px;
+            margin: 4px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Admin Debug Tool - Firebase</h1>
+    
+    <div class="card">
+        <h2>1. Firebase Connection</h2>
+        <button onclick="initFirebase()">Initialize Firebase</button>
+        <div id="firebaseStatus"></div>
+    </div>
+    
+    <div class="card">
+        <h2>2. Current User Info</h2>
+        <button onclick="getCurrentUser()">Get Current User</button>
+        <div id="currentUserInfo"></div>
+    </div>
+    
+    <div class="card">
+        <h2>3. Fix Admin Account</h2>
+        <p>Zadej email svého admin účtu:</p>
+        <input type="email" id="adminEmail" placeholder="admin@example.com">
+        <br>
+        <button onclick="fixAdminAccount()">Fix Admin Permissions</button>
+        <div id="fixAdminResult"></div>
+    </div>
+    
+    <div class="card">
+        <h2>4. Test Firebase Rules</h2>
+        <button onclick="testFirebaseRules()">Test Rules</button>
+        <div id="rulesTestResult"></div>
+    </div>
+    
+    <div class="card">
+        <h2>5. List All Users</h2>
+        <button onclick="listAllUsers()">List Users</button>
+        <div id="allUsersResult"></div>
+    </div>
+
+    <script>
+        // Firebase konfigurace
+        const firebaseConfig = {
+            apiKey: "AIzaSyB7f6hVmYeXmF9kLGwXPcUAWy8Ft_cApHE",
+            authDomain: "brana-a71fe.firebaseapp.com",
+            projectId: "brana-a71fe",
+            storageBucket: "brana-a71fe.firebasestorage.app",
+            messagingSenderId: "100155818288533404366",
+            appId: "1:100155818288533404366:web:abc123"
+        };
+
+        let app, auth, db;
+
+        function initFirebase() {
+            try {
+                app = firebase.initializeApp(firebaseConfig);
+                auth = firebase.auth();
+                db = firebase.firestore();
+                
+                document.getElementById('firebaseStatus').innerHTML = 
+                    '<div class="success">✅ Firebase initialized successfully</div>';
+                    
+                // Listen for auth state changes
+                auth.onAuthStateChanged((user) => {
+                    if (user) {
+                        document.getElementById('currentUserInfo').innerHTML = 
+                            `<div class="success">🔐 Logged in as: ${user.email}</div>`;
+                    } else {
+                        document.getElementById('currentUserInfo').innerHTML = 
+                            '<div class="error">❌ Not logged in</div>';
+                    }
+                });
+                
+            } catch (error) {
+                document.getElementById('firebaseStatus').innerHTML = 
+                    `<div class="error">❌ Firebase init failed: ${error.message}</div>`;
+            }
+        }
+
+        function getCurrentUser() {
+            if (!auth) {
+                alert('Initialize Firebase first!');
+                return;
+            }
+            
+            const user = auth.currentUser;
+            if (!user) {
+                document.getElementById('currentUserInfo').innerHTML = 
+                    '<div class="error">❌ No user logged in. Please login first.</div>';
+                return;
+            }
+            
+            // Get user details from Firestore
+            db.collection('users').where('email', '==', user.email).get()
+                .then((querySnapshot) => {
+                    if (querySnapshot.empty) {
+                        document.getElementById('currentUserInfo').innerHTML = 
+                            `<div class="error">❌ User document not found in Firestore for: ${user.email}</div>`;
+                        return;
+                    }
+                    
+                    const userDoc = querySnapshot.docs[0];
+                    const userData = userDoc.data();
+                    
+                    document.getElementById('currentUserInfo').innerHTML = `
+                        <div class="success">
+                            <strong>✅ Current User:</strong><br>
+                            <strong>Email:</strong> ${userData.email}<br>
+                            <strong>Name:</strong> ${userData.displayName}<br>
+                            <strong>Role:</strong> ${userData.role}<br>
+                            <strong>Status:</strong> ${userData.status}<br>
+                            <strong>Permissions:</strong><br>
+                            <pre>${JSON.stringify(userData.permissions, null, 2)}</pre>
+                        </div>
+                    `;
+                })
+                .catch((error) => {
+                    document.getElementById('currentUserInfo').innerHTML = 
+                        `<div class="error">❌ Error getting user data: ${error.message}</div>`;
+                });
+        }
+
+        function fixAdminAccount() {
+            const email = document.getElementById('adminEmail').value.trim();
+            if (!email) {
+                alert('Please enter admin email');
+                return;
+            }
+            
+            if (!db) {
+                alert('Initialize Firebase first!');
+                return;
+            }
+            
+            // Find user by email and fix permissions
+            db.collection('users').where('email', '==', email).get()
+                .then((querySnapshot) => {
+                    if (querySnapshot.empty) {
+                        document.getElementById('fixAdminResult').innerHTML = 
+                            `<div class="error">❌ User not found: ${email}</div>`;
+                        return;
+                    }
+                    
+                    const userDoc = querySnapshot.docs[0];
+                    const userRef = db.collection('users').doc(userDoc.id);
+                    
+                    // Update with full admin permissions
+                    return userRef.update({
+                        role: 'admin',
+                        status: 'approved',
+                        permissions: {
+                            gate: true,
+                            garage: true,
+                            camera: true,
+                            stopMode: true,
+                            viewLogs: true,
+                            manageUsers: true,
+                            requireLocation: false,
+                            allowGPS: true,
+                            requireLocationProximity: false
+                        }
+                    });
+                })
+                .then(() => {
+                    document.getElementById('fixAdminResult').innerHTML = 
+                        `<div class="success">✅ Admin permissions fixed for: ${email}</div>`;
+                })
+                .catch((error) => {
+                    document.getElementById('fixAdminResult').innerHTML = 
+                        `<div class="error">❌ Error fixing admin: ${error.message}</div>`;
+                });
+        }
+
+        function testFirebaseRules() {
+            if (!db || !auth.currentUser) {
+                alert('Initialize Firebase and login first!');
+                return;
+            }
+            
+            const testResults = [];
+            
+            // Test 1: Can read users collection
+            db.collection('users').limit(1).get()
+                .then(() => {
+                    testResults.push('✅ Can read users collection');
+                    return testDelete();
+                })
+                .catch((error) => {
+                    testResults.push(`❌ Cannot read users collection: ${error.message}`);
+                    return testDelete();
+                })
+                .then(() => {
+                    document.getElementById('rulesTestResult').innerHTML = 
+                        `<pre>${testResults.join('\n')}</pre>`;
+                });
+                
+            function testDelete() {
+                // Test 2: Try to delete a test document (should work for admin)
+                const testDoc = db.collection('users').doc('test-delete-doc');
+                return testDoc.set({ test: true })
+                    .then(() => {
+                        testResults.push('✅ Can create test document');
+                        return testDoc.delete();
+                    })
+                    .then(() => {
+                        testResults.push('✅ Can delete test document');
+                    })
+                    .catch((error) => {
+                        testResults.push(`❌ Cannot delete test document: ${error.message}`);
+                    });
+            }
+        }
+
+        function listAllUsers() {
+            if (!db) {
+                alert('Initialize Firebase first!');
+                return;
+            }
+            
+            db.collection('users').get()
+                .then((querySnapshot) => {
+                    const users = [];
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        users.push({
+                            id: doc.id,
+                            email: data.email,
+                            role: data.role,
+                            status: data.status,
+                            manageUsers: data.permissions?.manageUsers
+                        });
+                    });
+                    
+                    document.getElementById('allUsersResult').innerHTML = `
+                        <div class="success">
+                            <strong>📋 All Users (${users.length}):</strong><br>
+                            <pre>${JSON.stringify(users, null, 2)}</pre>
+                        </div>
+                    `;
+                })
+                .catch((error) => {
+                    document.getElementById('allUsersResult').innerHTML = 
+                        `<div class="error">❌ Error listing users: ${error.message}</div>`;
+                });
+        }
+
+        // Auto-initialize on page load
+        window.onload = function() {
+            initFirebase();
+        };
+    </script>
+</body>
+</html>
