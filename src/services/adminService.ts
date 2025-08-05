@@ -63,9 +63,9 @@ export class AdminService {
         manageUsers: user.permissions?.manageUsers
       });
       
-      // 4. Ověř admin oprávnění
+      // 4. Ověř admin oprávnění (včetně legacy uživatelů s undefined status)
       const isAdmin = user.role === 'admin' && 
-                      user.status === 'approved' && 
+                      (user.status === 'approved' || user.status === undefined) && 
                       user.permissions?.manageUsers === true;
       
       if (!isAdmin) {
