@@ -258,16 +258,18 @@ export class UserService {
 
   /**
    * Check if user has admin privileges
+   * Includes legacy users without status (considered approved)
    */
   isAdmin(user: User | null): boolean {
-    return user?.role === 'admin' && user?.status === 'approved';
+    return user?.role === 'admin' && (user?.status === 'approved' || user?.status === undefined);
   }
 
   /**
    * Check if user can access the application
+   * Includes legacy users without status (considered approved)
    */
   canAccess(user: User | null): boolean {
-    return user?.status === 'approved';
+    return user?.status === 'approved' || user?.status === undefined;
   }
 
   /**
