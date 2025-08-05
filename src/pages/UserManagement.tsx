@@ -6,6 +6,7 @@ import UserApprovalPanel from '../components/UserApprovalPanel';
 import { auth, db } from '../firebase/config';
 import { locationService } from '../services/locationService';
 import { userService } from '../services/userService';
+import { adminService } from '../services/adminService';
 import { User } from '../types';
 
 const UserManagement: React.FC = () => {
@@ -205,6 +206,18 @@ const UserManagement: React.FC = () => {
   const handleUpdateUser = async (user: User) => {
     try {
       setLoading(true);
+      console.log('✏️ UserManagement: Updating user:', user.id, user.displayName);
+      
+      // Ověř admin přístup
+      const adminCheck = await adminService.verifyAdminAccess();
+      if (!adminCheck.isAdmin || !adminCheck.user) {
+        console.error('❌ UserManagement: Admin verification failed for update action:', adminCheck.error);
+        alert('Chyba: Nemáte oprávnění pro úpravu uživatelů');
+        return;
+      }
+      
+      console.log('✅ UserManagement: Admin verified, proceeding with update...');
+      
       const userDoc = db.collection('users').doc(user.id);
       await userDoc.update({
         displayName: user.displayName,
@@ -212,6 +225,8 @@ const UserManagement: React.FC = () => {
         role: user.role,
         permissions: user.permissions
       });
+      
+      console.log('✅ User updated successfully:', user.displayName);
       setEditingUser(null);
       await loadUsers();
       
@@ -220,25 +235,79 @@ const UserManagement: React.FC = () => {
         console.log('🔧 UserManagement: Refreshing current user permissions...');
         await refreshUser();
       }
-    } catch (error) {
-      console.error('Error updating user:', error);
-      alert('Chyba při aktualizaci uživatele');
+      
+    } catch (error: any) {
+      console.error('❌ Error updating user:', error);
+      
+      let errorMessage = 'Neznámá chyba při aktualizaci uživatele';
+      
+      if (error.code === 'permission-denied') {
+        errorMessage = 'Nemáte oprávnění pro úpravu uživatelů. Zkontrolujte Firebase přístup.';
+      } else if (error.code === 'not-found') {
+        errorMessage = 'Uživatel nebyl nalezen v databázi.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      alert('❌ Chyba při aktualizaci uživatele: ' + errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!window.confirm('Opravdu chcete smazat tohoto uživatele?')) return;
+    // Najdi uživatele pro zobrazení v potvrzení
+    const userToDelete = users.find(u => u.id === userId);
+    const userName = userToDelete ? `${userToDelete.displayName} (${userToDelete.email})` : 'tohoto uživatele';
+    
+    if (!window.confirm(`Opravdu chcete smazat uživatele ${userName}?\n\nTato akce je nevratná!`)) {
+      return;
+    }
     
     try {
       setLoading(true);
+      console.log('🗑️ UserManagement: Attempting to delete user:', userId, userName);
+      
+      // Ověř admin přístup
+      const adminCheck = await adminService.verifyAdminAccess();
+      if (!adminCheck.isAdmin || !adminCheck.user) {
+        console.error('❌ UserManagement: Admin verification failed for delete action:', adminCheck.error);
+        alert('Chyba: Nemáte oprávnění pro mazání uživatelů');
+        return;
+      }
+      
+      console.log('✅ UserManagement: Admin verified, proceeding with delete...');
+      
+      // Zakázat mazání sebe sama
+      if (userId === currentUser?.id) {
+        alert('❌ Nemůžete smazat sám sebe!');
+        return;
+      }
+      
+      // Smazat uživatele z Firestore
       const userDoc = db.collection('users').doc(userId);
       await userDoc.delete();
+      
+      console.log('✅ User deleted successfully:', userId);
+      alert('✅ Uživatel byl úspěšně smazán');
+      
+      // Obnovit seznam uživatelů
       await loadUsers();
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      alert('Chyba při mazání uživatele');
+      
+    } catch (error: any) {
+      console.error('❌ Error deleting user:', error);
+      
+      let errorMessage = 'Neznámá chyba při mazání uživatele';
+      
+      if (error.code === 'permission-denied') {
+        errorMessage = 'Nemáte oprávnění pro mazání uživatelů. Zkontrolujte Firebase přístup.';
+      } else if (error.code === 'not-found') {
+        errorMessage = 'Uživatel nebyl nalezen v databázi.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      alert('❌ Chyba při mazání uživatele: ' + errorMessage);
     } finally {
       setLoading(false);
     }
@@ -450,14 +519,18 @@ const UserManagement: React.FC = () => {
                     <button
                       onClick={() => handleDeleteUser(user.id)}
                       className="btn-icon md-ripple"
+                      disabled={user.id === currentUser?.id || loading}
                       style={{
-                        background: 'var(--md-surface-variant)',
+                        background: (user.id === currentUser?.id || loading) ? 'var(--md-surface-variant)' : 'var(--md-surface-variant)',
                         border: '1px solid var(--md-outline)',
                         borderRadius: '8px',
-                        color: 'var(--md-error)',
+                        color: (user.id === currentUser?.id) ? 'var(--md-on-surface-variant)' : 'var(--md-error)',
                         width: '36px',
-                        height: '36px'
+                        height: '36px',
+                        opacity: (user.id === currentUser?.id || loading) ? 0.5 : 1,
+                        cursor: (user.id === currentUser?.id || loading) ? 'not-allowed' : 'pointer'
                       }}
+                      title={user.id === currentUser?.id ? 'Nemůžete smazat sám sebe' : 'Smazat uživatele'}
                     >
                       <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
