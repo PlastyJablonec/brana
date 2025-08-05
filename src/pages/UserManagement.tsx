@@ -7,6 +7,7 @@ import { auth, db } from '../firebase/config';
 import { locationService } from '../services/locationService';
 import { userService } from '../services/userService';
 import { adminService } from '../services/adminService';
+import { FirebaseDebug } from '../utils/firebaseDebug';
 import { User } from '../types';
 
 const UserManagement: React.FC = () => {
@@ -268,6 +269,10 @@ const UserManagement: React.FC = () => {
       setLoading(true);
       console.log('🗑️ UserManagement: Attempting to delete user:', userId, userName);
       
+      // PŘIDÁNO: Spusť kompletní diagnostiku před mazáním
+      console.log('🚀 Running Firebase diagnostics before delete...');
+      await FirebaseDebug.runFullDiagnostic();
+      
       // Ověř admin přístup
       const adminCheck = await adminService.verifyAdminAccess();
       if (!adminCheck.isAdmin || !adminCheck.user) {
@@ -284,7 +289,26 @@ const UserManagement: React.FC = () => {
         return;
       }
       
-      // Smazat uživatele z Firestore
+      // PŘIDÁNO: Otestuj delete permission před skutečným mazáním
+      console.log('🧪 Testing delete permission with test document...');
+      const testDocRef = db.collection('users').doc(`test-delete-${Date.now()}`);
+      
+      try {
+        // Vytvoř test document
+        await testDocRef.set({ test: true });
+        console.log('✅ Test document created');
+        
+        // Zkus ho smazat
+        await testDocRef.delete();
+        console.log('✅ Test document deleted - permissions OK!');
+      } catch (testError: any) {
+        console.error('❌ Test delete failed:', testError);
+        alert(`❌ Test delete failed: ${testError.message}\n\nFirebase Rules nejsou správně nastavené!`);
+        return;
+      }
+      
+      // Pokud test prošel, zkus skutečné mazání
+      console.log('🎯 Proceeding with actual user deletion...');
       const userDoc = db.collection('users').doc(userId);
       await userDoc.delete();
       
@@ -296,6 +320,11 @@ const UserManagement: React.FC = () => {
       
     } catch (error: any) {
       console.error('❌ Error deleting user:', error);
+      console.error('❌ Error details:', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
       
       let errorMessage = 'Neznámá chyba při mazání uživatele';
       
@@ -422,8 +451,23 @@ const UserManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Add User Button */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+      {/* Add User Button + Debug Button */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <button 
+          onClick={async () => {
+            console.log('🔧 Running Firebase Debug Diagnostic...');
+            await FirebaseDebug.runFullDiagnostic();
+            alert('🔧 Debug diagnostic complete! Check console for details.');
+          }}
+          className="md-fab md-fab-extended md-ripple"
+          style={{
+            background: 'var(--md-warning)',
+            color: 'white'
+          }}
+        >
+          🔧 Debug Firebase
+        </button>
+        
         <button 
           onClick={() => {
             console.log('🆕 Opening Add User dialog');

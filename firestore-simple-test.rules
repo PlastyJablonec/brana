@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // === VERY SIMPLE TEST RULES ===
+    // POZOR: Tyto rules jsou VELMI VOLNÉ pro testování!
+    // Použij je jen dočasně pro otestování mazání!
+    
+    match /users/{userId} {
+      // Všichni přihlášení uživatelé mohou všechno
+      allow read, write, delete: if request.auth != null;
+    }
+    
+    match /activities/{activityId} {
+      allow read, write, delete: if request.auth != null;
+    }
+    
+    match /settings/{settingId} {
+      allow read, write, delete: if request.auth != null;
+    }
+    
+    match /legacy_users/{userId} {
+      allow read, write, delete: if request.auth != null;
+    }
+  }
+}
