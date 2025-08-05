@@ -194,10 +194,16 @@ export class UserService {
         status: 'approved',
         approvedAt: Timestamp.now(),
         approvedBy: adminId,
-        // Grant basic permissions
+        // Grant default permissions: pouze brána + lokační oprávnění
         'permissions.gate': true,
-        'permissions.garage': true,
-        'permissions.camera': true,
+        'permissions.garage': false,
+        'permissions.camera': false,
+        'permissions.stopMode': false,
+        'permissions.viewLogs': true,
+        'permissions.manageUsers': false,
+        'permissions.requireLocation': true,
+        'permissions.allowGPS': true,
+        'permissions.requireLocationProximity': true,
       });
 
       console.log('✅ User approved:', userId, 'by admin:', adminId);

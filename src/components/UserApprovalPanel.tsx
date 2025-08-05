@@ -2,8 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { adminService } from '../services/adminService';
 import { User } from '../types';
+import Dialog from './Dialog';
 
-const UserApprovalPanel: React.FC = () => {
+interface UserApprovalPanelProps {
+  onUserActionComplete?: () => Promise<void>;
+}
+
+const UserApprovalPanel: React.FC<UserApprovalPanelProps> = ({ onUserActionComplete }) => {
   const { currentUser, getPendingUsers, approveUser, rejectUser } = useAuth();
   const [pendingUsers, setPendingUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -12,6 +17,17 @@ const UserApprovalPanel: React.FC = () => {
   const [showRejectDialog, setShowRejectDialog] = useState<string | null>(null);
   const [loadMethod, setLoadMethod] = useState<string>('');
   const [adminVerified, setAdminVerified] = useState<boolean>(false);
+  const [dialogState, setDialogState] = useState<{
+    isOpen: boolean;
+    type: 'success' | 'error';
+    title: string;
+    message: string;
+  }>({
+    isOpen: false,
+    type: 'success',
+    title: '',
+    message: ''
+  });
 
   const loadPendingUsers = async () => {
     try {
@@ -86,10 +102,31 @@ const UserApprovalPanel: React.FC = () => {
       setActionLoading(userId);
       await approveUser(userId);
       await loadPendingUsers(); // Refresh list
+      
+      // Obnovit parent komponentu
+      if (onUserActionComplete) {
+        await onUserActionComplete();
+      }
+      
       console.log('✅ User approved successfully');
+      
+      // Zobrazit úspěšný dialog
+      setDialogState({
+        isOpen: true,
+        type: 'success',
+        title: 'Uživatel schválen',
+        message: 'Uživatel byl úspěšně schválen a má nyní přístup k aplikaci s výchozími oprávněními.'
+      });
     } catch (error) {
       console.error('❌ Error approving user:', error);
-      alert('Chyba při schvalování uživatele');
+      
+      // Zobrazit chybový dialog
+      setDialogState({
+        isOpen: true,
+        type: 'error',
+        title: 'Chyba pri schvalování',
+        message: 'Nepodařilo se schválit uživatele. Zkuste to prosím znovu.'
+      });
     } finally {
       setActionLoading(null);
     }
@@ -103,10 +140,31 @@ const UserApprovalPanel: React.FC = () => {
       await loadPendingUsers(); // Refresh list
       setShowRejectDialog(null);
       setRejectReason(prev => ({ ...prev, [userId]: '' }));
+      
+      // Obnovit parent komponentu
+      if (onUserActionComplete) {
+        await onUserActionComplete();
+      }
+      
       console.log('❌ User rejected successfully');
+      
+      // Zobrazit úspěšný dialog
+      setDialogState({
+        isOpen: true,
+        type: 'success',
+        title: 'Uživatel zamítnut',
+        message: 'Uživatel byl úspěšně zamítnut a nemá přístup k aplikaci.'
+      });
     } catch (error) {
       console.error('❌ Error rejecting user:', error);
-      alert('Chyba při zamítání uživatele');
+      
+      // Zobrazit chybový dialog
+      setDialogState({
+        isOpen: true,
+        type: 'error',
+        title: 'Chyba při zamítání',
+        message: 'Nepodařilo se zamítnout uživatele. Zkuste to prosím znovu.'
+      });
     } finally {
       setActionLoading(null);
     }
@@ -464,6 +522,15 @@ const UserApprovalPanel: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Dialog pro zprávy */}
+      <Dialog
+        isOpen={dialogState.isOpen}
+        onClose={() => setDialogState(prev => ({ ...prev, isOpen: false }))}
+        type={dialogState.type}
+        title={dialogState.title}
+        message={dialogState.message}
+      />
 
       <style>
         {`

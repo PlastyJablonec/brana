@@ -9,6 +9,20 @@ import { userService } from '../services/userService';
 import { adminService } from '../services/adminService';
 import { FirebaseDebug } from '../utils/firebaseDebug';
 import { User } from '../types';
+import Dialog from '../components/Dialog';
+
+// Mapa popisů oprávnění
+const permissionDescriptions = {
+  gate: 'Umožňuje otevírat a zavírat bránu prostřednictvím aplikace',
+  garage: 'Umožňuje ovládat garáž a garážová vrata',
+  camera: 'Povoluje přístup k webkameře a prohlížení živého přenosu',
+  stopMode: 'Kritické oprávnění - povoluje aktivovat STOP režim (zastaví všechny operace)',
+  viewLogs: 'Umožňuje prohlížet logy a historii aktivit v systému',
+  manageUsers: 'Administrátorské oprávnění - správa uživatelů, schvalování přístupů',
+  requireLocation: 'Systém bude vyžadovat GPS lokaci před povolením akcí',
+  allowGPS: 'Povoluje aplikaci přístup k GPS poloze zařízení',
+  requireLocationProximity: 'Omezuje funkce na základě vzdálenosti od určeného místa'
+};
 
 const UserManagement: React.FC = () => {
   const { currentUser, refreshUser, logout, getPendingUsers } = useAuth();
@@ -20,6 +34,20 @@ const UserManagement: React.FC = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showPassword, setShowPassword] = useState(false);
+  const [dialogState, setDialogState] = useState<{
+    isOpen: boolean;
+    type: 'success' | 'error' | 'warning';
+    title: string;
+    message: string;
+    showCancel?: boolean;
+    onConfirm?: () => void;
+  }>({
+    isOpen: false,
+    type: 'success',
+    title: '',
+    message: '',
+    showCancel: false
+  });
   const [newUser, setNewUser] = useState({
     email: '',
     displayName: '',
@@ -154,7 +182,13 @@ const UserManagement: React.FC = () => {
       const docRef = await db.collection('users').add(userData);
       console.log('✅ Firestore document created with ID:', docRef.id);
 
-      alert('✅ Uživatel byl úspěšně vytvořen!');
+      // Zobrazit úspěšný dialog
+      setDialogState({
+        isOpen: true,
+        type: 'success',
+        title: 'Uživatel vytvořen',
+        message: 'Uživatel byl úspěšně vytvořen a automaticky schválen.'
+      });
       console.log('✅ Manual user created successfully and auto-approved');
 
       setShowAddDialog(false);
@@ -199,7 +233,13 @@ const UserManagement: React.FC = () => {
         errorMessage = error.message;
       }
       
-      alert('❌ Chyba při vytváření uživatele: ' + errorMessage);
+      // Zobrazit chybový dialog
+      setDialogState({
+        isOpen: true,
+        type: 'error',
+        title: 'Chyba při vytváření',
+        message: errorMessage
+      });
     } finally {
       console.log('🏁 handleAddUser finished, setting loading to false');
       setLoading(false);
@@ -215,7 +255,12 @@ const UserManagement: React.FC = () => {
       const adminCheck = await adminService.verifyAdminAccess();
       if (!adminCheck.isAdmin || !adminCheck.user) {
         console.error('❌ UserManagement: Admin verification failed for update action:', adminCheck.error);
-        alert('Chyba: Nemáte oprávnění pro úpravu uživatelů');
+        setDialogState({
+          isOpen: true,
+          type: 'error',
+          title: 'Chyba oprávnění',
+          message: 'Nemáte oprávnění pro úpravu uživatelů.'
+        });
         return;
       }
       
@@ -252,7 +297,13 @@ const UserManagement: React.FC = () => {
         errorMessage = error.message;
       }
       
-      alert('❌ Chyba při aktualizaci uživatele: ' + errorMessage);
+      // Zobrazit chybový dialog
+      setDialogState({
+        isOpen: true,
+        type: 'error',
+        title: 'Chyba při aktualizaci',
+        message: errorMessage
+      });
     } finally {
       setLoading(false);
     }
@@ -263,12 +314,25 @@ const UserManagement: React.FC = () => {
     const userToDelete = users.find(u => u.id === userId);
     const userName = userToDelete ? `${userToDelete.displayName} (${userToDelete.email})` : 'tohoto uživatele';
     
-    if (!window.confirm(`Opravdu chcete smazat uživatele ${userName}?\n\nTato akce je nevratná!`)) {
-      return;
-    }
+    // Zobrazit potvrzovací dialog
+    setDialogState({
+      isOpen: true,
+      type: 'warning',
+      title: 'Smazat uživatele',
+      message: `Opravdu chcete smazat uživatele ${userName}?\n\nTato akce je nevratná!`,
+      showCancel: true,
+      onConfirm: () => performDeleteUser(userId)
+    });
+  };
+
+  const performDeleteUser = async (userId: string) => {
+    // Zavřít dialog
+    setDialogState(prev => ({ ...prev, isOpen: false }));
     
     try {
       setLoading(true);
+      const userToDelete = users.find(u => u.id === userId);
+      const userName = userToDelete ? `${userToDelete.displayName} (${userToDelete.email})` : 'neznámého uživatele';
       console.log('🗑️ UserManagement: Attempting to delete user:', userId, userName);
       
       // PŘIDÁNO: Spusť kompletní diagnostiku před mazáním
@@ -279,7 +343,12 @@ const UserManagement: React.FC = () => {
       const adminCheck = await adminService.verifyAdminAccess();
       if (!adminCheck.isAdmin || !adminCheck.user) {
         console.error('❌ UserManagement: Admin verification failed for delete action:', adminCheck.error);
-        alert('Chyba: Nemáte oprávnění pro mazání uživatelů');
+        setDialogState({
+          isOpen: true,
+          type: 'error',
+          title: 'Chyba oprávnění',
+          message: 'Nemáte oprávnění pro mazání uživatelů.'
+        });
         return;
       }
       
@@ -287,7 +356,12 @@ const UserManagement: React.FC = () => {
       
       // Zakázat mazání sebe sama
       if (userId === currentUser?.id) {
-        alert('❌ Nemůžete smazat sám sebe!');
+        setDialogState({
+          isOpen: true,
+          type: 'error',
+          title: 'Neplatná akce',
+          message: 'Nemůžete smazat sám sebe!'
+        });
         return;
       }
       
@@ -305,7 +379,12 @@ const UserManagement: React.FC = () => {
         console.log('✅ Test document deleted - permissions OK!');
       } catch (testError: any) {
         console.error('❌ Test delete failed:', testError);
-        alert(`❌ Test delete failed: ${testError.message}\n\nFirebase Rules nejsou správně nastavené!`);
+        setDialogState({
+          isOpen: true,
+          type: 'error',
+          title: 'Firebase chyba',
+          message: `Test mazání selhal: ${testError.message}\n\nFirebase Rules nejsou správně nastavené!`
+        });
         return;
       }
       
@@ -315,7 +394,14 @@ const UserManagement: React.FC = () => {
       await userDoc.delete();
       
       console.log('✅ User deleted successfully:', userId);
-      alert('✅ Uživatel byl úspěšně smazán');
+      
+      // Zobrazit úspěšný dialog
+      setDialogState({
+        isOpen: true,
+        type: 'success',
+        title: 'Uživatel smazán',
+        message: `Uživatel ${userName} byl úspěšně smazán.`
+      });
       
       // Obnovit seznam uživatelů
       await loadUsers();
@@ -338,7 +424,13 @@ const UserManagement: React.FC = () => {
         errorMessage = error.message;
       }
       
-      alert('❌ Chyba při mazání uživatele: ' + errorMessage);
+      // Zobrazit chybový dialog
+      setDialogState({
+        isOpen: true,
+        type: 'error',
+        title: 'Chyba pri mazání',
+        message: errorMessage
+      });
     } finally {
       setLoading(false);
     }
@@ -449,7 +541,11 @@ const UserManagement: React.FC = () => {
       {/* User Approval Panel - only for admins */}
       {currentUser?.role === 'admin' && (
         <div style={{ marginBottom: '16px' }}>
-          <UserApprovalPanel />
+          <UserApprovalPanel onUserActionComplete={async () => {
+            // Obnovit data po schválení/zamítnutí uživatele
+            await loadUsers();
+            await loadPendingCount();
+          }} />
         </div>
       )}
 
@@ -972,28 +1068,41 @@ const UserManagement: React.FC = () => {
                       requireLocationProximity: 'Omezení vzdáleností'
                     })
                   }).map(([key, label]) => (
-                    <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={newUser.permissions[key as keyof typeof newUser.permissions]}
-                        onChange={(e) => setNewUser({
-                          ...newUser,
-                          permissions: {
-                            ...newUser.permissions,
-                            [key]: e.target.checked
-                          }
-                        })}
-                        style={{
-                          width: '20px',
-                          height: '20px',
-                          borderRadius: '4px',
-                          border: '2px solid var(--md-outline)',
-                          backgroundColor: 'var(--md-surface)',
-                          cursor: 'pointer'
-                        }}
-                      />
-                      <span style={{ fontSize: '0.875rem', color: 'var(--md-on-surface)' }}>{label}</span>
-                    </label>
+                    <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={newUser.permissions[key as keyof typeof newUser.permissions]}
+                          onChange={(e) => setNewUser({
+                            ...newUser,
+                            permissions: {
+                              ...newUser.permissions,
+                              [key]: e.target.checked
+                            }
+                          })}
+                          style={{
+                            width: '20px',
+                            height: '20px',
+                            borderRadius: '4px',
+                            border: '2px solid var(--md-outline)',
+                            backgroundColor: 'var(--md-surface)',
+                            cursor: 'pointer'
+                          }}
+                        />
+                        <span style={{ fontSize: '0.875rem', color: 'var(--md-on-surface)', fontWeight: '500' }}>{label}</span>
+                      </label>
+                      {permissionDescriptions[key as keyof typeof permissionDescriptions] && (
+                        <p style={{ 
+                          fontSize: '0.75rem', 
+                          color: 'var(--md-on-surface-variant)', 
+                          margin: '0 0 0 32px',
+                          lineHeight: '1.3',
+                          fontStyle: 'italic'
+                        }}>
+                          {permissionDescriptions[key as keyof typeof permissionDescriptions]}
+                        </p>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1177,28 +1286,41 @@ const UserManagement: React.FC = () => {
                       requireLocationProximity: 'Omezení vzdáleností'
                     })
                   }).map(([key, label]) => (
-                    <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={editingUser.permissions[key as keyof typeof editingUser.permissions]}
-                        onChange={(e) => setEditingUser({
-                          ...editingUser,
-                          permissions: {
-                            ...editingUser.permissions,
-                            [key]: e.target.checked
-                          }
-                        })}
-                        style={{
-                          width: '20px',
-                          height: '20px',
-                          borderRadius: '4px',
-                          border: '2px solid var(--md-outline)',
-                          backgroundColor: 'var(--md-surface)',
-                          cursor: 'pointer'
-                        }}
-                      />
-                      <span style={{ fontSize: '0.875rem', color: 'var(--md-on-surface)' }}>{label}</span>
-                    </label>
+                    <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={editingUser.permissions[key as keyof typeof editingUser.permissions]}
+                          onChange={(e) => setEditingUser({
+                            ...editingUser,
+                            permissions: {
+                              ...editingUser.permissions,
+                              [key]: e.target.checked
+                            }
+                          })}
+                          style={{
+                            width: '20px',
+                            height: '20px',
+                            borderRadius: '4px',
+                            border: '2px solid var(--md-outline)',
+                            backgroundColor: 'var(--md-surface)',
+                            cursor: 'pointer'
+                          }}
+                        />
+                        <span style={{ fontSize: '0.875rem', color: 'var(--md-on-surface)', fontWeight: '500' }}>{label}</span>
+                      </label>
+                      {permissionDescriptions[key as keyof typeof permissionDescriptions] && (
+                        <p style={{ 
+                          fontSize: '0.75rem', 
+                          color: 'var(--md-on-surface-variant)', 
+                          margin: '0 0 0 32px',
+                          lineHeight: '1.3',
+                          fontStyle: 'italic'
+                        }}>
+                          {permissionDescriptions[key as keyof typeof permissionDescriptions]}
+                        </p>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1234,6 +1356,17 @@ const UserManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Dialog pro zprávy */}
+      <Dialog
+        isOpen={dialogState.isOpen}
+        onClose={() => setDialogState(prev => ({ ...prev, isOpen: false }))}
+        type={dialogState.type}
+        title={dialogState.title}
+        message={dialogState.message}
+        showCancel={dialogState.showCancel}
+        onConfirm={dialogState.onConfirm}
+      />
 
       {/* CSS for animations */}
       <style>
