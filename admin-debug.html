@@ -74,7 +74,9 @@
     </div>
     
     <div class="card">
-        <h2>2. Current User Info</h2>
+        <h2>2. LOGIN FIRST!</h2>
+        <p>Musíš se přihlásit Google účtem:</p>
+        <button onclick="loginWithGoogle()" style="background: #db4437;">🔐 Login with Google</button>
         <button onclick="getCurrentUser()">Get Current User</button>
         <div id="currentUserInfo"></div>
     </div>
@@ -126,10 +128,11 @@
                 auth.onAuthStateChanged((user) => {
                     if (user) {
                         document.getElementById('currentUserInfo').innerHTML = 
-                            `<div class="success">🔐 Logged in as: ${user.email}</div>`;
+                            `<div class="success">🔐 Logged in as: ${user.email}<br>
+                            <button onclick="logout()" style="background: #f44336;">Logout</button></div>`;
                     } else {
                         document.getElementById('currentUserInfo').innerHTML = 
-                            '<div class="error">❌ Not logged in</div>';
+                            '<div class="error">❌ Not logged in - Click Login with Google!</div>';
                     }
                 });
                 
@@ -137,6 +140,37 @@
                 document.getElementById('firebaseStatus').innerHTML = 
                     `<div class="error">❌ Firebase init failed: ${error.message}</div>`;
             }
+        }
+
+        function loginWithGoogle() {
+            if (!auth) {
+                alert('Initialize Firebase first!');
+                return;
+            }
+            
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    console.log('✅ Login successful:', result.user.email);
+                    document.getElementById('currentUserInfo').innerHTML = 
+                        `<div class="success">🔐 Login successful: ${result.user.email}</div>`;
+                })
+                .catch((error) => {
+                    console.error('❌ Login failed:', error);
+                    document.getElementById('currentUserInfo').innerHTML = 
+                        `<div class="error">❌ Login failed: ${error.message}</div>`;
+                });
+        }
+
+        function logout() {
+            auth.signOut()
+                .then(() => {
+                    document.getElementById('currentUserInfo').innerHTML = 
+                        '<div class="error">❌ Logged out</div>';
+                })
+                .catch((error) => {
+                    console.error('Logout error:', error);
+                });
         }
 
         function getCurrentUser() {
