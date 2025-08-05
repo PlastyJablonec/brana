@@ -67,9 +67,11 @@ const UserManagement: React.FC = () => {
     try {
       setLoading(true);
       
-      // OPRAVA: Používat userService pro konzistenci místo přímého Firestore dotazu
-      const usersList = await userService.getAllUsers();
-      setUsers(usersList);
+      // OPRAVA: Používat getApprovedUsers() místo filtrování getAllUsers()
+      // Tím se zajistí, že main seznam obsahuje jen schválené uživatele
+      // Pending uživatelé se zobrazují pouze v UserApprovalPanel
+      const approvedUsers = await userService.getApprovedUsers();
+      setUsers(approvedUsers);
       
       // Refresh pending count when users list is loaded
       await loadPendingCount();

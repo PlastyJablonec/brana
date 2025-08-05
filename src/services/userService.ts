@@ -375,6 +375,78 @@ export class UserService {
       throw new Error('Failed to load users');
     }
   }
+
+  /**
+   * Get only approved users for main user list
+   * Excludes pending users (they appear in UserApprovalPanel)
+   * Includes legacy users without status (considered approved)
+   */
+  async getApprovedUsers(): Promise<User[]> {
+    try {
+      console.log('📊 UserService: Loading approved users only...');
+      
+      // Get all users and filter for approved ones (including legacy without status)
+      const allUsersQuery = await db.collection(this.COLLECTION).get();
+      const approvedUsers: User[] = [];
+      
+      allUsersQuery.docs.forEach((doc: any) => {
+        const data = doc.data();
+        const status = data.status;
+        
+        // Include users that are explicitly approved OR have no status (legacy users)
+        // Exclude users that are explicitly pending or rejected
+        if (status === 'approved' || status === undefined) {
+          const user: User = {
+            id: doc.id,
+            email: data.email,
+            displayName: data.displayName,
+            photoURL: data.photoURL,
+            nick: data.nick,
+            role: data.role,
+            status: data.status || 'approved', // Legacy users default to approved
+            authProvider: data.authProvider || 'email',
+            permissions: data.permissions || {
+              gate: false,
+              garage: false,
+              camera: false,
+              stopMode: false,
+              viewLogs: true,
+              manageUsers: false,
+              requireLocation: false,
+              allowGPS: true,
+              requireLocationProximity: false
+            },
+            gpsEnabled: data.gpsEnabled || false,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            lastLogin: data.lastLogin?.toDate() || new Date(),
+            requestedAt: data.requestedAt?.toDate(),
+            approvedAt: data.approvedAt?.toDate(),
+            approvedBy: data.approvedBy,
+            rejectedAt: data.rejectedAt?.toDate(),
+            rejectedBy: data.rejectedBy,
+            rejectedReason: data.rejectedReason,
+            lastLocation: data.lastLocation ? {
+              ...data.lastLocation,
+              timestamp: data.lastLocation.timestamp?.toDate() || new Date()
+            } : undefined
+          };
+          
+          approvedUsers.push(user);
+        }
+      });
+
+      // Sort by email
+      approvedUsers.sort((a: User, b: User) => a.email.localeCompare(b.email));
+      
+      console.log(`✅ UserService: Loaded ${approvedUsers.length} approved users (including legacy)`);
+      
+      return approvedUsers;
+      
+    } catch (error) {
+      console.error('❌ Error loading approved users:', error);
+      throw new Error('Failed to load approved users');
+    }
+  }
 }
 
 // Export singleton instance
