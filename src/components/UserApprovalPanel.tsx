@@ -274,7 +274,7 @@ const UserApprovalPanel: React.FC<UserApprovalPanelProps> = ({ onUserActionCompl
                 padding: '20px',
                 background: 'var(--md-surface-variant)'
               }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                <div className="approval-user-card">
                   {/* User Avatar */}
                   {user.photoURL ? (
                     <img 
@@ -380,7 +380,7 @@ const UserApprovalPanel: React.FC<UserApprovalPanelProps> = ({ onUserActionCompl
                   </div>
 
                   {/* Action Buttons */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div className="approval-action-buttons">
                     <button
                       onClick={() => handleApprove(user.id)}
                       disabled={actionLoading === user.id}
@@ -537,6 +537,38 @@ const UserApprovalPanel: React.FC<UserApprovalPanelProps> = ({ onUserActionCompl
           @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+          }
+          
+          .approval-user-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+          }
+          
+          .approval-action-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+          }
+          
+          @media (max-width: 768px) {
+            .approval-user-card {
+              flex-direction: column;
+              align-items: center;
+              text-align: center;
+            }
+            
+            .approval-action-buttons {
+              flex-direction: row;
+              width: 100%;
+              justify-content: center;
+              gap: 12px;
+            }
+            
+            .approval-action-buttons button {
+              flex: 1;
+              max-width: 120px;
+            }
           }
         `}
       </style>

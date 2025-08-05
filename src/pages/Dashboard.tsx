@@ -751,23 +751,6 @@ const Dashboard: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <ThemeToggle />
             
-            {/* MQTT Debug Toggle */}
-            <button 
-              onClick={() => setShowMqttDebug(true)}
-              className="btn-icon md-ripple"
-              style={{ 
-                background: mqttConnected ? 'var(--md-success-container)' : 'var(--md-error-container)', 
-                border: '1px solid var(--md-outline)',
-                borderRadius: '12px',
-                color: mqttConnected ? 'var(--md-on-success-container)' : 'var(--md-on-error-container)',
-                width: '44px',
-                height: '44px'
-              }}
-              title={mqttConnected ? 'MQTT připojeno - klikni pro debug' : 'MQTT nepřipojeno - klikni pro debug'}
-            >
-              🔧
-            </button>
-            
             {/* Admin Toggle - Navigation Menu */}
             <button 
               onClick={() => setShowAdminPanel(!showAdminPanel)}
@@ -1102,41 +1085,6 @@ const Dashboard: React.FC = () => {
                 MQTT: {mqttConnected ? 'Připojeno' : 'Odpojeno'}
               </span>
             </div>
-            
-            {/* GPS Status - only for admins */}
-            {currentUser?.permissions.manageUsers && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div 
-                  style={{ 
-                    width: '8px', 
-                    height: '8px', 
-                    borderRadius: '50%', 
-                    backgroundColor: locationPermission === true 
-                      ? 'var(--md-success)' 
-                      : locationPermission === false 
-                        ? 'var(--md-error)' 
-                        : 'var(--md-warning)'
-                  }}
-                ></div>
-                <span 
-                  style={{ fontSize: '0.75rem', color: 'var(--md-on-surface-variant)' }}
-                  title={currentLocation 
-                    ? `Lokace: ${currentLocation.latitude.toFixed(6)}, ${currentLocation.longitude.toFixed(6)} (přesnost: ${Math.round(currentLocation.accuracy)}m)`
-                    : locationError || undefined}
-                >
-                  GPS: {locationPermission === true 
-                    ? (currentLocation 
-                        ? (currentLocation.accuracy > 50000 
-                            ? 'Fallback Praha' 
-                            : `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`
-                          )
-                        : 'Aktivní (získávám lokaci)')
-                    : locationPermission === false 
-                      ? (locationError ? 'Nedostupné' : 'Odepřeno')
-                      : 'Načítám...'}
-                </span>
-              </div>
-            )}
           </div>
         </div>
         
