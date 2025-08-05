@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // === USERS COLLECTION ===
+    match /users/{userId} {
+      // Čtení: libovolný přihlášený uživatel (potřebné pro admin interface)
+      allow read: if request.auth != null;
+      
+      // Zápis: pouze vlastník nebo admin
+      allow write: if request.auth != null && 
+        (request.auth.uid == userId || isAdmin(request.auth.uid));
+      
+      // Vytvoření: pouze při registraci nového uživatele
+      allow create: if request.auth != null && 
+        (request.auth.uid == userId || isAdmin(request.auth.uid));
+    }
+    
+    // === ACTIVITIES COLLECTION ===
+    match /activities/{activityId} {
+      // Čtení: pouze uživatelé s viewLogs oprávněním
+      allow read: if request.auth != null && 
+        (isAdmin(request.auth.uid) || hasPermission(request.auth.uid, 'viewLogs'));
+      
+      // Vytvoření: libovolný přihlášený uživatel může logovat
+      allow create: if request.auth != null;
+      
+      // Úprava/mazání: pouze admin
+      allow update, delete: if request.auth != null && isAdmin(request.auth.uid);
+    }
+    
+    // === SETTINGS COLLECTION ===
+    match /settings/{settingId} {
+      // Čtení: libovolný přihlášený uživatel
+      allow read: if request.auth != null;
+      
+      // Zápis: pouze admin
+      allow write: if request.auth != null && isAdmin(request.auth.uid);
+    }
+    
+    // === LEGACY USERS COLLECTION ===
+    match /legacy_users/{userId} {
+      // Čtení pro migrace: pouze admin
+      allow read: if request.auth != null && isAdmin(request.auth.uid);
+      
+      // Zápis zakázán (pouze pro čtení)
+      allow write: if false;
+    }
+    
+    // === HELPER FUNCTIONS ===
+    
+    // Kontrola admin role
+    function isAdmin(userId) {
+      // Bezpečná kontrola s fallback
+      let userData = get(/databases/$(database)/documents/users/$(userId)).data;
+      return userData != null && 
+             userData.role == 'admin' && 
+             userData.status == 'approved' &&
+             userData.permissions != null &&
+             userData.permissions.manageUsers == true;
+    }
+    
+    // Kontrola specifického oprávnění
+    function hasPermission(userId, permission) {
+      // Bezpečná kontrola s fallback
+      let userData = get(/databases/$(database)/documents/users/$(userId)).data;
+      return userData != null && 
+             userData.permissions != null &&
+             userData.permissions[permission] == true;
+    }
+    
+    // Kontrola zda je uživatel schválený
+    function isApproved(userId) {
+      let userData = get(/databases/$(database)/documents/users/$(userId)).data;
+      return userData != null && userData.status == 'approved';
+    }
+  }
+}

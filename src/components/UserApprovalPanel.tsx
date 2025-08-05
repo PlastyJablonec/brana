@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { adminService } from '../services/adminService';
 import { User } from '../types';
 
 const UserApprovalPanel: React.FC = () => {
@@ -9,16 +10,66 @@ const UserApprovalPanel: React.FC = () => {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState<{ [userId: string]: string }>({});
   const [showRejectDialog, setShowRejectDialog] = useState<string | null>(null);
+  const [loadMethod, setLoadMethod] = useState<string>('');
+  const [adminVerified, setAdminVerified] = useState<boolean>(false);
 
   const loadPendingUsers = async () => {
     try {
       setLoading(true);
       console.log('🔍 UserApprovalPanel: Loading pending users...');
-      const users = await getPendingUsers();
-      console.log('🔍 UserApprovalPanel: Received pending users:', users.length, users);
-      setPendingUsers(users);
+      
+      // Nejprve ověříme admin přístup
+      const adminCheck = await adminService.verifyAdminAccess();
+      console.log('🔍 UserApprovalPanel: Admin verification result:', adminCheck);
+      
+      if (!adminCheck.isAdmin) {
+        console.error('❌ UserApprovalPanel: Admin verification failed:', adminCheck.error);
+        setAdminVerified(false);
+        
+        if (adminCheck.error?.includes('permission-denied') || adminCheck.error?.includes('Firebase error')) {
+          console.log('🚨 UserApprovalPanel: Zkouším fallback metodu načítání...');
+          
+          // Fallback: použij adminService s vlastními metodami
+          const fallbackResult = await adminService.getPendingUsersWithFallback();
+          console.log('🔍 UserApprovalPanel: Fallback result:', fallbackResult.method, fallbackResult.users.length);
+          
+          setPendingUsers(fallbackResult.users);
+          setLoadMethod(`Fallback: ${fallbackResult.method}`);
+          setAdminVerified(true); // Můžeme pokračovat s fallback
+          return;
+        }
+        
+        // Jiná chyba - nelze pokračovat
+        setPendingUsers([]);
+        setLoadMethod('Failed: Admin verification failed');
+        return;
+      }
+      
+      setAdminVerified(true);
+      
+      // Admin ověřen, zkusíme standardní načítání
+      try {
+        console.log('✅ UserApprovalPanel: Admin verified, loading via AuthContext...');
+        const users = await getPendingUsers();
+        console.log('🔍 UserApprovalPanel: AuthContext success:', users.length, users);
+        setPendingUsers(users);
+        setLoadMethod('Standard: AuthContext');
+      } catch (contextError: any) {
+        console.warn('⚠️ UserApprovalPanel: AuthContext failed, trying adminService fallback:', contextError);
+        
+        // Fallback na adminService
+        const fallbackResult = await adminService.getPendingUsersWithFallback();
+        console.log('🔍 UserApprovalPanel: AdminService fallback result:', fallbackResult.method, fallbackResult.users.length);
+        
+        setPendingUsers(fallbackResult.users);
+        setLoadMethod(`Fallback: ${fallbackResult.method}`);
+      }
+      
     } catch (error) {
-      console.error('❌ UserApprovalPanel: Error loading pending users:', error);
+      console.error('❌ UserApprovalPanel: Critical error loading pending users:', error);
+      setPendingUsers([]);
+      setLoadMethod('Critical Error');
+      setAdminVerified(false);
     } finally {
       setLoading(false);
     }
@@ -139,6 +190,21 @@ const UserApprovalPanel: React.FC = () => {
           }}>
             Noví uživatelé čekají na váše schválení
           </p>
+          
+          {/* Debug info */}
+          {loadMethod && (
+            <div style={{
+              marginTop: '8px',
+              padding: '6px 10px',
+              background: adminVerified ? 'var(--md-success-container)' : 'var(--md-error-container)',
+              color: adminVerified ? 'var(--md-on-success-container)' : 'var(--md-on-error-container)',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontFamily: 'monospace'
+            }}>
+              🔧 Metoda: {loadMethod} {adminVerified ? '✅' : '❌'}
+            </div>
+          )}
         </div>
 
         <div className="md-card-content" style={{ padding: '0 24px 24px' }}>
