@@ -98,10 +98,8 @@ export class GarageTimerService {
     this.stopLocalCountdown(); // Clear any existing timer
 
     this.timerInterval = setInterval(() => {
-      console.log(`🏠 GarageTimer: Countdown tick - ${this.currentStatus.timeRemaining}s remaining`);
-      
       if (this.currentStatus.timeRemaining <= 0) {
-        console.log('🏠 GarageTimer: Time reached 0, calling finishOperation()');
+        console.log('🏠 GarageTimer: Timer finished - calling finishOperation()');
         this.finishOperation();
         return;
       }
@@ -125,7 +123,7 @@ export class GarageTimerService {
   }
 
   private async finishOperation(): Promise<void> {
-    console.log('🏠 GarageTimer: finishOperation() called - stopping countdown');
+    console.log('🏠 GarageTimer: FINISH OPERATION CALLED');
     this.stopLocalCountdown();
 
     const finalState: GarageTimerState = this.currentStatus.state === 'opening' ? 'open' : 'closed';
@@ -138,22 +136,18 @@ export class GarageTimerService {
       triggeredBy: this.currentStatus.triggeredBy
     };
 
-    console.log(`🏠 GarageTimer: Operation finished - transitioning from ${this.currentStatus.state} to ${finalState}`);
-    console.log('🏠 GarageTimer: Final status to save:', finalStatus);
+    console.log(`🏠 GarageTimer: State change: ${this.currentStatus.state} → ${finalState}`);
 
     // Update local state immediately - FORCE UPDATE
-    this.currentStatus = { ...finalStatus, lastUpdated: Date.now() }; // Use timestamp instead of serverTimestamp for local
-    console.log('🏠 GarageTimer: About to notify callbacks with state:', this.currentStatus);
+    this.currentStatus = { ...finalStatus, lastUpdated: Date.now() };
     this.notifyCallbacks();
-    console.log('🏠 GarageTimer: Local state updated, callbacks notified');
+    console.log('🏠 GarageTimer: CALLBACKS NOTIFIED');
 
     try {
-      console.log('🏠 GarageTimer: Saving final state to Firebase...');
       await setDoc(this.garageDocRef, finalStatus);
-      console.log('✅ GarageTimer: Final state successfully synced to Firebase');
+      console.log('🏠 GarageTimer: Firebase updated');
     } catch (error) {
-      console.error('❌ GarageTimer: Failed to sync final state to Firebase:', error);
-      // Don't throw - local state is already updated
+      console.error('❌ GarageTimer: Firebase error:', error);
     }
   }
 
@@ -218,12 +212,9 @@ export class GarageTimerService {
   }
 
   private notifyCallbacks(): void {
-    console.log(`🏠 GarageTimer: Notifying ${this.callbacks.length} callbacks with:`, this.currentStatus);
     this.callbacks.forEach((callback, index) => {
       try {
-        console.log(`🏠 GarageTimer: Calling callback ${index} with state: ${this.currentStatus.state}`);
         callback({ ...this.currentStatus });
-        console.log(`🏠 GarageTimer: Callback ${index} completed successfully`);
       } catch (error) {
         console.error(`🏠 GarageTimer: Callback ${index} error:`, error);
       }
