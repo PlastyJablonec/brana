@@ -98,15 +98,16 @@ export class GarageTimerService {
     this.stopLocalCountdown(); // Clear any existing timer
 
     this.timerInterval = setInterval(() => {
+      // Update local countdown FIRST
+      this.currentStatus.timeRemaining -= 1;
+      this.notifyCallbacks();
+
+      // Check for completion AFTER decrementing
       if (this.currentStatus.timeRemaining <= 0) {
         console.log('🏠 GarageTimer: Timer finished - calling finishOperation()');
         this.finishOperation();
         return;
       }
-
-      // Update local countdown
-      this.currentStatus.timeRemaining -= 1;
-      this.notifyCallbacks();
 
       // Sync to Firebase every 5 seconds to avoid too many writes
       if (this.currentStatus.timeRemaining % 5 === 0) {
