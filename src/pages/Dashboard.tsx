@@ -12,12 +12,15 @@ import { locationService } from '../services/locationService';
 import { lastUserService } from '../services/lastUserService';
 import { distanceService } from '../services/distanceService';
 import { settingsService } from '../services/settingsService';
+import { garageTimerService, GarageTimerStatus } from '../services/garageTimerService';
 
 const Dashboard: React.FC = () => {
   const { currentUser, logout } = useAuth();
   const { timerState, startTravelTimer, startAutoCloseTimer, startOpenElapsedTimer, stopTimer } = useGateTimer();
   const [gateStatus, setGateStatus] = useState('Neznámý stav');
   const [garageStatus, setGarageStatus] = useState('Neznámý stav');
+  const [garageTimerStatus, setGarageTimerStatus] = useState<GarageTimerStatus | null>(null);
+  const [garageSettings, setGarageSettings] = useState({ movementTime: 15, enabled: true });
   const [mqttConnected, setMqttConnected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
@@ -440,6 +443,37 @@ const Dashboard: React.FC = () => {
     return () => clearInterval(locationCheck);
   }, [locationPermission]);
 
+  // Load garage settings and setup garage timer
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const appSettings = await settingsService.getAppSettings();
+        setGarageSettings(appSettings.garage);
+        console.log('🏠 Dashboard: Garage settings loaded:', appSettings.garage);
+      } catch (error) {
+        console.error('🏠 Dashboard: Failed to load garage settings:', error);
+      }
+    };
+
+    loadSettings();
+
+    // Setup garage timer service listener
+    const unsubscribe = garageTimerService.onStatusChange((status) => {
+      console.log('🏠 Dashboard: Garage timer status update:', status);
+      setGarageTimerStatus(status);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  // Handle P1 messages from MQTT - force garage to closed state
+  useEffect(() => {
+    if (garageStatus === 'Garáž zavřena') {
+      console.log('🏠 Dashboard: P1 received, forcing garage timer to closed state');
+      garageTimerService.forceCloseState();
+    }
+  }, [garageStatus]);
+
   const handleGateControl = async () => {
     // Play click sound
     playSound('click');
@@ -558,24 +592,23 @@ const Dashboard: React.FC = () => {
     // Check location proximity if required (now handled by UI state)
     if (!isLocationProximityAllowed) {
       playSound('error');
-      console.log('📍 Gate operation blocked by location proximity');
+      console.log('📍 Garage operation blocked by location proximity');
       return;
     }
 
     setLoading(true);
-    let mqttCommandSucceeded = false;
     
-    // Critical MQTT operations - must succeed for the command to work
+    // Step 1: Send MQTT command
     try {
-      console.log('🔧 Dashboard: Sending garage command...');
+      console.log('🏠 Dashboard: Sending garage MQTT command...');
       await mqttService.publishGarageCommand(currentUser.email || '');
       
-      // Try to publish Log message as part of critical operations
-      const action = garageStatus.includes('zavřen') ? 'Otevření garáže' : 'Zavření garáže';
+      // Log message for tracking
+      const currentState = garageTimerStatus?.state || 'closed';
+      const action = currentState === 'closed' ? 'Otevření garáže' : 'Zavření garáže';
       const logMessage = `${getUserIdentifier()}: ${action}`;
       await mqttService.publishMessage('Log/Brana/ID', logMessage);
       
-      mqttCommandSucceeded = true;
       console.log('✅ Dashboard: Garage MQTT command sent successfully');
       
     } catch (mqttError) {
@@ -585,44 +618,53 @@ const Dashboard: React.FC = () => {
       setLoading(false);
       return;
     }
+
+    // Step 2: Start garage timer operation
+    try {
+      console.log(`🏠 Dashboard: Starting garage timer for ${garageSettings.movementTime}s`);
+      await garageTimerService.startGarageOperation(
+        currentUser.email || '', 
+        garageSettings.movementTime
+      );
+      
+      console.log('✅ Dashboard: Garage timer started successfully');
+      
+    } catch (timerError) {
+      console.error('❌ Dashboard: Garage timer failed to start:', timerError);
+      // Don't show error alert - MQTT command was sent successfully
+    }
+
+    // Step 3: Non-critical logging operations  
+    const currentState = garageTimerStatus?.state || 'closed';
+    const action = currentState === 'closed' ? 'Otevření garáže' : 'Zavření garáže';
     
-    // Non-critical logging operations - should not cause error alerts
-    if (mqttCommandSucceeded) {
-      const action = garageStatus.includes('zavřen') ? 'Otevření garáže' : 'Zavření garáže';
-      
-      // Non-critical Firestore activity logging
-      try {
-        await activityService.logActivity({
-          user: currentUser.email || '',
-          userDisplayName: getUserIdentifier(),
-          action,
-          device: 'garage',
-          status: 'success',
-          details: `Garáž byla ${garageStatus.includes('zavřen') ? 'otevřena' : 'zavřena'} uživatelem`
-        }, false); // Always include GPS location in logs
-        console.log('✅ Dashboard: Garage activity logged to Firestore');
-      } catch (activityError) {
-        console.warn('⚠️ Dashboard: Failed to log garage activity to Firestore (non-critical):', activityError);
-        // Don't show error alert for non-critical logging failures
-      }
-      
-      // Non-critical last user service logging
-      try {
-        await lastUserService.logGarageActivity(
-          currentUser.email || '',
-          getUserIdentifier(),
-          action
-        );
-        console.log('✅ Dashboard: Garage last user service updated');
-      } catch (lastUserError) {
-        console.warn('⚠️ Dashboard: Failed to update garage last user service (non-critical):', lastUserError);
-        // Don't show error alert for non-critical logging failures
-      }
-      
-      console.log('🎉 Dashboard: Garage command completed successfully');
-      playSound('success');
+    try {
+      await activityService.logActivity({
+        user: currentUser.email || '',
+        userDisplayName: getUserIdentifier(),
+        action,
+        device: 'garage',
+        status: 'success',
+        details: `Garáž byla aktivována uživatelem`
+      }, false);
+      console.log('✅ Dashboard: Garage activity logged to Firestore');
+    } catch (activityError) {
+      console.warn('⚠️ Dashboard: Failed to log garage activity to Firestore (non-critical):', activityError);
     }
     
+    try {
+      await lastUserService.logGarageActivity(
+        currentUser.email || '',
+        getUserIdentifier(),
+        action
+      );
+      console.log('✅ Dashboard: Garage last user service updated');
+    } catch (lastUserError) {
+      console.warn('⚠️ Dashboard: Failed to update garage last user service (non-critical):', lastUserError);
+    }
+    
+    console.log('🎉 Dashboard: Garage command completed successfully');
+    playSound('success');
     setLoading(false);
   };
 
@@ -903,22 +945,25 @@ const Dashboard: React.FC = () => {
             <button
               onClick={handleGarageControl}
               disabled={loading || !mqttConnected || !isLocationProximityAllowed}
-              className={`md-fab md-fab-extended md-ripple ${(garageStatus.includes('se...') || loading) ? 'pulsing' : ''}`}
+              className={`md-fab md-fab-extended md-ripple ${(garageTimerStatus?.isActive || loading) ? 'pulsing' : ''}`}
               style={{
-                minWidth: '140px',
+                minWidth: '180px',
                 height: '56px',
                 background: !isLocationProximityAllowed ? 'var(--md-surface-variant)' :
-                           garageStatus.includes('zavřen') ? 'var(--md-error)' : 
-                           garageStatus.includes('otevřen') ? 'var(--md-success)' : 'var(--md-secondary)',
+                           garageTimerStatus?.state === 'closed' ? 'var(--md-error)' : 
+                           garageTimerStatus?.state === 'open' ? 'var(--md-success)' : 
+                           garageTimerStatus?.isActive ? 'var(--md-tertiary)' : 'var(--md-secondary)',
                 color: !isLocationProximityAllowed ? 'var(--md-on-surface-variant)' : 'white',
                 opacity: (loading || !mqttConnected || !isLocationProximityAllowed) ? 0.6 : 1
               }}
-              aria-label={`Ovládat garáž - aktuální stav: ${garageStatus}`}
+              aria-label={`Ovládat garáž - ${garageTimerStatus ? garageTimerService.getDisplayText() : 'Garáž'}`}
             >
               <svg style={{ width: '20px', height: '20px', fill: 'currentColor' }} viewBox="0 0 24 24">
                 <path d="M12 3L2 9v12h20V9L12 3zm8 16H4v-8l8-5.33L20 11v8zm-2-6v4h-2v-4h2zm-4 0v4h-2v-4h2zm-4 0v4H8v-4h2z"/>
               </svg>
-              <span>{garageStatus !== 'Neznámý stav' ? garageStatus : 'Garáž'}</span>
+              <span>
+                {garageTimerStatus ? garageTimerService.getDisplayText() : 'Garáž - načítám...'}
+              </span>
             </button>
           </div>
         )}

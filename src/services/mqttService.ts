@@ -217,32 +217,8 @@ export class MqttService {
     console.log('🧪 Using simple HTML approach - no status requests, waiting for automatic messages...');
     console.log('📡 Subscribed to topics, waiting for hardware to send status automatically...');
     
-    // 💡 Hardware posílá status jen když se něco stane
-    // Zkusíme různé status request příkazy
-    setTimeout(async () => {
-      if (this.currentStatus.gateStatus === 'Neznámý stav') {
-        console.log('🔔 Still unknown after 2s, trying status requests...');
-        try {
-          // Zkusíme různé způsoby jak získat initial status
-          console.log('📡 Trying status request on control topic...');
-          await this.publishMessage('IoT/Brana/Ovladani', 'STATUS');
-        } catch (err) {
-          console.log('⚠️ Status request failed:', err);
-        }
-        
-        // Zkusíme ještě heartbeat jako fallback
-        setTimeout(async () => {
-          if (this.currentStatus.gateStatus === 'Neznámý stav') {
-            console.log('🔔 Still unknown after 4s, trying heartbeat...');
-            try {
-              await this.publishMessage('IoT/Brana/Heartbeat', 'ping');
-            } catch (err) {
-              console.log('⚠️ Heartbeat failed:', err);
-            }
-          }
-        }, 2000);
-      }
-    }, 2000);
+    // 💡 Hardware posílá jen P1 status, ostatní stavy řídí timer
+    console.log('📡 Garage: Waiting for P1 messages only - no status requests needed');
   }
 
   public disconnect(): void {
@@ -305,19 +281,13 @@ export class MqttService {
   }
 
   private parseGarageStatus(status: string): GarageStatusType {
-    // Parse garage status
+    // Hardware posílá pouze P1 = zavřeno, ostatní stavy řídí garage timer service
     const upperStatus = status.toUpperCase();
     switch (upperStatus) {
-      case 'P7':
+      case 'P1':
         return 'Garáž zavřena';
-      case 'P8':
-        return 'Garáž otevřena';
-      case 'P9':
-        return 'Garáž - otevírá se...';
-      case 'P10':
-        return 'Garáž - zavírá se...';
       default:
-        console.warn(`Unknown garage status received: ${status}`);
+        console.warn(`Unknown garage status received: ${status} - expected only P1`);
         return 'Neznámý stav';
     }
   }

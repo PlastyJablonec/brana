@@ -8,6 +8,11 @@ export interface GateSettings {
   notificationsEnabled: boolean;
 }
 
+export interface GarageSettings {
+  movementTime: number; // seconds - time for garage movement (otevírání/zavírání)
+  enabled: boolean;
+}
+
 export interface UserSettings {
   theme: 'light' | 'dark';
   language: 'cs' | 'en';
@@ -16,6 +21,7 @@ export interface UserSettings {
 
 export interface AppSettings {
   gate: GateSettings;
+  garage: GarageSettings;
   global: {
     maintenanceMode: boolean;
     maxUsersOnline: number;
@@ -66,6 +72,14 @@ class SettingsService {
           needsMigration = true;
         }
         
+        if (!data.garage) {
+          data.garage = {
+            movementTime: 15, // seconds for garage movement
+            enabled: true
+          };
+          needsMigration = true;
+        }
+        
         if (needsMigration) {
           // Uložíme migrovaná nastavení
           await this.saveAppSettings(data);
@@ -82,6 +96,10 @@ class SettingsService {
             autoCloseTime: 240, // 4 minutes for auto close
             stopModeEnabled: false,
             notificationsEnabled: true
+          },
+          garage: {
+            movementTime: 15, // seconds for garage movement (default 15s)
+            enabled: true
           },
           global: {
             maintenanceMode: false,
@@ -115,6 +133,10 @@ class SettingsService {
           autoCloseTime: 240,
           stopModeEnabled: false,
           notificationsEnabled: true
+        },
+        garage: {
+          movementTime: 15,
+          enabled: true
         },
         global: {
           maintenanceMode: false,
