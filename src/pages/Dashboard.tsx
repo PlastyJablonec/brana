@@ -466,6 +466,22 @@ const Dashboard: React.FC = () => {
     return unsubscribe;
   }, []);
 
+  // Initial P1 check - force garage to closed if MQTT says P1
+  useEffect(() => {
+    // Wait a bit for MQTT to initialize, then check if we have P1
+    const checkInitialState = setTimeout(() => {
+      const currentMqttStatus = mqttService.getStatus();
+      console.log('🏠 Dashboard: Initial MQTT check:', currentMqttStatus);
+      
+      if (currentMqttStatus.garageStatus === 'Garáž zavřena') {
+        console.log('🏠 Dashboard: Initial P1 detected, forcing garage timer to closed');
+        garageTimerService.forceCloseState();
+      }
+    }, 2000); // Wait 2s for MQTT to initialize
+
+    return () => clearTimeout(checkInitialState);
+  }, []);
+
   // Handle P1 messages from MQTT - force garage to closed state
   useEffect(() => {
     if (garageStatus === 'Garáž zavřena') {
