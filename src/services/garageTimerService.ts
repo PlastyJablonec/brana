@@ -94,10 +94,14 @@ export class GarageTimerService {
   }
 
   private startLocalCountdown(): void {
+    console.log(`🏠 GarageTimer: Starting local countdown for ${this.currentStatus.timeRemaining}s`);
     this.stopLocalCountdown(); // Clear any existing timer
 
     this.timerInterval = setInterval(() => {
+      console.log(`🏠 GarageTimer: Countdown tick - ${this.currentStatus.timeRemaining}s remaining`);
+      
       if (this.currentStatus.timeRemaining <= 0) {
+        console.log('🏠 GarageTimer: Time reached 0, calling finishOperation()');
         this.finishOperation();
         return;
       }
@@ -121,6 +125,7 @@ export class GarageTimerService {
   }
 
   private async finishOperation(): Promise<void> {
+    console.log('🏠 GarageTimer: finishOperation() called - stopping countdown');
     this.stopLocalCountdown();
 
     const finalState: GarageTimerState = this.currentStatus.state === 'opening' ? 'open' : 'closed';
@@ -133,13 +138,21 @@ export class GarageTimerService {
       triggeredBy: this.currentStatus.triggeredBy
     };
 
-    console.log(`🏠 GarageTimer: Operation finished - state now: ${finalState}`);
+    console.log(`🏠 GarageTimer: Operation finished - transitioning from ${this.currentStatus.state} to ${finalState}`);
+    console.log('🏠 GarageTimer: Final status to save:', finalStatus);
+
+    // Update local state immediately
+    this.currentStatus = { ...finalStatus };
+    this.notifyCallbacks();
+    console.log('🏠 GarageTimer: Local state updated, notified callbacks');
 
     try {
+      console.log('🏠 GarageTimer: Saving final state to Firebase...');
       await setDoc(this.garageDocRef, finalStatus);
-      console.log('🏠 GarageTimer: Final state synced to Firebase');
+      console.log('✅ GarageTimer: Final state successfully synced to Firebase');
     } catch (error) {
-      console.error('🏠 GarageTimer: Failed to sync final state:', error);
+      console.error('❌ GarageTimer: Failed to sync final state to Firebase:', error);
+      // Don't throw - local state is already updated
     }
   }
 
