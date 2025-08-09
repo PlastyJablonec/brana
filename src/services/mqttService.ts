@@ -281,15 +281,22 @@ export class MqttService {
   }
 
   private parseGarageStatus(status: string): GarageStatusType {
-    // Hardware posílá pouze P1 = zavřeno, ostatní stavy řídí garage timer service
+    // Hardware posílá P1 = zavřeno a "pohyb" zprávy
     const upperStatus = status.toUpperCase();
-    switch (upperStatus) {
-      case 'P1':
-        return 'Garáž zavřena';
-      default:
-        console.warn(`Unknown garage status received: ${status} - expected only P1`);
-        return 'Neznámý stav';
+    
+    // P1 = definitively closed (overrides timer)
+    if (upperStatus === 'P1') {
+      return 'Garáž zavřena';
     }
+    
+    // Movement message = hardware is moving (but we ignore this, timer controls state)
+    if (upperStatus.includes('POHYB') || upperStatus.includes('POHYBU')) {
+      console.log(`MQTT: Hardware movement message received: ${status} - ignoring, timer controls state`);
+      return 'Neznámý stav'; // Don't override timer state
+    }
+    
+    console.warn(`Unknown garage status received: ${status} - expected P1 or pohyb message`);
+    return 'Neznámý stav';
   }
 
   public async publishGateCommand(userEmail: string): Promise<void> {
