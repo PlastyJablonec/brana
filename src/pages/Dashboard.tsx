@@ -459,8 +459,10 @@ const Dashboard: React.FC = () => {
 
     // Setup garage timer service listener
     const unsubscribe = garageTimerService.onStatusChange((status) => {
-      console.log('🏠 Dashboard: Garage timer status update:', status);
+      console.log('🏠 Dashboard: Garage timer status update received:', status);
+      console.log('🏠 Dashboard: Setting garageTimerStatus to:', status.state, status.isActive);
       setGarageTimerStatus(status);
+      console.log('🏠 Dashboard: garageTimerStatus state updated');
     });
 
     return unsubscribe;

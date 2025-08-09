@@ -141,10 +141,11 @@ export class GarageTimerService {
     console.log(`🏠 GarageTimer: Operation finished - transitioning from ${this.currentStatus.state} to ${finalState}`);
     console.log('🏠 GarageTimer: Final status to save:', finalStatus);
 
-    // Update local state immediately
-    this.currentStatus = { ...finalStatus };
+    // Update local state immediately - FORCE UPDATE
+    this.currentStatus = { ...finalStatus, lastUpdated: Date.now() }; // Use timestamp instead of serverTimestamp for local
+    console.log('🏠 GarageTimer: About to notify callbacks with state:', this.currentStatus);
     this.notifyCallbacks();
-    console.log('🏠 GarageTimer: Local state updated, notified callbacks');
+    console.log('🏠 GarageTimer: Local state updated, callbacks notified');
 
     try {
       console.log('🏠 GarageTimer: Saving final state to Firebase...');
@@ -217,11 +218,14 @@ export class GarageTimerService {
   }
 
   private notifyCallbacks(): void {
-    this.callbacks.forEach(callback => {
+    console.log(`🏠 GarageTimer: Notifying ${this.callbacks.length} callbacks with:`, this.currentStatus);
+    this.callbacks.forEach((callback, index) => {
       try {
+        console.log(`🏠 GarageTimer: Calling callback ${index} with state: ${this.currentStatus.state}`);
         callback({ ...this.currentStatus });
+        console.log(`🏠 GarageTimer: Callback ${index} completed successfully`);
       } catch (error) {
-        console.error('🏠 GarageTimer: Callback error:', error);
+        console.error(`🏠 GarageTimer: Callback ${index} error:`, error);
       }
     });
   }
