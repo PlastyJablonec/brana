@@ -217,17 +217,30 @@ export class MqttService {
     console.log('🧪 Using simple HTML approach - no status requests, waiting for automatic messages...');
     console.log('📡 Subscribed to topics, waiting for hardware to send status automatically...');
     
-    // 💡 Možná hardware posílá status jen když se něco stane
-    // Zkusíme "neškodný" ping který možná triggers status response
+    // 💡 Hardware posílá status jen když se něco stane
+    // Zkusíme různé status request příkazy
     setTimeout(async () => {
       if (this.currentStatus.gateStatus === 'Neznámý stav') {
-        console.log('🔔 Still unknown after 2s, trying gentle trigger...');
+        console.log('🔔 Still unknown after 2s, trying status requests...');
         try {
-          // Pošleme prázdný nebo neškodný příkaz který možná způsobí status broadcast
-          await this.publishMessage('IoT/Brana/Heartbeat', 'ping');
+          // Zkusíme různé způsoby jak získat initial status
+          console.log('📡 Trying status request on control topic...');
+          await this.publishMessage('IoT/Brana/Ovladani', 'STATUS');
         } catch (err) {
-          console.log('⚠️ Gentle trigger failed:', err);
+          console.log('⚠️ Status request failed:', err);
         }
+        
+        // Zkusíme ještě heartbeat jako fallback
+        setTimeout(async () => {
+          if (this.currentStatus.gateStatus === 'Neznámý stav') {
+            console.log('🔔 Still unknown after 4s, trying heartbeat...');
+            try {
+              await this.publishMessage('IoT/Brana/Heartbeat', 'ping');
+            } catch (err) {
+              console.log('⚠️ Heartbeat failed:', err);
+            }
+          }
+        }, 2000);
       }
     }, 2000);
   }
