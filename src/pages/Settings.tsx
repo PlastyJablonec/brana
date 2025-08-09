@@ -265,6 +265,38 @@ const Settings: React.FC = () => {
                 Doba odpočítávání při pohybu brány
               </div>
             </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', marginBottom: '8px', fontWeight: 500 }}>
+                Čas pohybu garáže (sekundy)
+              </label>
+              <input
+                type="number"
+                min="5"
+                max="60"
+                value={settings.garage.movementTime}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  garage: { ...settings.garage, movementTime: parseInt(e.target.value) || 15 }
+                })}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  fontSize: '1rem',
+                  borderRadius: '12px',
+                  border: '1px solid var(--md-outline)',  
+                  backgroundColor: 'var(--md-surface)',
+                  color: 'var(--md-on-surface)',
+                  outline: 'none',
+                  transition: 'border-color 0.2s ease'
+                }}
+                onFocus={(e) => e.target.style.borderColor = 'var(--md-primary)'}
+                onBlur={(e) => e.target.style.borderColor = 'var(--md-outline)'}
+              />
+              <div style={{ fontSize: '0.75rem', color: 'var(--md-on-surface-variant)', marginTop: '4px' }}>
+                Doba countdown při otevírání/zavírání garáže
+              </div>
+            </div>
             
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', marginBottom: '8px', fontWeight: 500 }}>

@@ -168,7 +168,7 @@ export class GarageTimerService {
 
   public forceCloseState(): void {
     // Called when P1 message is received - always override to closed state
-    console.log('🏠 GarageTimer: P1 received - forcing closed state');
+    console.log('🏠 GarageTimer: P1 received - forcing closed state (immediate override)');
     
     this.stopLocalCountdown();
     
@@ -180,8 +180,14 @@ export class GarageTimerService {
       triggeredBy: 'hardware_p1'
     };
 
+    // Update local state immediately
+    this.currentStatus = { ...closedStatus, lastUpdated: Date.now() };
+    this.notifyCallbacks();
+    console.log('🏠 GarageTimer: P1 override - local state updated and callbacks notified');
+
+    // Also update Firebase
     setDoc(this.garageDocRef, closedStatus).catch(error => {
-      console.error('🏠 GarageTimer: Failed to force close state:', error);
+      console.error('🏠 GarageTimer: Failed to force close state in Firebase:', error);
     });
   }
 
