@@ -24,5 +24,8 @@
   "orientation": "portrait-primary",
   "theme_color": "#1976d2",
   "background_color": "#ffffff",
-  "lang": "cs"
+  "lang": "cs",
+  "categories": ["utilities", "productivity"],
+  "scope": "/",
+  "prefer_related_applications": false
 }

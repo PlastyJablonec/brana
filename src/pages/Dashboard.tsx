@@ -13,6 +13,7 @@ import { lastUserService } from '../services/lastUserService';
 import { distanceService } from '../services/distanceService';
 import { settingsService } from '../services/settingsService';
 import { garageTimerService, GarageTimerStatus } from '../services/garageTimerService';
+import { wakeLockService } from '../services/wakeLockService';
 
 const Dashboard: React.FC = () => {
   const { currentUser, logout } = useAuth();
@@ -480,6 +481,42 @@ const Dashboard: React.FC = () => {
     }, 2000); // Wait 2s for MQTT to initialize
 
     return () => clearTimeout(checkInitialState);
+  }, []);
+
+  // Wake Lock - keep screen on for PWA
+  useEffect(() => {
+    const enableWakeLock = async () => {
+      try {
+        const success = await wakeLockService.requestWakeLock();
+        if (success) {
+          console.log('💡 Dashboard: Wake lock activated - screen will stay on');
+        } else {
+          console.log('💡 Dashboard: Wake lock fallback methods activated');
+        }
+      } catch (error) {
+        console.error('💡 Dashboard: Wake lock failed:', error);
+      }
+    };
+
+    // Enable wake lock when dashboard loads
+    enableWakeLock();
+
+    // Re-enable wake lock when page becomes visible (user returns to app)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('💡 Dashboard: Page visible - re-enabling wake lock');
+        enableWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Cleanup on unmount
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      wakeLockService.cleanup();
+      console.log('💡 Dashboard: Wake lock cleaned up');
+    };
   }, []);
 
   // Handle P1 messages from MQTT - force garage to closed state
