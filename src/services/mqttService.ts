@@ -209,12 +209,13 @@ export class MqttService {
 
     const subscriptionPromises = subscriptions.map(({ topic, name }) => 
       new Promise<void>((resolve, reject) => {
+        console.log(`🔄 Attempting to subscribe to ${topic} (${name})...`);
         this.client!.subscribe(topic, { qos: 0 }, (err) => {  // ⚡ QoS 0 pro rychlost
           if (err) {
-            console.error(`❌ Failed to subscribe to ${name}:`, err);
+            console.error(`❌ Failed to subscribe to ${name} (${topic}):`, err);
             reject(new Error(`Failed to subscribe to ${topic}: ${err.message}`));
           } else {
-            console.log(`✅ Subscribed to ${topic} (clean session: immediate retained)`);
+            console.log(`✅ Successfully subscribed to ${topic} (${name})`);
             resolve();
           }
         });
