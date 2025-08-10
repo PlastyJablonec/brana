@@ -14,6 +14,7 @@ import { distanceService } from '../services/distanceService';
 import { settingsService } from '../services/settingsService';
 import { garageTimerService, GarageTimerStatus } from '../services/garageTimerService';
 import { wakeLockService } from '../services/wakeLockService';
+import LastGateActivity from '../components/LastGateActivity';
 
 const Dashboard: React.FC = () => {
   const { currentUser, logout } = useAuth();
@@ -866,6 +867,10 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Last Gate Activity - Only for admin users */}
+      {currentUser?.permissions.manageUsers && (
+        <LastGateActivity limit={5} />
+      )}
 
       {/* Camera Section */}
       {currentUser?.permissions.camera && (

@@ -36,12 +36,20 @@ export interface IActivityLog {
   status: 'sent' | 'failed';
 }
 
+export interface IGateLogEntry {
+  id: string;
+  timestamp: Date;
+  source: 'app' | 'external'; // app = z aplikace, external = jiné ovládání
+}
+
 type StatusCallback = (status: IMqttStatus) => void;
+type GateLogCallback = (logEntry: IGateLogEntry) => void;
 type UnsubscribeFunction = () => void;
 
 export class MqttService {
   private client: MqttClient | null = null;
   private statusCallbacks: StatusCallback[] = [];
+  private gateLogCallbacks: GateLogCallback[] = [];
   private currentStatus: IMqttStatus = {
     gateStatus: 'Neznámý stav',
     garageStatus: 'Neznámý stav',
@@ -194,7 +202,8 @@ export class MqttService {
 
     const subscriptions = [
       { topic: 'IoT/Brana/Status', name: 'gate status' },
-      { topic: 'IoT/Brana/Status2', name: 'garage status' }
+      { topic: 'IoT/Brana/Status2', name: 'garage status' },
+      { topic: 'Log/Brana/ID', name: 'gate activity log' }
     ];
 
     const subscriptionPromises = subscriptions.map(({ topic, name }) => 
@@ -252,6 +261,10 @@ export class MqttService {
         const oldGarageStatus = this.currentStatus.garageStatus;
         this.currentStatus.garageStatus = this.parseGarageStatus(message);
         console.log(`🏠 Garage status: ${oldGarageStatus} → ${this.currentStatus.garageStatus}`);
+        break;
+      case 'Log/Brana/ID':
+        // Zpracování external gate activity log
+        this.handleGateLogMessage(message);
         break;
     }
     
@@ -423,6 +436,41 @@ export class MqttService {
         }
       });
     });
+  }
+
+  private handleGateLogMessage(message: string): void {
+    console.log(`📋 Gate Log: External activity detected - ID: ${message}`);
+    
+    const logEntry: IGateLogEntry = {
+      id: message.trim(),
+      timestamp: new Date(),
+      source: 'external'
+    };
+    
+    // Notify all gate log callbacks
+    this.notifyGateLogChange(logEntry);
+  }
+
+  private notifyGateLogChange(logEntry: IGateLogEntry): void {
+    console.log('🔧 MQTT Service: Notifying gate log change to', this.gateLogCallbacks.length, 'callbacks');
+    
+    this.gateLogCallbacks.forEach((callback, index) => {
+      try {
+        console.log(`🔧 MQTT Service: Calling gate log callback ${index}...`);
+        callback(logEntry);
+      } catch (error) {
+        console.error(`❌ MQTT Service: Error in gate log callback ${index}:`, error);
+      }
+    });
+  }
+
+  public onGateLogChange(callback: GateLogCallback): UnsubscribeFunction {
+    this.gateLogCallbacks.push(callback);
+    
+    // Return unsubscribe function
+    return (): void => {
+      this.gateLogCallbacks = this.gateLogCallbacks.filter(cb => cb !== callback);
+    };
   }
 
   public onStatusChange(callback: StatusCallback): UnsubscribeFunction {
