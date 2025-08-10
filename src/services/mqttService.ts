@@ -49,6 +49,33 @@ type UnsubscribeFunction = () => void;
 export class MqttService {
   private client: MqttClient | null = null;
   private statusCallbacks: StatusCallback[] = [];
+  
+  // Detekce zda jsme na lokální síti a výběr optimální MQTT URL
+  private static getOptimalMqttUrl(): string {
+    if (typeof window === 'undefined') {
+      return 'ws://89.24.76.191:9001'; // Fallback pro SSR
+    }
+    
+    const hostname = window.location.hostname;
+    console.log('🔍 MQTT Service: Detecting network for hostname:', hostname);
+    
+    // Pokud jsme na lokální síti (192.168, 10., 172.16-31, localhost, nebo přímo IP RPi)
+    if (
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.') ||
+      hostname.startsWith('172.19.') || // Konkrétně naše síť 172.19.3.x
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '172.19.3.200' // Přímo RPi IP
+    ) {
+      console.log('🏠 MQTT Service: Local network detected, using local MQTT broker');
+      return 'ws://172.19.3.200:9001';
+    }
+    
+    // Jinak externí IP
+    console.log('🌐 MQTT Service: External network, using external MQTT broker');
+    return 'ws://89.24.76.191:9001';
+  }
   private gateLogCallbacks: GateLogCallback[] = [];
   private currentStatus: IMqttStatus = {
     gateStatus: 'Neznámý stav',
@@ -59,7 +86,7 @@ export class MqttService {
   constructor(
     private readonly brokerUrl: string = typeof window !== 'undefined' && window.location.protocol === 'https:' 
       ? (process.env.REACT_APP_MQTT_WSS_URL || 'wss://89.24.76.191:9002')
-      : (process.env.REACT_APP_MQTT_URL || 'ws://89.24.76.191:9001'),
+      : (process.env.REACT_APP_MQTT_URL || MqttService.getOptimalMqttUrl()),
     private readonly options: IMqttConnectionOptions = {
       clientId: `gate-control-${Math.random().toString(16).substring(2, 8)}`,
       clean: true,  // ⚡ TRUE pro okamžité retained messages

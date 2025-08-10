@@ -19,10 +19,10 @@ function connectToMqtt() {
   }
 
   isConnecting = true;
-  console.log('MQTT Proxy: Attempting to connect to ws://89.24.76.191:9001');
+  console.log('MQTT Proxy: Attempting to connect to ws://172.19.3.200:9001 (local network)');
   
   try {
-    mqttClient = mqtt.connect('ws://89.24.76.191:9001', {
+    mqttClient = mqtt.connect('ws://172.19.3.200:9001', {
       clientId: `proxy-${Math.random().toString(16).substring(2, 8)}`,
       clean: false,
       reconnectPeriod: 5000,
