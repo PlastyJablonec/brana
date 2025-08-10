@@ -5,7 +5,8 @@ let mqttClient = null;
 let isConnecting = false;
 let lastMessages = {
   'IoT/Brana/Status': null,
-  'IoT/Brana/Status2': null
+  'IoT/Brana/Status2': null,
+  'Log/Brana/ID': null
 };
 
 function connectToMqtt() {
@@ -33,12 +34,12 @@ function connectToMqtt() {
       console.log('MQTT Proxy: ✅ Connected to broker successfully');
       isConnecting = false;
       
-      // Subscribe to status topics
-      mqttClient.subscribe(['IoT/Brana/Status', 'IoT/Brana/Status2'], { qos: 1 }, (err) => {
+      // Subscribe to status topics AND activity log
+      mqttClient.subscribe(['IoT/Brana/Status', 'IoT/Brana/Status2', 'Log/Brana/ID'], { qos: 1 }, (err) => {
         if (err) {
           console.error('MQTT Proxy: Subscribe error:', err);
         } else {
-          console.log('MQTT Proxy: ✅ Subscribed to status topics');
+          console.log('MQTT Proxy: ✅ Subscribed to status topics and activity log');
         }
       });
     });

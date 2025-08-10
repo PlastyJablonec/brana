@@ -101,6 +101,12 @@ export class MqttService {
                 this.notifyStatusChange();
               });
               
+              // Forward HTTP MQTT gate log changes to this service
+              httpMqttService.onGateLogChange((logEntry) => {
+                console.log('🔄 MQTT Service: Forwarding gate log from HTTP proxy:', logEntry);
+                this.notifyGateLogChange(logEntry);
+              });
+              
               resolve();
             })
             .catch((error) => {

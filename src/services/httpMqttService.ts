@@ -15,6 +15,7 @@ export class HttpMqttService {
     isConnected: false
   };
   private statusPollingInterval: NodeJS.Timeout | null = null;
+  private lastGateLogMessage: string | null = null; // Pro detekci nových zpráv
   private readonly proxyUrl = '/api/mqtt-proxy';
 
   public async connect(): Promise<void> {
@@ -92,6 +93,16 @@ export class HttpMqttService {
               if (oldGarageStatus !== this.currentStatus.garageStatus) {
                 console.log(`🏠 HTTP MQTT: Garage status: ${oldGarageStatus} → ${this.currentStatus.garageStatus}`);
                 statusChanged = true;
+              }
+            }
+            
+            // Handle Log/Brana/ID messages (gate activity log)
+            if (status.messages['Log/Brana/ID']) {
+              const newLogMessage = status.messages['Log/Brana/ID'];
+              if (this.lastGateLogMessage !== newLogMessage) {
+                console.log(`🎯 HTTP MQTT: New Log/Brana/ID message: "${this.lastGateLogMessage}" → "${newLogMessage}"`);
+                this.lastGateLogMessage = newLogMessage;
+                this.handleGateLogMessage(newLogMessage);
               }
             }
           }
@@ -379,10 +390,38 @@ export class HttpMqttService {
     }
   }
 
+  private handleGateLogMessage(message: string): void {
+    console.log(`🎯 HTTP MQTT Service: Log/Brana/ID message received: "${message}"`);
+    console.log(`📋 Gate Log: External activity detected - ID: ${message}`);
+    
+    const logEntry: IGateLogEntry = {
+      id: message.trim(),
+      timestamp: new Date(),
+      source: 'external'
+    };
+    
+    console.log('🔔 HTTP MQTT Service: Notifying gate log callbacks with:', logEntry);
+    // Notify all gate log callbacks
+    this.notifyGateLogChange(logEntry);
+  }
+
+  private notifyGateLogChange(logEntry: IGateLogEntry): void {
+    console.log('🔧 HTTP MQTT Service: Notifying gate log change to', this.gateLogCallbacks.length, 'callbacks');
+    
+    this.gateLogCallbacks.forEach((callback, index) => {
+      try {
+        console.log(`🔧 HTTP MQTT Service: Calling gate log callback ${index}...`);
+        callback(logEntry);
+      } catch (error) {
+        console.error(`❌ HTTP MQTT Service: Error in gate log callback ${index}:`, error);
+      }
+    });
+  }
+
   public onGateLogChange(callback: GateLogCallback): UnsubscribeFunction {
     this.gateLogCallbacks.push(callback);
     
-    console.log('⚠️ HTTP MQTT Service: onGateLogChange registered, but HTTP proxy doesn\'t support Log/Brana/ID subscription yet');
+    console.log('✅ HTTP MQTT Service: onGateLogChange registered - Log/Brana/ID subscription via HTTP proxy enabled');
     
     // Return unsubscribe function
     return (): void => {
