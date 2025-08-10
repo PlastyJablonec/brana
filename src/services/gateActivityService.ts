@@ -17,10 +17,15 @@ export class GateActivityService {
   private maxExternalLogs = 10; // Kolik external logů si pamatujeme
 
   constructor() {
+    console.log('🔧 GateActivityService: Initializing...');
+    
     // Listen na MQTT external logs
     mqttService.onGateLogChange((logEntry: IGateLogEntry) => {
+      console.log('🔔 GateActivityService: Received MQTT gate log callback');
       this.handleExternalLog(logEntry);
     });
+    
+    console.log('✅ GateActivityService: Initialized and subscribed to MQTT logs');
   }
 
   private handleExternalLog(logEntry: IGateLogEntry): void {
@@ -40,10 +45,12 @@ export class GateActivityService {
 
   public async getCombinedGateActivities(limit: number = 10): Promise<CombinedGateActivity[]> {
     try {
-      console.log('🔧 GateActivityService: Fetching combined gate activities...');
+      console.log(`🔧 GateActivityService: Fetching combined gate activities (limit: ${limit})...`);
       
       // Načti app activity logs pro bránu
+      console.log('📊 GateActivityService: Fetching app logs from Firebase...');
       const appLogs = await activityService.getActivitiesByDevice('gate', limit);
+      console.log(`📊 GateActivityService: Found ${appLogs.length} app logs:`, appLogs);
       
       // Konvertuj app logs
       const appActivities: CombinedGateActivity[] = appLogs.map(log => ({
@@ -57,6 +64,7 @@ export class GateActivityService {
       }));
       
       // Konvertuj external logs
+      console.log(`📊 GateActivityService: Processing ${this.recentExternalLogs.length} external logs:`, this.recentExternalLogs);
       const externalActivities: CombinedGateActivity[] = this.recentExternalLogs.map(log => ({
         id: `external_${log.id}_${log.timestamp.getTime()}`,
         timestamp: log.timestamp,
@@ -69,7 +77,7 @@ export class GateActivityService {
         .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
         .slice(0, limit);
       
-      console.log(`🔧 GateActivityService: Combined ${combined.length} activities (${appActivities.length} app + ${externalActivities.length} external)`);
+      console.log(`✅ GateActivityService: Combined ${combined.length} activities (${appActivities.length} app + ${externalActivities.length} external):`, combined);
       
       return combined;
     } catch (error) {

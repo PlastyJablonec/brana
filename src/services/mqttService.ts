@@ -439,6 +439,7 @@ export class MqttService {
   }
 
   private handleGateLogMessage(message: string): void {
+    console.log(`🎯 MQTT Service: Log/Brana/ID message received: "${message}"`);
     console.log(`📋 Gate Log: External activity detected - ID: ${message}`);
     
     const logEntry: IGateLogEntry = {
@@ -447,6 +448,7 @@ export class MqttService {
       source: 'external'
     };
     
+    console.log('🔔 MQTT Service: Notifying gate log callbacks with:', logEntry);
     // Notify all gate log callbacks
     this.notifyGateLogChange(logEntry);
   }

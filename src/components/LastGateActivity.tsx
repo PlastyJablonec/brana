@@ -13,12 +13,14 @@ const LastGateActivity: React.FC<LastGateActivityProps> = ({ limit = 5 }) => {
   useEffect(() => {
     const loadActivities = async () => {
       try {
+        console.log('🔧 LastGateActivity: Loading activities...');
         setLoading(true);
         setError('');
         const data = await gateActivityService.getCombinedGateActivities(limit);
+        console.log('🔧 LastGateActivity: Loaded activities:', data);
         setActivities(data);
       } catch (err) {
-        console.error('Error loading gate activities:', err);
+        console.error('❌ LastGateActivity: Error loading gate activities:', err);
         setError('Chyba při načítání aktivit');
       } finally {
         setLoading(false);
@@ -30,10 +32,12 @@ const LastGateActivity: React.FC<LastGateActivityProps> = ({ limit = 5 }) => {
 
     // Subscribe na změny
     const unsubscribe = gateActivityService.onActivitiesChange((newActivities) => {
+      console.log('🔔 LastGateActivity: Activities changed:', newActivities);
       setActivities(newActivities);
       setLoading(false);
     });
 
+    console.log('🔧 LastGateActivity: Component mounted, subscribed to changes');
     return unsubscribe;
   }, [limit]);
 
