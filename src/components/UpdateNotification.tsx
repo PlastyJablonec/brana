@@ -7,19 +7,15 @@ const UpdateNotification: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
-    // Subscribe na update notifikace
+    // Subscribe na update notifikace - už bez periodic check
     const unsubscribe = updateService.onUpdateAvailable((result) => {
       console.log('🔔 UpdateNotification: Update available:', result);
       setUpdateInfo(result);
       setIsVisible(true);
     });
 
-    // Start periodic checking
-    updateService.startPeriodicCheck(15); // každých 15 minut
-
     return () => {
       unsubscribe();
-      updateService.stopPeriodicCheck();
     };
   }, []);
 
@@ -73,40 +69,7 @@ const UpdateNotification: React.FC = () => {
   };
 
   if (!isVisible || !updateInfo) {
-    // Zobraz malé tlačítko pro manuální kontrolu
-    return (
-      <button
-        onClick={handleCheckNow}
-        disabled={isUpdating}
-        className="btn-icon md-ripple"
-        style={{
-          position: 'fixed',
-          bottom: '16px',
-          right: '16px',
-          width: '48px',
-          height: '48px',
-          borderRadius: '50%',
-          backgroundColor: 'var(--md-surface-container)',
-          border: '1px solid var(--md-outline)',
-          color: 'var(--md-on-surface-variant)',
-          boxShadow: 'var(--md-elevation-2-shadow)',
-          zIndex: 1000,
-          opacity: isUpdating ? 0.6 : 1
-        }}
-        title="Zkontrolovat aktualizace"
-      >
-        {isUpdating ? (
-          <div style={{ width: '20px', height: '20px' }}>
-            <div className="loading" style={{ width: '20px', height: '20px', margin: 0 }}></div>
-          </div>
-        ) : (
-          <svg style={{ width: '20px', height: '20px', fill: 'currentColor' }} viewBox="0 0 24 24">
-            <path d="M12 4V2A10 10 0 0 0 2 12H4A8 8 0 0 1 12 4Z"/>
-            <path d="M20.83 12.13C20.83 12.13 20.83 12.13 20.83 12.13L22.63 10.33C22.78 10.18 22.78 9.93 22.63 9.78L20.83 8C20.68 7.85 20.43 7.85 20.28 8L18.48 9.8C18.33 9.95 18.33 10.2 18.48 10.35L20.28 12.13C20.43 12.28 20.68 12.28 20.83 12.13Z"/>
-          </svg>
-        )}
-      </button>
-    );
+    return null; // Žádné floating tlačítko
   }
 
   return (

@@ -144,9 +144,10 @@ export class MqttService {
             });
         });
 
-        this.client.on('message', (topic: string, message: Buffer) => {
+        this.client.on('message', (topic: string, message: Buffer, packet: any) => {
           const messageStr = message.toString();
-          console.log(`📨 MQTT Message: ${topic} = ${messageStr}`);
+          const isRetained = packet?.retain || false;
+          console.log(`📨 MQTT Message: ${topic} = ${messageStr} ${isRetained ? '(RETAINED)' : '(LIVE)'}`);
           this.handleMessage(topic, messageStr);
         });
 

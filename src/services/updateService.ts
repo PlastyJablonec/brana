@@ -174,6 +174,10 @@ class UpdateService {
     });
   }
 
+  public triggerUpdateNotification(result: UpdateCheckResult): void {
+    this.notifyCallbacks(result);
+  }
+
   public async forceRefresh(): Promise<void> {
     try {
       console.log('🔄 UpdateService: Force refreshing application...');

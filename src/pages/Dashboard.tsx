@@ -14,6 +14,7 @@ import { distanceService } from '../services/distanceService';
 import { settingsService } from '../services/settingsService';
 import { garageTimerService, GarageTimerStatus } from '../services/garageTimerService';
 import { wakeLockService } from '../services/wakeLockService';
+import { updateService } from '../services/updateService';
 import LastGateActivity from '../components/LastGateActivity';
 
 const Dashboard: React.FC = () => {
@@ -42,7 +43,8 @@ const Dashboard: React.FC = () => {
   }>>([
     { label: 'Autentifikace', status: 'success', description: 'Přihlášení ověřeno' },
     { label: 'MQTT protokol', status: 'loading', description: 'Připojuji se...' },
-    { label: 'Stav brány', status: 'pending', description: 'Čekám na data...' }
+    { label: 'Stav brány', status: 'pending', description: 'Čekám na data...' },
+    { label: 'Kontrola aktualizací', status: 'pending', description: 'Ověřuji verzi...' }
   ]);
 
   // Helper function to update connection step status
@@ -56,8 +58,8 @@ const Dashboard: React.FC = () => {
   };
 
   // Check if all critical steps are completed (hide loader)
-  const checkConnectionComplete = () => {
-    // Jen kritické kroky: Auth, MQTT, Gate Status
+  const checkConnectionComplete = async () => {
+    // Kritické kroky: Auth, MQTT, Gate Status  
     const criticalSteps = [0, 1, 2]; // Auth, MQTT, Gate Status
     const allCriticalComplete = criticalSteps.every(index => 
       connectionSteps[index]?.status === 'success'
@@ -66,9 +68,42 @@ const Dashboard: React.FC = () => {
     // Dodatečná kontrola - skutečný stav brány (ne "Neznámý stav")
     const hasRealGateStatus = gateStatus !== 'Neznámý stav';
     
-    if (allCriticalComplete && hasRealGateStatus && showConnectionLoader) {
-      console.log('🎯 Critical steps completed, hiding loader fast...');
-      setTimeout(() => setShowConnectionLoader(false), 500); // Rychlejší skrytí
+    // Když jsou kritické kroky hotové, spusť update check
+    if (allCriticalComplete && hasRealGateStatus && connectionSteps[3]?.status === 'pending') {
+      console.log('🔄 Critical steps completed, starting update check...');
+      updateConnectionStep(3, 'loading', 'Kontroluji novou verzi...');
+      
+      try {
+        const updateResult = await updateService.checkForUpdates();
+        
+        if (updateResult.hasUpdate) {
+          console.log('🎉 Update available, prompting user...');
+          updateConnectionStep(3, 'error', 'Nová verze k dispozici');
+          
+          // Trigger update notification
+          setTimeout(() => {
+            setShowConnectionLoader(false);
+            updateService.triggerUpdateNotification(updateResult);
+          }, 1000);
+          return;
+        } else {
+          console.log('✅ App is up to date');
+          updateConnectionStep(3, 'success', 'Aktuální verze');
+        }
+      } catch (error) {
+        console.error('❌ Update check failed:', error);
+        updateConnectionStep(3, 'success', 'Přeskočeno'); // Nepřerušuj kvůli update check
+      }
+    }
+    
+    // Všechny kroky včetně update check hotové
+    const allStepsComplete = connectionSteps.every(step => 
+      step.status === 'success' || step.status === 'error'
+    );
+    
+    if (allStepsComplete && hasRealGateStatus && showConnectionLoader) {
+      console.log('🎯 All steps completed, hiding loader...');
+      setTimeout(() => setShowConnectionLoader(false), 500);
     }
   };
 
