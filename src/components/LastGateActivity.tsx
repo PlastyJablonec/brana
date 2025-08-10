@@ -93,8 +93,11 @@ const LastGateActivity: React.FC<LastGateActivityProps> = ({ limit = 5 }) => {
           </h3>
         </div>
         <div className="md-card-content" style={{ textAlign: 'center', padding: '24px' }}>
-          <div style={{ fontSize: '0.875rem', color: 'var(--md-on-surface-variant)' }}>
-            Žádné aktivity zatím
+          <div style={{ fontSize: '0.875rem', color: 'var(--md-on-surface-variant)', marginBottom: '8px' }}>
+            Čekám na MQTT zprávy z Log/Brana/ID...
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--md-on-surface-variant)' }}>
+            Aktivity se zobrazí při ovládání brány
           </div>
         </div>
       </div>

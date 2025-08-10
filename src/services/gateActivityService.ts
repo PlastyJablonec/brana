@@ -1,4 +1,3 @@
-import { activityService } from './activityService';
 import { mqttService, IGateLogEntry } from './mqttService';
 
 export interface CombinedGateActivity {
@@ -45,43 +44,27 @@ export class GateActivityService {
 
   public async getCombinedGateActivities(limit: number = 10): Promise<CombinedGateActivity[]> {
     try {
-      console.log(`🔧 GateActivityService: Fetching combined gate activities (limit: ${limit})...`);
+      console.log(`🔧 GateActivityService: Getting MQTT external logs only (limit: ${limit})...`);
       
-      // Načti app activity logs pro bránu
-      console.log('📊 GateActivityService: Fetching app logs from Firebase...');
-      const appLogs = await activityService.getActivitiesByDevice('gate', limit);
-      console.log(`📊 GateActivityService: Found ${appLogs.length} app logs:`, appLogs);
-      
-      // Konvertuj app logs
-      const appActivities: CombinedGateActivity[] = appLogs.map(log => ({
-        id: log.id || 'unknown',
-        timestamp: log.timestamp.toDate(),
-        user: log.user,
-        userDisplayName: log.userDisplayName,
-        source: 'app' as const,
-        action: log.action,
-        details: log.details
-      }));
-      
-      // Konvertuj external logs
+      // Pouze external logs z MQTT Log/Brana/ID - žádné Firebase DB!
       console.log(`📊 GateActivityService: Processing ${this.recentExternalLogs.length} external logs:`, this.recentExternalLogs);
       const externalActivities: CombinedGateActivity[] = this.recentExternalLogs.map(log => ({
         id: `external_${log.id}_${log.timestamp.getTime()}`,
         timestamp: log.timestamp,
         source: 'external' as const,
-        details: `External ovládání - ID: ${log.id}`
+        details: `Ovládání brány - ID: ${log.id}`
       }));
       
-      // Zkombinuj a seřaď podle času (nejnovější první)
-      const combined = [...appActivities, ...externalActivities]
+      // Seřaď podle času (nejnovější první) a omez limit
+      const activities = externalActivities
         .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
         .slice(0, limit);
       
-      console.log(`✅ GateActivityService: Combined ${combined.length} activities (${appActivities.length} app + ${externalActivities.length} external):`, combined);
+      console.log(`✅ GateActivityService: Returning ${activities.length} MQTT activities:`, activities);
       
-      return combined;
+      return activities;
     } catch (error) {
-      console.error('❌ GateActivityService: Error fetching combined activities:', error);
+      console.error('❌ GateActivityService: Error fetching MQTT activities:', error);
       return [];
     }
   }
