@@ -53,9 +53,12 @@ export class HttpMqttService {
   }
 
   private startStatusPolling(): void {
+    console.log('🔄 HTTP MQTT Service: Starting status polling every 2s...');
+    
     // Poll every 2 seconds for status updates
     this.statusPollingInterval = setInterval(async () => {
       try {
+        console.log('📡 HTTP MQTT Service: Polling proxy endpoint...');
         const response = await fetch(this.proxyUrl, {
           method: 'GET',
           headers: {
@@ -65,6 +68,7 @@ export class HttpMqttService {
 
         if (response.ok) {
           const status = await response.json();
+          console.log('📊 HTTP MQTT Service: Proxy response:', status);
           const wasConnected = this.currentStatus.isConnected;
           let statusChanged = false;
           
@@ -111,6 +115,7 @@ export class HttpMqttService {
             this.notifyStatusChange();
           }
         } else {
+          console.error('❌ HTTP MQTT Service: Proxy polling failed - status:', response.status);
           if (this.currentStatus.isConnected) {
             console.warn('⚠️ HTTP MQTT: Proxy polling failed, marking as disconnected');
             this.currentStatus.isConnected = false;
@@ -118,6 +123,7 @@ export class HttpMqttService {
           }
         }
       } catch (error) {
+        console.error('❌ HTTP MQTT Service: Polling error:', error);
         if (this.currentStatus.isConnected) {
           console.warn('⚠️ HTTP MQTT: Polling error, marking as disconnected:', error);
           this.currentStatus.isConnected = false;
