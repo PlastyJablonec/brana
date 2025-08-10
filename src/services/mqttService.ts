@@ -136,10 +136,14 @@ export class MqttService {
           this.notifyStatusChange();
           
           // Subscribe to status topics with proper error handling
+          console.log('🔧 MQTT Service: Starting subscription process...');
           this.subscribeToTopics()
-            .then(() => resolve())
+            .then(() => {
+              console.log('✅ MQTT Service: All subscriptions completed successfully');
+              resolve();
+            })
             .catch(error => {
-              console.error('❌ Failed to subscribe to topics:', error);
+              console.error('❌ MQTT Service: Failed to subscribe to topics:', error);
               reject(error);
             });
         });
@@ -206,6 +210,8 @@ export class MqttService {
       { topic: 'IoT/Brana/Status2', name: 'garage status' },
       { topic: 'Log/Brana/ID', name: 'gate activity log' }
     ];
+    
+    console.log('📋 MQTT Service: Attempting to subscribe to topics:', subscriptions.map(s => s.topic));
 
     const subscriptionPromises = subscriptions.map(({ topic, name }) => 
       new Promise<void>((resolve, reject) => {

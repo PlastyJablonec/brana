@@ -1,12 +1,14 @@
-import { GateStatusType, GarageStatusType, IMqttStatus, IActivityLog } from './mqttService';
+import { GateStatusType, GarageStatusType, IMqttStatus, IActivityLog, IGateLogEntry } from './mqttService';
 import { db } from '../firebase/config';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
 
 type StatusCallback = (status: IMqttStatus) => void;
+type GateLogCallback = (logEntry: IGateLogEntry) => void;
 type UnsubscribeFunction = () => void;
 
 export class HttpMqttService {
   private statusCallbacks: StatusCallback[] = [];
+  private gateLogCallbacks: GateLogCallback[] = [];
   private currentStatus: IMqttStatus = {
     gateStatus: 'Neznámý stav',
     garageStatus: 'Neznámý stav',
@@ -375,6 +377,17 @@ export class HttpMqttService {
       console.error('❌ HTTP MQTT: publishMessage error:', error);
       throw error;
     }
+  }
+
+  public onGateLogChange(callback: GateLogCallback): UnsubscribeFunction {
+    this.gateLogCallbacks.push(callback);
+    
+    console.log('⚠️ HTTP MQTT Service: onGateLogChange registered, but HTTP proxy doesn\'t support Log/Brana/ID subscription yet');
+    
+    // Return unsubscribe function
+    return (): void => {
+      this.gateLogCallbacks = this.gateLogCallbacks.filter(cb => cb !== callback);
+    };
   }
 }
 
