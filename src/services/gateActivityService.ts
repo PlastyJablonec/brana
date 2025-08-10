@@ -49,10 +49,10 @@ export class GateActivityService {
       // Pouze external logs z MQTT Log/Brana/ID - žádné Firebase DB!
       console.log(`📊 GateActivityService: Processing ${this.recentExternalLogs.length} external logs:`, this.recentExternalLogs);
       const externalActivities: CombinedGateActivity[] = this.recentExternalLogs.map(log => ({
-        id: `external_${log.id}_${log.timestamp.getTime()}`,
+        id: log.id, // Jen čistá hodnota z MQTT pro zobrazení
         timestamp: log.timestamp,
         source: 'external' as const,
-        details: `Ovládání brány - ID: ${log.id}`
+        details: `Ovládání brány - ${log.id}` // Jen pro fallback (nepoužívá se v UI)
       }));
       
       // Seřaď podle času (nejnovější první) a omez limit

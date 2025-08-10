@@ -116,7 +116,7 @@ const LastGateActivity: React.FC<LastGateActivityProps> = ({ limit = 5 }) => {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         {activities.slice(0, 3).map((activity, index) => (
           <div
-            key={activity.id}
+            key={`${activity.id}_${activity.timestamp.getTime()}_${index}`}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -136,23 +136,14 @@ const LastGateActivity: React.FC<LastGateActivityProps> = ({ limit = 5 }) => {
               flexShrink: 0
             }} />
             
-            {/* Obsah - jen ID */}
+            {/* Jen hodnota ID - bez prefixu */}
             <div style={{ 
-              fontSize: '0.8125rem', 
+              fontSize: '0.75rem', 
               color: index === 0 ? 'var(--md-on-primary-container)' : 'var(--md-on-surface)',
               fontWeight: index === 0 ? '500' : '400',
               flex: 1
             }}>
-              {activity.source === 'external' ? `ID: ${activity.id}` : activity.details}
-            </div>
-            
-            {/* Kompaktní čas */}
-            <div style={{
-              fontSize: '0.75rem',
-              color: index === 0 ? 'var(--md-on-primary-container)' : 'var(--md-on-surface-variant)',
-              flexShrink: 0
-            }}>
-              {gateActivityService.formatActivityTime(activity.timestamp)}
+              {activity.source === 'external' ? activity.id : activity.details}
             </div>
           </div>
         ))}
