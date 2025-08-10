@@ -867,8 +867,8 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Last Gate Activity - For users with gate permission */}
-      {currentUser?.permissions.gate && (
+      {/* Last Gate Activity - Only for admin users */}
+      {currentUser?.permissions.manageUsers && (
         <LastGateActivity limit={5} />
       )}
 
