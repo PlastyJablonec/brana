@@ -33,6 +33,7 @@ export interface User {
     stopMode: boolean;
     viewLogs: boolean;
     manageUsers: boolean;
+    viewGateActivity: boolean; // Zobrazení LastGateActivity komponenty
     requireLocation: boolean;
     allowGPS: boolean;
     requireLocationProximity: boolean;

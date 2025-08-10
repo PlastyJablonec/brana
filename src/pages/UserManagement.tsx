@@ -19,6 +19,7 @@ const permissionDescriptions = {
   stopMode: 'Kritické oprávnění - povoluje aktivovat STOP režim (zastaví všechny operace)',
   viewLogs: 'Umožňuje prohlížet logy a historii aktivit v systému',
   manageUsers: 'Administrátorské oprávnění - správa uživatelů, schvalování přístupů',
+  viewGateActivity: 'Zobrazuje poslední aktivity brány (kdo a kdy ovládal bránu)',
   requireLocation: 'Systém bude vyžadovat GPS lokaci před povolením akcí',
   allowGPS: 'Povoluje aplikaci přístup k GPS poloze zařízení',
   requireLocationProximity: 'Omezuje funkce na základě vzdálenosti od určeného místa'
@@ -61,6 +62,7 @@ const UserManagement: React.FC = () => {
       stopMode: false,
       viewLogs: true,
       manageUsers: false,
+      viewGateActivity: false,
       requireLocation: false,
       allowGPS: true,
       requireLocationProximity: false
@@ -206,6 +208,7 @@ const UserManagement: React.FC = () => {
           stopMode: false,
           viewLogs: true,
           manageUsers: false,
+          viewGateActivity: false,
           requireLocation: false,
           allowGPS: true,
           requireLocationProximity: false
@@ -1062,6 +1065,7 @@ const UserManagement: React.FC = () => {
                     stopMode: 'STOP režim',
                     viewLogs: 'Zobrazení logů',
                     manageUsers: 'Správa uživatelů',
+                    viewGateActivity: 'Aktivita brány',
                     ...(currentUser?.permissions.manageUsers && {
                       requireLocation: 'Vyžadovat lokaci',
                       allowGPS: 'GPS lokace',
@@ -1126,6 +1130,7 @@ const UserManagement: React.FC = () => {
                         stopMode: false,
                         viewLogs: true,
                         manageUsers: false,
+                        viewGateActivity: false,
                         requireLocation: false,
                         allowGPS: true,
                         requireLocationProximity: false
@@ -1280,6 +1285,7 @@ const UserManagement: React.FC = () => {
                     stopMode: 'STOP režim',
                     viewLogs: 'Zobrazení logů',
                     manageUsers: 'Správa uživatelů',
+                    viewGateActivity: 'Aktivita brány',
                     ...(currentUser?.permissions.manageUsers && {
                       requireLocation: 'Vyžadovat lokaci',
                       allowGPS: 'GPS lokace',

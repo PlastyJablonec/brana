@@ -25,6 +25,7 @@ export class UserService {
         stopMode: false,
         viewLogs: false,
         manageUsers: false,
+        viewGateActivity: false,
         requireLocation: false,
         allowGPS: false,
         requireLocationProximity: false,
@@ -201,6 +202,7 @@ export class UserService {
         'permissions.stopMode': false,
         'permissions.viewLogs': false,
         'permissions.manageUsers': false,
+        'permissions.viewGateActivity': false,
         'permissions.requireLocation': true,
         'permissions.allowGPS': true,
         'permissions.requireLocationProximity': true,
@@ -352,6 +354,7 @@ export class UserService {
             stopMode: false,
             viewLogs: true,
             manageUsers: false,
+            viewGateActivity: false,
             requireLocation: false,
             allowGPS: true,
             requireLocationProximity: false
@@ -420,6 +423,7 @@ export class UserService {
               stopMode: false,
               viewLogs: true,
               manageUsers: false,
+              viewGateActivity: false,
               requireLocation: false,
               allowGPS: true,
               requireLocationProximity: false
