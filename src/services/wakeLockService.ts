@@ -1,52 +1,92 @@
+import NoSleep from 'nosleep.js';
+
 export class WakeLockService {
   private wakeLock: any = null;
   private isSupported = false;
   private periodicInterval: NodeJS.Timeout | null = null;
   private noSleepVideo: HTMLVideoElement | null = null;
+  private noSleep: NoSleep | null = null;
+  private isNoSleepActive = false;
 
   constructor() {
     // Check if Wake Lock API is supported
     this.isSupported = 'wakeLock' in navigator;
     console.log('💡 WakeLock: API supported:', this.isSupported);
+    
+    // Initialize NoSleep.js
+    try {
+      this.noSleep = new NoSleep();
+      console.log('💡 WakeLock: NoSleep.js initialized');
+    } catch (error) {
+      console.error('❌ WakeLock: NoSleep.js initialization failed:', error);
+    }
   }
 
   public async requestWakeLock(): Promise<boolean> {
-    if (!this.isSupported) {
-      console.log('💡 WakeLock: API not supported, using fallback methods');
-      this.useFallbackMethods();
-      return false;
+    // Try NoSleep.js first - most reliable cross-platform solution
+    if (this.noSleep && !this.isNoSleepActive) {
+      try {
+        await this.noSleep.enable();
+        this.isNoSleepActive = true;
+        console.log('✅ WakeLock: NoSleep.js enabled successfully');
+        return true;
+      } catch (error) {
+        console.error('❌ WakeLock: NoSleep.js failed:', error);
+      }
     }
 
-    try {
-      // Release any existing wake lock first
-      await this.releaseWakeLock();
+    // Fallback to native Wake Lock API
+    if (this.isSupported) {
+      try {
+        // Release any existing wake lock first
+        await this.releaseWakeLock();
 
-      // Request screen wake lock
-      this.wakeLock = await (navigator as any).wakeLock.request('screen');
-      
-      console.log('✅ WakeLock: Screen wake lock acquired');
+        // Request screen wake lock
+        this.wakeLock = await (navigator as any).wakeLock.request('screen');
+        
+        console.log('✅ WakeLock: Native API wake lock acquired');
 
-      // Handle wake lock release (e.g., when tab becomes invisible)
-      this.wakeLock.addEventListener('release', () => {
-        console.log('💡 WakeLock: Wake lock was released');
-      });
+        // Handle wake lock release (e.g., when tab becomes invisible)
+        this.wakeLock.addEventListener('release', () => {
+          console.log('💡 WakeLock: Native wake lock was released');
+          // Try to re-enable NoSleep if native fails
+          if (this.noSleep && !this.isNoSleepActive) {
+            this.noSleep.enable().catch(e => console.log('NoSleep re-enable failed:', e));
+          }
+        });
 
-      return true;
-    } catch (error) {
-      console.error('❌ WakeLock: Failed to acquire wake lock:', error);
-      this.useFallbackMethods();
-      return false;
+        return true;
+      } catch (error) {
+        console.error('❌ WakeLock: Native API failed:', error);
+      }
     }
+
+    // Last resort - custom fallback methods
+    console.log('💡 WakeLock: Using custom fallback methods');
+    this.useFallbackMethods();
+    return false;
   }
 
   public async releaseWakeLock(): Promise<void> {
+    // Release NoSleep.js
+    if (this.noSleep && this.isNoSleepActive) {
+      try {
+        this.noSleep.disable();
+        this.isNoSleepActive = false;
+        console.log('✅ WakeLock: NoSleep.js disabled');
+      } catch (error) {
+        console.error('❌ WakeLock: Error disabling NoSleep.js:', error);
+      }
+    }
+
+    // Release native wake lock
     if (this.wakeLock) {
       try {
         await this.wakeLock.release();
         this.wakeLock = null;
-        console.log('✅ WakeLock: Wake lock released');
+        console.log('✅ WakeLock: Native wake lock released');
       } catch (error) {
-        console.error('❌ WakeLock: Error releasing wake lock:', error);
+        console.error('❌ WakeLock: Error releasing native wake lock:', error);
       }
     }
   }
@@ -234,22 +274,45 @@ export class WakeLockService {
       this.periodicInterval = null;
     }
 
-    // Clean up NoSleep video
+    // Clean up custom NoSleep video
     if (this.noSleepVideo && this.noSleepVideo.parentNode) {
       this.noSleepVideo.pause();
       this.noSleepVideo.parentNode.removeChild(this.noSleepVideo);
       this.noSleepVideo = null;
     }
 
+    // Clean up NoSleep.js instance
+    if (this.noSleep && this.isNoSleepActive) {
+      try {
+        this.noSleep.disable();
+        this.isNoSleepActive = false;
+      } catch (error) {
+        console.log('NoSleep cleanup error:', error);
+      }
+    }
+
     console.log('💡 WakeLock: Service cleaned up');
   }
 
   public isWakeLockActive(): boolean {
-    return this.wakeLock !== null;
+    return this.wakeLock !== null || this.isNoSleepActive;
   }
 
   public isWakeLockSupported(): boolean {
     return this.isSupported;
+  }
+
+  public getWakeLockStatus(): string {
+    if (this.isNoSleepActive) {
+      return 'NoSleep.js aktivní';
+    }
+    if (this.wakeLock) {
+      return 'Native API aktivní';
+    }
+    if (this.periodicInterval) {
+      return 'Fallback metody aktivní';
+    }
+    return 'Neaktivní';
   }
 }
 

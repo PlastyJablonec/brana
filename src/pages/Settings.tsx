@@ -781,6 +781,42 @@ const Settings: React.FC = () => {
         </div>
       </div>
 
+      {/* PWA Information */}
+      <div className="md-card" style={{ marginBottom: '16px' }}>
+        <div className="md-card-header">
+          <h2 className="md-card-title">PWA a udržení obrazovky zapnuté</h2>
+        </div>
+        <div className="md-card-content">
+          <div style={{ color: 'var(--md-on-surface-variant)', fontSize: '0.875rem', lineHeight: 1.5 }}>
+            <p style={{ marginBottom: '12px' }}>
+              <strong>Aplikace se snaží udržet obrazovku telefonu zapnutou</strong> během ovládání brány a garáže. 
+              Používá kombinaci několika technologií:
+            </p>
+            <ul style={{ marginBottom: '16px', paddingLeft: '20px' }}>
+              <li><strong>NoSleep.js</strong> - nejspolehlivější řešení pro většinu prohlížečů</li>
+              <li><strong>Wake Lock API</strong> - moderní nativní API (Chrome, Edge)</li>
+              <li><strong>Fallback metody</strong> - kombinace technik pro starší zařízení</li>
+            </ul>
+            <div style={{ 
+              backgroundColor: 'var(--md-warning-container)', 
+              color: 'var(--md-on-warning-container)',
+              padding: '12px',
+              borderRadius: '8px',
+              marginBottom: '12px'
+            }}>
+              <p style={{ margin: 0, fontWeight: '500' }}>⚠️ Omezení na iOS Safari PWA:</p>
+              <p style={{ margin: '8px 0 0 0', fontSize: '0.8125rem' }}>
+                Když je aplikace přidána na plochu iOS jako PWA, Wake Lock API často nefunguje. 
+                NoSleep.js zůstává nejspolehlivějším řešením.
+              </p>
+            </div>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--md-on-surface-variant)', margin: 0 }}>
+              Pokud se obrazovka stále vypíná, zkuste aplikaci používat přímo v Safari místo PWA verze.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Save Button */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
         <button

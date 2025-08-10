@@ -19,6 +19,7 @@
     "firebase": "^9.23.0",
     "firebase-admin": "^13.4.0",
     "mqtt": "^5.13.3",
+    "nosleep.js": "^0.12.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.7.1",

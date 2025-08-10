@@ -31,6 +31,7 @@ const Dashboard: React.FC = () => {
   const [distanceFromGate, setDistanceFromGate] = useState<number | null>(null);
   const [isLocationProximityAllowed, setIsLocationProximityAllowed] = useState<boolean>(true);
   const [showMqttDebug, setShowMqttDebug] = useState(false);
+  const [wakeLockStatus, setWakeLockStatus] = useState<string>('Neaktivní');
 
   // Connection loading states
   const [showConnectionLoader, setShowConnectionLoader] = useState(true);
@@ -488,6 +489,7 @@ const Dashboard: React.FC = () => {
     const enableWakeLock = async () => {
       try {
         const success = await wakeLockService.requestWakeLock();
+        setWakeLockStatus(wakeLockService.getWakeLockStatus());
         if (success) {
           console.log('💡 Dashboard: Wake lock activated - screen will stay on');
         } else {
@@ -495,6 +497,7 @@ const Dashboard: React.FC = () => {
         }
       } catch (error) {
         console.error('💡 Dashboard: Wake lock failed:', error);
+        setWakeLockStatus('Chyba');
       }
     };
 
@@ -507,13 +510,21 @@ const Dashboard: React.FC = () => {
         console.log('💡 Dashboard: Page visible - re-enabling wake lock');
         enableWakeLock();
       }
+      // Always update status on visibility change
+      setWakeLockStatus(wakeLockService.getWakeLockStatus());
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    // Update status every 5 seconds to keep UI fresh
+    const statusInterval = setInterval(() => {
+      setWakeLockStatus(wakeLockService.getWakeLockStatus());
+    }, 5000);
+
     // Cleanup on unmount
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(statusInterval);
       wakeLockService.cleanup();
       console.log('💡 Dashboard: Wake lock cleaned up');
     };
@@ -865,6 +876,29 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Wake Lock Status - Show when active */}
+      {wakeLockStatus !== 'Neaktivní' && (
+        <div className="md-card" style={{ marginBottom: '16px', backgroundColor: 'var(--md-surface-container)' }}>
+          <div className="md-card-content" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px' }}>
+            <div style={{ 
+              width: '12px', 
+              height: '12px', 
+              borderRadius: '50%', 
+              backgroundColor: wakeLockStatus === 'Chyba' ? 'var(--md-error)' : 'var(--md-tertiary)',
+              animation: wakeLockStatus !== 'Chyba' ? 'pulse 2s ease-in-out infinite' : 'none'
+            }}></div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '0.875rem', fontWeight: '500', color: 'var(--md-on-surface)' }}>
+                {wakeLockStatus === 'Chyba' ? 'Chyba při aktivaci' : 'Obrazovka zůstává zapnutá'}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--md-on-surface-variant)' }}>
+                {wakeLockStatus}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Camera Section */}
       {currentUser?.permissions.camera && (
