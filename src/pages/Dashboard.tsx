@@ -902,11 +902,6 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Last Gate Activity - Only for users with viewGateActivity permission */}
-      {currentUser?.permissions.viewGateActivity && (
-        <LastGateActivity limit={5} />
-      )}
-
       {/* Camera Section */}
       {currentUser?.permissions.camera && (
         <div className="md-card" style={{ marginBottom: '16px' }}>
@@ -1028,6 +1023,13 @@ const Dashboard: React.FC = () => {
                 )}
               </div>
             </button>
+            
+            {/* LastGateActivity dovnitř gate boxu pro úsporu místa */}
+            {currentUser?.permissions.viewGateActivity && (
+              <div style={{ width: '100%', marginTop: '16px' }}>
+                <LastGateActivity limit={3} />
+              </div>
+            )}
           </div>
         )}
 
