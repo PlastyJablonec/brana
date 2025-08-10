@@ -17,6 +17,7 @@ import { locationService } from './services/locationService';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase/config';
 import AppFooter from './components/AppFooter';
+import UpdateNotification from './components/UpdateNotification';
 import { IProtectedRouteProps } from './types';
 
 const ProtectedRoute: React.FC<IProtectedRouteProps> = ({ children }) => {
@@ -215,6 +216,7 @@ function App(): React.ReactElement {
             <Router>
               <AppRoutes />
               <AppFooter />
+              <UpdateNotification />
             </Router>
           </ThemeProvider>
         </AuthProvider>

@@ -42,10 +42,22 @@ try {
   const finalContent = buildInfoLines.concat(lines).join('\n');
   fs.writeFileSync(envPath, finalContent);
   
+  // Vytvoř také build-info.json pro HTTP fetch
+  const buildInfo = {
+    version,
+    buildTime,
+    commit: commitHash
+  };
+  
+  // Do public složky pro static serving
+  const buildInfoPath = path.join(__dirname, 'public', 'build-info.json');
+  fs.writeFileSync(buildInfoPath, JSON.stringify(buildInfo, null, 2));
+  
   console.log('✅ Build info set:');
   console.log(`   Version: ${version}`);
   console.log(`   Build time: ${buildTime}`);
   console.log(`   Commit: ${commitHash.substring(0, 7)}`);
+  console.log(`   Build info JSON: ${buildInfoPath}`);
   
 } catch (error) {
   console.error('❌ Failed to set build info:', error.message);
@@ -75,5 +87,16 @@ try {
   
   const finalContent = fallbackLines.concat(lines).join('\n');
   fs.writeFileSync(envPath, finalContent);
+  
+  // Fallback build-info.json
+  const fallbackBuildInfo = {
+    version: '2.14.0',
+    buildTime: '2025-08-10T09:00:00.000Z',
+    commit: 'dev-fallback'
+  };
+  
+  const buildInfoPath = path.join(__dirname, 'public', 'build-info.json');
+  fs.writeFileSync(buildInfoPath, JSON.stringify(fallbackBuildInfo, null, 2));
+  
   console.log('⚠️ Using fallback build info (preserving existing .env)');
 }
