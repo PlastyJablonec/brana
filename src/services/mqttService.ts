@@ -213,22 +213,30 @@ export class MqttService {
     
     console.log('📋 MQTT Service: Attempting to subscribe to topics:', subscriptions.map(s => s.topic));
 
-    const subscriptionPromises = subscriptions.map(({ topic, name }) => 
-      new Promise<void>((resolve, reject) => {
+    // Subscribe jeden po druhém místo Promise.all - uvidíme který failuje
+    for (const { topic, name } of subscriptions) {
+      try {
         console.log(`🔄 Attempting to subscribe to ${topic} (${name})...`);
-        this.client!.subscribe(topic, { qos: 0 }, (err) => {  // ⚡ QoS 0 pro rychlost
-          if (err) {
-            console.error(`❌ Failed to subscribe to ${name} (${topic}):`, err);
-            reject(new Error(`Failed to subscribe to ${topic}: ${err.message}`));
-          } else {
-            console.log(`✅ Successfully subscribed to ${topic} (${name})`);
-            resolve();
-          }
+        
+        await new Promise<void>((resolve, reject) => {
+          this.client!.subscribe(topic, { qos: 0 }, (err) => {
+            if (err) {
+              console.error(`❌ FAILED to subscribe to ${name} (${topic}):`, err);
+              reject(new Error(`Failed to subscribe to ${topic}: ${err.message}`));
+            } else {
+              console.log(`✅ SUCCESS: Subscribed to ${topic} (${name})`);
+              resolve();
+            }
+          });
         });
-      })
-    );
-
-    await Promise.all(subscriptionPromises);
+        
+        console.log(`🎯 ${topic} subscription completed successfully`);
+        
+      } catch (error) {
+        console.error(`💥 SUBSCRIPTION ERROR for ${topic}:`, error);
+        throw error; // Stop the whole process to see which one fails
+      }
+    }
     
     // 🧪 EXPERIMENT: Simple HTML approach + Smart Trigger
     console.log('🧪 Using simple HTML approach - no status requests, waiting for automatic messages...');
