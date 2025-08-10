@@ -66,7 +66,9 @@ const Dashboard: React.FC = () => {
     );
     
     // Dodatečná kontrola - skutečný stav brány (ne "Neznámý stav")
-    const hasRealGateStatus = gateStatus !== 'Neznámý stav';
+    // Pro HTTPS (HTTP proxy) neblokujeme na unknown status - polling může trvat dlouho
+    const isHttpsProxy = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    const hasRealGateStatus = gateStatus !== 'Neznámý stav' || isHttpsProxy;
     
     // Když jsou kritické kroky hotové, spusť update check
     if (allCriticalComplete && hasRealGateStatus && connectionSteps[3]?.status === 'pending') {
@@ -284,8 +286,15 @@ const Dashboard: React.FC = () => {
       // Update connection steps
       if (status.isConnected) {
         updateConnectionStep(1, 'success', 'Připojeno');
+        
+        // Pro HTTPS (HTTP proxy) nečekáme na status - polling může trvat dlouho
+        const isHttpsProxy = typeof window !== 'undefined' && window.location.protocol === 'https:';
+        
         if (status.gateStatus !== 'Neznámý stav') {
           updateConnectionStep(2, 'success', status.gateStatus);
+        } else if (isHttpsProxy) {
+          // Na HTTPS rovnou označíme jako success - status přijde postupně přes polling
+          updateConnectionStep(2, 'success', 'Načítám stav...');
         } else {
           updateConnectionStep(2, 'loading', 'Načítám...');
         }
