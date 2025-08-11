@@ -124,7 +124,9 @@ export class MqttService {
               
               // Forward HTTP MQTT status changes to this service
               httpMqttService.onStatusChange((status) => {
+                console.log('🔄 MQTT Service: Received status from HTTP MQTT:', status);
                 this.currentStatus = { ...status };
+                console.log('🔄 MQTT Service: Forwarding to Dashboard callbacks...');
                 this.notifyStatusChange();
               });
               
@@ -133,6 +135,16 @@ export class MqttService {
                 console.log('🔄 MQTT Service: Forwarding gate log from HTTP proxy:', logEntry);
                 this.notifyGateLogChange(logEntry);
               });
+              
+              // CRITICAL: Get initial status immediately after registering callbacks
+              console.log('🚀 MQTT Service: Getting initial status from HTTP MQTT...');
+              const initialStatus = httpMqttService.getStatus();
+              console.log('🚀 MQTT Service: Initial status:', initialStatus);
+              if (initialStatus.gateStatus !== 'Neznámý stav') {
+                console.log('🚀 MQTT Service: Force updating with initial status');
+                this.currentStatus = { ...initialStatus };
+                this.notifyStatusChange();
+              }
               
               resolve();
             })
