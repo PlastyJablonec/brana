@@ -1034,9 +1034,21 @@ const Dashboard: React.FC = () => {
             </button>
             
             {/* LastGateActivity dovnitř gate boxu pro úsporu místa */}
-            {currentUser?.permissions.viewGateActivity && (
+            {(() => {
+              // DEBUG: Permission check
+              console.log('🔍 DEBUG: currentUser.role =', currentUser?.role);
+              console.log('🔍 DEBUG: currentUser.permissions.viewGateActivity =', currentUser?.permissions.viewGateActivity);
+              console.log('🔍 DEBUG: currentUser.permissions =', currentUser?.permissions);
+              return null;
+            })()}
+            
+            {currentUser?.permissions.viewGateActivity ? (
               <div style={{ width: '100%', marginTop: '16px' }}>
                 <LastGateActivity limit={3} />
+              </div>
+            ) : (
+              <div style={{ color: 'orange', fontSize: '0.8em', marginTop: '8px' }}>
+                DEBUG: viewGateActivity = {String(currentUser?.permissions.viewGateActivity)} (role: {currentUser?.role})
               </div>
             )}
           </div>
