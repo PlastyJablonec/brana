@@ -48,6 +48,11 @@ export class HttpMqttService {
       // Start polling for status updates
       this.startStatusPolling();
 
+      // CRITICAL FIX: Always notify on first connection even if status didn't "change"
+      // Dashboard needs to know current status values
+      console.log('🚀 HTTP MQTT Service: Initial connection - force notifying current status');
+      this.notifyStatusChange();
+
       console.log('✅ HTTP MQTT Service: Connected via proxy');
     } catch (error) {
       console.error('❌ HTTP MQTT Service: Connection failed:', error);
@@ -219,6 +224,10 @@ export class HttpMqttService {
         }
 
         if (statusChanged) {
+          this.notifyStatusChange();
+        } else {
+          // FORCE notification on immediate fetch to ensure Dashboard gets current status
+          console.log('🚀 HTTP MQTT: Force notifying current status on immediate fetch');
           this.notifyStatusChange();
         }
       }
