@@ -34,3 +34,4 @@ test-*.js
 
 # binary/system files
 *[[:cntrl:]]*
+.vercel

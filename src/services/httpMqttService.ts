@@ -16,7 +16,9 @@ export class HttpMqttService {
   };
   private statusPollingInterval: NodeJS.Timeout | null = null;
   private lastGateLogMessage: string | null = null; // Pro detekci nových zpráv
-  private readonly proxyUrl = '/api/mqtt-proxy';
+  private readonly proxyUrl = process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:3003/api/mqtt-proxy'  // Dev server with MQTT proxy
+    : '/api/mqtt-proxy';  // Production Vercel serverless function
 
   public async connect(): Promise<void> {
     console.log('🌐 HTTP MQTT Service: Connecting via proxy...');
@@ -82,6 +84,10 @@ export class HttpMqttService {
             statusChanged = true;
           }
           
+          // DEBUG: Log messages state
+          console.log('🔍 HTTP MQTT Debug: status.messages =', status.messages);
+          console.log('🔍 HTTP MQTT Debug: IoT/Brana/Status =', status.messages?.['IoT/Brana/Status']);
+          
           // Update gate and garage status from messages
           if (status.messages) {
             const oldGateStatus = this.currentStatus.gateStatus;
@@ -111,6 +117,13 @@ export class HttpMqttService {
                 this.lastGateLogMessage = newLogMessage;
                 this.handleGateLogMessage(newLogMessage);
               }
+            }
+          } else {
+            // PROBLEM: Proxy říká, že je connected, ale nevrací žádné messages
+            if (this.currentStatus.isConnected) {
+              console.warn('🚨 HTTP MQTT: Proxy connected but NO MESSAGES! This explains why gate status is stuck!');
+              console.warn('🚨 HTTP MQTT: status.connected =', status.connected);
+              console.warn('🚨 HTTP MQTT: status.messages =', status.messages);
             }
           }
           
@@ -151,6 +164,10 @@ export class HttpMqttService {
         const status = await response.json();
         console.log('⚡ HTTP MQTT Service: Immediate response:', status);
         
+        // DEBUG: Log messages state for immediate fetch
+        console.log('🔍 HTTP MQTT Debug (immediate): status.messages =', status.messages);
+        console.log('🔍 HTTP MQTT Debug (immediate): IoT/Brana/Status =', status.messages?.['IoT/Brana/Status']);
+        
         // Process status immediately
         let statusChanged = false;
         const oldGateStatus = this.currentStatus.gateStatus;
@@ -183,6 +200,13 @@ export class HttpMqttService {
               this.lastGateLogMessage = newLogMessage;
               this.handleGateLogMessage(newLogMessage);
             }
+          }
+        } else {
+          // PROBLEM: Proxy říká, že je connected, ale nevrací žádné messages (immediate)
+          if (this.currentStatus.isConnected) {
+            console.warn('🚨 HTTP MQTT: Immediate fetch - Proxy connected but NO MESSAGES!');
+            console.warn('🚨 HTTP MQTT: immediate status.connected =', status.connected);
+            console.warn('🚨 HTTP MQTT: immediate status.messages =', status.messages);
           }
         }
 
