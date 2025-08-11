@@ -51,6 +51,7 @@ export class HttpMqttService {
       console.log('✅ HTTP MQTT Service: Connected via proxy');
     } catch (error) {
       console.error('❌ HTTP MQTT Service: Connection failed:', error);
+      console.error('🚨 HTTP MQTT Service: This might be due to Vercel authentication or API unavailability');
       this.currentStatus.isConnected = false;
       this.notifyStatusChange();
       throw error;
