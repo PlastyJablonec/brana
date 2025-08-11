@@ -95,10 +95,14 @@ export class HttpMqttService {
             const oldGarageStatus = this.currentStatus.garageStatus;
             
             if (status.messages['IoT/Brana/Status']) {
-              this.currentStatus.gateStatus = this.parseGateStatus(status.messages['IoT/Brana/Status']);
+              const parsedStatus = this.parseGateStatus(status.messages['IoT/Brana/Status']);
+              console.log(`🚪 HTTP MQTT DEBUG: Raw: "${status.messages['IoT/Brana/Status']}" → Parsed: "${parsedStatus}"`);
+              this.currentStatus.gateStatus = parsedStatus;
               if (oldGateStatus !== this.currentStatus.gateStatus) {
-                console.log(`🚪 HTTP MQTT: Gate status: ${oldGateStatus} → ${this.currentStatus.gateStatus}`);
+                console.log(`🚪 HTTP MQTT: Gate status CHANGED: ${oldGateStatus} → ${this.currentStatus.gateStatus}`);
                 statusChanged = true;
+              } else {
+                console.log(`🚪 HTTP MQTT: Gate status SAME: ${oldGateStatus} (no change)`);
               }
             }
             
@@ -129,7 +133,10 @@ export class HttpMqttService {
           }
           
           if (statusChanged) {
+            console.log('🔔 HTTP MQTT: Status changed, notifying callbacks...');
             this.notifyStatusChange();
+          } else {
+            console.log('🔕 HTTP MQTT: No status change, skipping notification');
           }
         } else {
           console.error('❌ HTTP MQTT Service: Proxy polling failed - status:', response.status);
