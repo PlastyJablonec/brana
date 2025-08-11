@@ -53,6 +53,13 @@ export class HttpMqttService {
       console.log('🚀 HTTP MQTT Service: Initial connection - force notifying current status');
       this.notifyStatusChange();
 
+      // CRITICAL FIX: Force trigger existing gate log message on initial connection
+      // This ensures LastGateActivity shows retained MQTT messages immediately
+      if (this.lastGateLogMessage) {
+        console.log('🚀 HTTP MQTT Service: Force triggering existing gate log:', this.lastGateLogMessage);
+        this.handleGateLogMessage(this.lastGateLogMessage);
+      }
+
       console.log('✅ HTTP MQTT Service: Connected via proxy');
     } catch (error) {
       console.error('❌ HTTP MQTT Service: Connection failed:', error);
