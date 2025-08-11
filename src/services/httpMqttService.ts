@@ -40,6 +40,9 @@ export class HttpMqttService {
       this.currentStatus.isConnected = status.connected || false;
       this.notifyStatusChange();
 
+      // Immediate fetch for fast initial status
+      await this.fetchStatusOnce();
+      
       // Start polling for status updates
       this.startStatusPolling();
 
@@ -53,9 +56,9 @@ export class HttpMqttService {
   }
 
   private startStatusPolling(): void {
-    console.log('🔄 HTTP MQTT Service: Starting status polling every 2s...');
+    console.log('🔄 HTTP MQTT Service: Starting status polling every 0.5s...');
     
-    // Poll every 2 seconds for status updates
+    // Poll every 0.5 seconds for fast status updates
     this.statusPollingInterval = setInterval(async () => {
       try {
         console.log('📡 HTTP MQTT Service: Polling proxy endpoint...');
@@ -130,7 +133,67 @@ export class HttpMqttService {
           this.notifyStatusChange();
         }
       }
-    }, 2000);
+    }, 500); // 0.5s polling pro rychlou odezvu
+  }
+
+  // Immediate status fetch for fast initial load
+  private async fetchStatusOnce(): Promise<void> {
+    try {
+      console.log('⚡ HTTP MQTT Service: Immediate status fetch...');
+      const response = await fetch(this.proxyUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const status = await response.json();
+        console.log('⚡ HTTP MQTT Service: Immediate response:', status);
+        
+        // Process status immediately
+        let statusChanged = false;
+        const oldGateStatus = this.currentStatus.gateStatus;
+        const oldGarageStatus = this.currentStatus.garageStatus;
+
+        this.currentStatus.isConnected = status.connected || false;
+
+        if (status.messages) {
+          if (status.messages['IoT/Brana/Status']) {
+            this.currentStatus.gateStatus = this.parseGateStatus(status.messages['IoT/Brana/Status']);
+            if (oldGateStatus !== this.currentStatus.gateStatus) {
+              console.log(`🚪 HTTP MQTT: Immediate gate status: ${oldGateStatus} → ${this.currentStatus.gateStatus}`);
+              statusChanged = true;
+            }
+          }
+
+          if (status.messages['IoT/Brana/Status2']) {
+            this.currentStatus.garageStatus = this.parseGarageStatus(status.messages['IoT/Brana/Status2']);
+            if (oldGarageStatus !== this.currentStatus.garageStatus) {
+              console.log(`🏠 HTTP MQTT: Immediate garage status: ${oldGarageStatus} → ${this.currentStatus.garageStatus}`);
+              statusChanged = true;
+            }
+          }
+
+          // Handle Log/Brana/ID messages
+          if (status.messages['Log/Brana/ID']) {
+            const newLogMessage = status.messages['Log/Brana/ID'];
+            if (this.lastGateLogMessage !== newLogMessage) {
+              console.log(`🎯 HTTP MQTT: Immediate Log/Brana/ID: "${this.lastGateLogMessage}" → "${newLogMessage}"`);
+              this.lastGateLogMessage = newLogMessage;
+              this.handleGateLogMessage(newLogMessage);
+            }
+          }
+        }
+
+        if (statusChanged) {
+          this.notifyStatusChange();
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ HTTP MQTT Service: Immediate fetch failed:', error);
+      // Neblokuj připojení kvůli chybě immediate fetch
+    }
   }
 
   private parseGateStatus(status: string): GateStatusType {
