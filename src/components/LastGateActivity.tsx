@@ -82,7 +82,20 @@ const LastGateActivity: React.FC<LastGateActivityProps> = ({ limit = 5 }) => {
   }
 
   if (activities.length === 0) {
-    return null; // Skryj komponentu pokud nejsou aktivity
+    return (
+      <div style={{ 
+        padding: '8px 12px',
+        backgroundColor: 'var(--md-surface-container-low)',
+        borderRadius: '8px',
+        border: '1px solid var(--md-outline-variant)',
+        color: 'var(--md-on-surface-variant)',
+        fontSize: '0.8rem'
+      }}>
+        🔍 DEBUG: Žádné aktivity (activities.length = {activities.length})
+        <br />
+        Čekám na MQTT Log/Brana/ID zprávy...
+      </div>
+    );
   }
 
   return (
