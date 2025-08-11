@@ -202,7 +202,7 @@ export class UserService {
         'permissions.stopMode': false,
         'permissions.viewLogs': false,
         'permissions.manageUsers': false,
-        'permissions.viewGateActivity': false,
+        'permissions.viewGateActivity': true, // Admin uživatelé vidí gate activity
         'permissions.requireLocation': true,
         'permissions.allowGPS': true,
         'permissions.requireLocationProximity': true,
