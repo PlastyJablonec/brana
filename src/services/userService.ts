@@ -25,7 +25,7 @@ export class UserService {
         stopMode: false,
         viewLogs: false,
         manageUsers: false,
-        viewGateActivity: false,
+        viewGateActivity: false, // Will be set to true for admins when role is assigned
         requireLocation: false,
         allowGPS: false,
         requireLocationProximity: false,
@@ -354,7 +354,7 @@ export class UserService {
             stopMode: false,
             viewLogs: true,
             manageUsers: false,
-            viewGateActivity: false,
+            viewGateActivity: data.role === 'admin', // Only admins can see gate activity
             requireLocation: false,
             allowGPS: true,
             requireLocationProximity: false
@@ -423,7 +423,7 @@ export class UserService {
               stopMode: false,
               viewLogs: true,
               manageUsers: false,
-              viewGateActivity: false,
+              viewGateActivity: data.role === 'admin', // Only admins can see gate activity
               requireLocation: false,
               allowGPS: true,
               requireLocationProximity: false
