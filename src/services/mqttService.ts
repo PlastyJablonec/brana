@@ -114,8 +114,8 @@ export class MqttService {
         const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
         
         if (isHttps) {
-          console.log('🌐 MQTT Service: HTTPS detected, using HTTP proxy instead of WebSocket');
-          // Use HTTP proxy service on HTTPS
+          console.log('🌐 MQTT Service: HTTPS detected, trying HTTP proxy first...');
+          // Try HTTP proxy service on HTTPS
           httpMqttService.connect()
             .then(() => {
               console.log('✅ MQTT connected via HTTP proxy');
@@ -138,9 +138,17 @@ export class MqttService {
             })
             .catch((error) => {
               console.error('❌ HTTP MQTT proxy connection failed:', error);
-              this.currentStatus.isConnected = false;
-              this.notifyStatusChange();
-              reject(error);
+              console.warn('🔄 MQTT Service: HTTP proxy failed, trying direct WSS connection as fallback...');
+              
+              // Fallback to direct WSS connection even on HTTPS
+              try {
+                this.connectDirectWebSocket('wss://89.24.76.191:9002', resolve, reject);
+              } catch (directError) {
+                console.error('❌ Direct WSS fallback also failed:', directError);
+                this.currentStatus.isConnected = false;
+                this.notifyStatusChange();
+                reject(new Error(`Both HTTP proxy and direct WSS failed: ${error}, ${directError}`));
+              }
             });
           return;
         }
@@ -555,6 +563,53 @@ export class MqttService {
   public isConnected(): boolean {
     return this.currentStatus.isConnected;
   }
+
+  // Fallback method for direct WebSocket connection
+  private connectDirectWebSocket(url: string, resolve: () => void, reject: (error: any) => void): void {
+    console.log(`🔄 MQTT Service: Direct WebSocket connection to ${url}`);
+    
+    if (!mqtt || typeof mqtt.connect !== 'function') {
+      reject(new Error('MQTT library not available for direct connection'));
+      return;
+    }
+
+    try {
+      this.client = mqtt.connect(url, {
+        ...this.options,
+        clientId: `gate-control-direct-${Math.random().toString(16).substring(2, 8)}`
+      });
+
+      this.client.on('connect', async () => {
+        console.log('✅ Direct WebSocket MQTT connection established');
+        this.currentStatus.isConnected = true;
+        await this.subscribeToTopics();
+        this.notifyStatusChange();
+        resolve();
+      });
+
+      this.client.on('message', (topic, message) => {
+        this.handleMessage(topic, message.toString());
+      });
+
+      this.client.on('error', (error) => {
+        console.error('❌ Direct WebSocket MQTT error:', error);
+        this.currentStatus.isConnected = false;
+        this.notifyStatusChange();
+        reject(error);
+      });
+
+      this.client.on('close', () => {
+        console.log('🔌 Direct WebSocket MQTT connection closed');
+        this.currentStatus.isConnected = false;
+        this.notifyStatusChange();
+      });
+
+    } catch (error) {
+      console.error('❌ Direct WebSocket connection setup failed:', error);
+      reject(error);
+    }
+  }
+
 }
 
 // Export singleton instance
