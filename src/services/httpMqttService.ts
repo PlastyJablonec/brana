@@ -53,12 +53,10 @@ export class HttpMqttService {
       console.log('🚀 HTTP MQTT Service: Initial connection - force notifying current status');
       this.notifyStatusChange();
 
-      // CRITICAL FIX: Force trigger existing gate log message on initial connection
+      // CRITICAL FIX: Force check for existing gate log messages on initial connection
       // This ensures LastGateActivity shows retained MQTT messages immediately
-      if (this.lastGateLogMessage) {
-        console.log('🚀 HTTP MQTT Service: Force triggering existing gate log:', this.lastGateLogMessage);
-        this.handleGateLogMessage(this.lastGateLogMessage);
-      }
+      console.log('🚀 HTTP MQTT Service: Checking for existing gate log messages after connection...');
+      await this.forceCheckGateLogMessage();
 
       console.log('✅ HTTP MQTT Service: Connected via proxy');
     } catch (error) {
@@ -167,6 +165,38 @@ export class HttpMqttService {
         }
       }
     }, 500); // 0.5s polling pro rychlou odezvu
+  }
+
+  // Force check gate log messages on initial connection
+  private async forceCheckGateLogMessage(): Promise<void> {
+    try {
+      console.log('🔍 HTTP MQTT Service: Force checking gate log messages...');
+      const response = await fetch(this.proxyUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const status = await response.json();
+        console.log('🔍 HTTP MQTT Service: Force check response:', status);
+        
+        if (status.messages && status.messages['Log/Brana/ID']) {
+          const logMessage = status.messages['Log/Brana/ID'];
+          console.log('🎯 HTTP MQTT Service: Force triggering gate log message:', logMessage);
+          // ALWAYS trigger, ignore lastGateLogMessage comparison
+          this.lastGateLogMessage = logMessage;
+          this.handleGateLogMessage(logMessage);
+        } else {
+          console.log('🔍 HTTP MQTT Service: No Log/Brana/ID message found in force check');
+        }
+      } else {
+        console.error('❌ HTTP MQTT Service: Force check failed - status:', response.status);
+      }
+    } catch (error) {
+      console.error('❌ HTTP MQTT Service: Force check error:', error);
+    }
   }
 
   // Immediate status fetch for fast initial load
