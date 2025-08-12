@@ -307,6 +307,7 @@ const Dashboard: React.FC = () => {
       const isMoving = status.gateStatus.includes('se...') || status.gateStatus.includes('Otevírá') || status.gateStatus.includes('Zavírá');
       const isOpen = status.gateStatus.includes('otevřen') || status.gateStatus.includes('Otevřena');
       const isClosed = status.gateStatus.includes('zavřen') || status.gateStatus.includes('Zavřena');
+      const isStopMode = status.gateStatus.includes('STOP režim') || status.gateStatus === 'STOP režim';
       
       if (isMoving) {
         // Spustí travel timer pouze pokud ještě neběží
@@ -329,6 +330,9 @@ const Dashboard: React.FC = () => {
         }
       } else if (isClosed) {
         console.log('🔧 Dashboard: Gate closed, stopping timers');
+        stopTimer();
+      } else if (isStopMode) {
+        console.log('🛑 Dashboard: STOP režim detected from MQTT, stopping all timers');
         stopTimer();
       }
       
@@ -778,6 +782,11 @@ const Dashboard: React.FC = () => {
     }
 
     setLoading(true);
+    
+    // CRITICAL: Stop all timers immediately when STOP is activated
+    console.log('🛑 Dashboard: STOP activated - stopping all timers');
+    stopTimer();
+    
     let mqttCommandSucceeded = false;
     
     // Critical MQTT operations - must succeed for the command to work
@@ -933,7 +942,7 @@ const Dashboard: React.FC = () => {
             
             <button
               onClick={handleGateControl}
-              disabled={loading || !mqttConnected || !isLocationProximityAllowed}
+              disabled={loading || !mqttConnected || !isLocationProximityAllowed || gateStatus.includes('STOP režim')}
               className={`gate-button-modern ${(gateStatus.includes('se...') || loading) ? 'pulsing' : ''} ${timerState.type === 'autoClose' && timerState.countdown <= 60 ? 'timer-blinking' : ''} md-ripple`}
               style={{
                 width: '280px',
@@ -948,6 +957,7 @@ const Dashboard: React.FC = () => {
                 fontSize: '16px',
                 fontWeight: '600',
                 background: !isLocationProximityAllowed ? 'var(--md-surface-variant)' :
+                           gateStatus.includes('STOP režim') ? 'var(--md-error-container)' :
                            gateStatus.includes('zavřen') ? 'var(--md-error)' : 
                            gateStatus.includes('otevřen') ? 'var(--md-success)' : 'var(--md-primary)',
                 color: !isLocationProximityAllowed ? 'var(--md-on-surface-variant)' : 'white',
