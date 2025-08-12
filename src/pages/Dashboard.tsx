@@ -1033,6 +1033,55 @@ const Dashboard: React.FC = () => {
               </div>
             </button>
             
+            {/* STOP tlačítko pro uživatele s stopMode oprávněním */}
+            {currentUser?.permissions.stopMode && (
+              <button
+                onClick={handleStopMode}
+                disabled={loading || !mqttConnected}
+                className="md-button md-button-outlined md-ripple"
+                style={{
+                  width: '100%',
+                  marginTop: '16px',
+                  height: '48px',
+                  background: 'var(--md-error-container)',
+                  color: 'var(--md-on-error-container)',
+                  border: '2px solid var(--md-error)',
+                  borderRadius: '12px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: (loading || !mqttConnected) ? 'not-allowed' : 'pointer',
+                  opacity: (loading || !mqttConnected) ? 0.6 : 1,
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+                onMouseEnter={(e) => {
+                  if (!loading && mqttConnected) {
+                    e.currentTarget.style.background = 'var(--md-error)';
+                    e.currentTarget.style.color = 'var(--md-on-error)';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = 'var(--md-elevation-3-shadow)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!loading && mqttConnected) {
+                    e.currentTarget.style.background = 'var(--md-error-container)';
+                    e.currentTarget.style.color = 'var(--md-on-error-container)';
+                    e.currentTarget.style.transform = 'translateY(0px)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }
+                }}
+                aria-label="STOP - nouzové zastavení brány"
+              >
+                <svg style={{ width: '20px', height: '20px', fill: 'currentColor' }} viewBox="0 0 24 24">
+                  <path d="M18,18H6V6H18V18Z"/>
+                </svg>
+                STOP
+              </button>
+            )}
+            
             {/* LastGateActivity dovnitř gate boxu pro úsporu místa */}
             {(() => {
               // DEBUG: Permission check
