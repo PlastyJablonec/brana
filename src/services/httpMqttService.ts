@@ -56,7 +56,10 @@ export class HttpMqttService {
       // CRITICAL FIX: Force check for existing gate log messages on initial connection
       // This ensures LastGateActivity shows retained MQTT messages immediately
       console.log('🚀 HTTP MQTT Service: Checking for existing gate log messages after connection...');
-      await this.forceCheckGateLogMessage();
+      // Small delay to ensure all callbacks are registered
+      setTimeout(async () => {
+        await this.forceCheckGateLogMessage();
+      }, 1000);
 
       console.log('✅ HTTP MQTT Service: Connected via proxy');
     } catch (error) {
