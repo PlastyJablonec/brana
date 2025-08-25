@@ -16,10 +16,24 @@ import { garageTimerService, GarageTimerStatus } from '../services/garageTimerSe
 import { wakeLockService } from '../services/wakeLockService';
 import { updateService } from '../services/updateService';
 import LastGateActivity from '../components/LastGateActivity';
+import { useGateCoordination } from '../hooks/useGateCoordination';
+import { ReservationQueue } from '../components/GateCoordination/ReservationQueue';
 
 const Dashboard: React.FC = () => {
   const { currentUser, logout } = useAuth();
   const { timerState, startTravelTimer, startAutoCloseTimer, startOpenElapsedTimer, stopTimer } = useGateTimer();
+  const { 
+    coordinationState, 
+    status: gateCoordinationStatus, 
+    isLoading: coordinationLoading,
+    error: coordinationError,
+    requestControl,
+    releaseControl,
+    joinQueue,
+    leaveQueue,
+    updateGateState,
+    clearError: clearCoordinationError
+  } = useGateCoordination();
   const [gateStatus, setGateStatus] = useState('Neznámý stav');
   const [garageStatus, setGarageStatus] = useState('Neznámý stav');
   const [garageTimerStatus, setGarageTimerStatus] = useState<GarageTimerStatus | null>(null);
@@ -43,7 +57,6 @@ const Dashboard: React.FC = () => {
   }>>([
     { label: 'Autentifikace', status: 'success', description: 'Přihlášení ověřeno' },
     { label: 'MQTT protokol', status: 'loading', description: 'Připojuji se...' },
-    { label: 'Stav brány', status: 'pending', description: 'Čekám na data...' },
     { label: 'Kontrola aktualizací', status: 'pending', description: 'Ověřuji verzi...' }
   ]);
 
@@ -59,28 +72,26 @@ const Dashboard: React.FC = () => {
 
   // Check if all critical steps are completed (hide loader)
   const checkConnectionComplete = async () => {
-    // Kritické kroky: Auth, MQTT, Gate Status  
-    const criticalSteps = [0, 1, 2]; // Auth, MQTT, Gate Status
+    // Kritické kroky: Auth, MQTT (Stav brány odstraněn - není kritický)
+    const criticalSteps = [0, 1]; // Auth, MQTT
     const allCriticalComplete = criticalSteps.every(index => 
       connectionSteps[index]?.status === 'success'
     );
     
-    // Dodatečná kontrola - skutečný stav brány (ne "Neznámý stav")
-    // Pro HTTPS (HTTP proxy) neblokujeme na unknown status - polling může trvat dlouho
-    const isHttpsProxy = typeof window !== 'undefined' && window.location.protocol === 'https:';
-    const hasRealGateStatus = gateStatus !== 'Neznámý stav' || isHttpsProxy;
+    // Gate status check není potřebný - data přijdou postupně přes polling
+    const hasRealGateStatus = true; // Vždy true, neblokujeme na gate status
     
     // Když jsou kritické kroky hotové, spusť update check
-    if (allCriticalComplete && hasRealGateStatus && connectionSteps[3]?.status === 'pending') {
+    if (allCriticalComplete && hasRealGateStatus && connectionSteps[2]?.status === 'pending') {
       console.log('🔄 Critical steps completed, starting update check...');
-      updateConnectionStep(3, 'loading', 'Kontroluji novou verzi...');
+      updateConnectionStep(2, 'loading', 'Kontroluji novou verzi...');
       
       try {
         const updateResult = await updateService.checkForUpdates();
         
         if (updateResult.hasUpdate) {
           console.log('🎉 Update available, prompting user...');
-          updateConnectionStep(3, 'error', 'Nová verze k dispozici');
+          updateConnectionStep(2, 'error', 'Nová verze k dispozici');
           
           // Trigger update notification
           setTimeout(() => {
@@ -90,11 +101,11 @@ const Dashboard: React.FC = () => {
           return;
         } else {
           console.log('✅ App is up to date');
-          updateConnectionStep(3, 'success', 'Aktuální verze');
+          updateConnectionStep(2, 'success', 'Aktuální verze');
         }
       } catch (error) {
         console.error('❌ Update check failed:', error);
-        updateConnectionStep(3, 'success', 'Přeskočeno'); // Nepřerušuj kvůli update check
+        updateConnectionStep(2, 'success', 'Přeskočeno'); // Nepřerušuj kvůli update check
       }
     }
     
@@ -252,6 +263,37 @@ const Dashboard: React.FC = () => {
   // MQTT Status Subscription (connection managed globally in App.tsx)
   useEffect(() => {
     console.log('🔧 Dashboard: Subscribing to MQTT status changes...');
+    console.log('🔧 Dashboard: currentUser:', currentUser);
+    console.log('🔧 Dashboard: Force triggering MQTT connection...');
+    
+    // FORCE MQTT connection if it hasn't started + DETAILED DEBUG
+    if (currentUser) {
+      console.log('🚀 Dashboard: Force connecting MQTT...');
+      console.log('🔍 Dashboard: MQTT Service broker URL check...');
+      
+      // Log the exact URL that will be used
+      const isHttps = window.location.protocol === 'https:';
+      const hostname = window.location.hostname;
+      console.log('🌐 Dashboard: Protocol:', window.location.protocol);
+      console.log('🌐 Dashboard: Hostname:', hostname);
+      console.log('🌐 Dashboard: isHttps:', isHttps);
+      
+      if (isHttps) {
+        console.log('🔄 Dashboard: Will use HTTP MQTT proxy service');
+      } else {
+        if (hostname === 'localhost') {
+          console.log('🏠 Dashboard: Will use LOCAL MQTT broker: ws://172.19.3.200:9001');
+        } else {
+          console.log('🌍 Dashboard: Will use EXTERNAL MQTT broker: ws://89.24.76.191:9001');
+        }
+      }
+      
+      mqttService.connect().then(() => {
+        console.log('✅ Dashboard: MQTT connected successfully');
+      }).catch((error) => {
+        console.error('❌ Dashboard: MQTT connection failed:', error);
+      });
+    }
     
     // Get initial status immediately
     const initialStatus = mqttService.getStatus();
@@ -263,14 +305,9 @@ const Dashboard: React.FC = () => {
     // Update connection steps based on initial status
     if (initialStatus.isConnected) {
       updateConnectionStep(1, 'success', 'Připojeno');
-      if (initialStatus.gateStatus !== 'Neznámý stav') {
-        updateConnectionStep(2, 'success', initialStatus.gateStatus);
-      } else {
-        updateConnectionStep(2, 'loading', 'Načítám...');
-      }
+      // Stav brány krok odstraněn - není potřebný pro connection loading
     } else {
       updateConnectionStep(1, 'loading', 'Připojuji se...');
-      updateConnectionStep(2, 'pending', 'Čekám...');
     }
 
     // Subscribe to status changes (don't manage connection here)
@@ -286,21 +323,9 @@ const Dashboard: React.FC = () => {
       // Update connection steps
       if (status.isConnected) {
         updateConnectionStep(1, 'success', 'Připojeno');
-        
-        // Pro HTTPS (HTTP proxy) nečekáme na status - polling může trvat dlouho
-        const isHttpsProxy = typeof window !== 'undefined' && window.location.protocol === 'https:';
-        
-        if (status.gateStatus !== 'Neznámý stav') {
-          updateConnectionStep(2, 'success', status.gateStatus);
-        } else if (isHttpsProxy) {
-          // Na HTTPS rovnou označíme jako success - status přijde postupně přes polling
-          updateConnectionStep(2, 'success', 'Načítám stav...');
-        } else {
-          updateConnectionStep(2, 'loading', 'Načítám...');
-        }
+        // Stav brány krok odstraněn - není potřebný pro connection loading
       } else {
         updateConnectionStep(1, 'error', 'Chyba připojení');
-        updateConnectionStep(2, 'pending', 'Čekám...');
       }
       
       // Handle timer logic based on gate status changes
@@ -308,6 +333,26 @@ const Dashboard: React.FC = () => {
       const isOpen = status.gateStatus.includes('otevřen') || status.gateStatus.includes('Otevřena');
       const isClosed = status.gateStatus.includes('zavřen') || status.gateStatus.includes('Zavřena');
       const isStopMode = status.gateStatus.includes('STOP režim') || status.gateStatus === 'STOP režim';
+      
+      // NOVÉ: Aktualizace stavu brány v koordinaci uživatelů
+      let coordinationGateState: 'CLOSED' | 'OPENING' | 'OPEN' | 'CLOSING' | 'STOPPED' = 'CLOSED';
+      if (isMoving) {
+        if (prevGateStatus.includes('zavřen') || prevGateStatus.includes('Zavřena')) {
+          coordinationGateState = 'OPENING';
+        } else {
+          coordinationGateState = 'CLOSING';
+        }
+      } else if (isOpen) {
+        coordinationGateState = 'OPEN';
+      } else if (isClosed) {
+        coordinationGateState = 'CLOSED';
+      } else if (status.gateStatus.includes('STOP')) {
+        coordinationGateState = 'STOPPED';
+      }
+      
+      // Aktualizuj stav v koordinační službě
+      updateGateState(coordinationGateState);
+      console.log('🔧 Dashboard: Gate coordination state updated to:', coordinationGateState);
       
       if (isMoving) {
         // Spustí travel timer pouze pokud ještě neběží
@@ -471,6 +516,83 @@ const Dashboard: React.FC = () => {
     return () => clearInterval(statusCheck);
   }, [mqttConnected]);
 
+  // NOVÉ: Callback pro automatické otevření při zavírání (chytré čekání)
+  useEffect(() => {
+    // Import pro gateCoordinationService
+    const { gateCoordinationService } = require('../services/gateCoordinationService');
+    
+    gateCoordinationService.onAutoOpeningTriggered((userId: string) => {
+      if (currentUser?.id === userId) {
+        console.log('🔧 Dashboard: Automatické otevření spuštěno pro uživatele:', currentUser.displayName);
+        // Automaticky otevři bránu po 2 sekundách
+        setTimeout(async () => {
+          try {
+            console.log('🔧 Dashboard: Odesílám automatické otevření...');
+            await mqttService.publishGateCommand(currentUser.email || '');
+            
+            // Loguj aktivitu
+            await activityService.logActivity({
+              user: currentUser.email || '',
+              userDisplayName: currentUser.displayName || currentUser.email || 'Neznámý uživatel',
+              action: 'Automatické otevření brány',
+              device: 'gate',
+              status: 'success',
+              details: 'Brána automaticky otevřena kvůli čekajícímu uživateli'
+            });
+            
+          } catch (error) {
+            console.error('🔧 Dashboard: Chyba při automatickém otevření:', error);
+          }
+        }, 2000);
+      }
+    });
+  }, [currentUser]);
+
+  // NOVÉ: Real-time notifikace pro koordinaci mezi uživateli
+  useEffect(() => {
+    const { gateCoordinationService } = require('../services/gateCoordinationService');
+    
+    // Handler pro real-time změny stavu koordinace
+    gateCoordinationService.onCoordinationStateChange((state: any) => {
+      console.log('🔄 Dashboard: Koordinace změněna:', state);
+      
+      // Zobrazit notifikace o změnách
+      if (state.activeUser && state.activeUser.userId !== currentUser?.id) {
+        // Někdo jiný převzal ovládání
+        const message = `🎮 ${state.activeUser.userDisplayName} nyní ovládá bránu`;
+        console.log('📢 Notifikace:', message);
+        
+        // Zobrazit toast notifikaci (pokud je uživatel aktivní na stránce)
+        if (!document.hidden) {
+          // Dočasně zobrazit alert - později můžeme přidat toast systém
+          // alert(message);
+          console.log('📢 Real-time notifikace:', message);
+        }
+      }
+      
+      // Pokud je uživatel další v pořadí
+      if (currentUser?.id && state.reservationQueue.length > 0) {
+        const nextUser = state.reservationQueue[0];
+        if (nextUser.userId === currentUser.id && !state.activeUser) {
+          const message = 'ℹ️ Jste další na řadě pro ovládání brány!';
+          console.log('📢 Notifikace:', message);
+          playSound('success');
+          
+          // Zobrazit důležitou notifikaci
+          if (!document.hidden) {
+            // alert(message);
+            console.log('📢 Real-time notifikace:', message);
+          }
+        }
+      }
+    });
+    
+    // Uklidíme registraci při unmount
+    return () => {
+      // gateCoordinationService cleanup je již řešen v useGateCoordination hooku
+    };
+  }, [currentUser]);
+
   // GPS location check every 30 seconds
   useEffect(() => {
     const locationCheck = setInterval(() => {
@@ -597,6 +719,36 @@ const Dashboard: React.FC = () => {
       playSound('error');
       console.log('📍 Gate operation blocked by location proximity');
       return;
+    }
+
+    // NOVÉ: Inteligentní koordinace - tlačítko reaguje na stav uživatele
+    if (gateCoordinationStatus.isBlocked && !gateCoordinationStatus.isInQueue) {
+      // Uživatel je blokován → zařadí se do fronty
+      playSound('click');
+      const success = await joinQueue();
+      if (success) {
+        playSound('success');
+      } else {
+        playSound('error');
+      }
+      return;
+    }
+
+    if (gateCoordinationStatus.isInQueue) {
+      // Uživatel je ve frontě → opustí frontu
+      playSound('click');
+      await leaveQueue();
+      playSound('success');
+      return;
+    }
+
+    // NOVÉ: Pokud není aktivní, zkus získat kontrolu
+    if (!gateCoordinationStatus.isActive) {
+      const controlGranted = await requestControl();
+      if (!controlGranted) {
+        playSound('error');
+        return; // Chyba už byla zobrazena v requestControl
+      }
     }
 
     setLoading(true);
@@ -838,9 +990,37 @@ const Dashboard: React.FC = () => {
     return 'error';
   };
 
+  // NOVÉ: Handler funkce pro koordinaci uživatelů
+  const handleJoinQueue = async () => {
+    playSound('click');
+    const success = await joinQueue();
+    if (success) {
+      playSound('success');
+    } else {
+      playSound('error');
+    }
+  };
+
+  const handleLeaveQueue = async () => {
+    playSound('click');
+    await leaveQueue();
+    playSound('success');
+  };
+
+  const handleRequestControl = async () => {
+    playSound('click');
+    const success = await requestControl();
+    if (success) {
+      playSound('success');
+    } else {
+      playSound('error');
+    }
+  };
+
   // Debug log during each render
   console.log('🔧 Dashboard render - mqttConnected:', mqttConnected, 'gateStatus:', gateStatus, 'garageStatus:', garageStatus);
   console.log('🔧 Dashboard render - user permissions:', currentUser?.permissions);
+  console.log('🔧 Dashboard render - coordination status:', gateCoordinationStatus);
 
   return (
     <>
@@ -999,7 +1179,20 @@ const Dashboard: React.FC = () => {
               </svg>
               <div style={{ textAlign: 'center', lineHeight: '1.3' }}>
                 <div style={{ fontSize: '20px', fontWeight: '700', marginBottom: '4px' }}>
-                  {gateStatus}
+                  {(() => {
+                    // Inteligentní text podle koordinačního stavu
+                    if (gateCoordinationStatus.isBlocked && !gateCoordinationStatus.isInQueue) {
+                      return '📋 Zařadit do fronty';
+                    }
+                    if (gateCoordinationStatus.isInQueue) {
+                      return `${gateCoordinationStatus.waitingTimeText}`;
+                    }
+                    if (!gateCoordinationStatus.isActive && !gateCoordinationStatus.isBlocked) {
+                      return '🎮 Převzít ovládání';
+                    }
+                    // Aktivní uživatel - normální stav brány
+                    return gateStatus;
+                  })()}
                 </div>
                 {(gateStatus.includes('se...') || loading) && (
                   <div style={{ 
@@ -1092,6 +1285,7 @@ const Dashboard: React.FC = () => {
               </button>
             )}
             
+            
             {/* LastGateActivity dovnitř gate boxu pro úsporu místa */}
             {(() => {
               // DEBUG: Permission check
@@ -1141,6 +1335,16 @@ const Dashboard: React.FC = () => {
                 {garageTimerStatus ? garageTimerService.getDisplayText() : 'Garáž - načítám...'}
               </span>
             </button>
+          </div>
+        )}
+
+        {/* NOVÉ: Reservation Queue - zobrazuje seznam čekajících uživatelů */}
+        {coordinationState && coordinationState.reservationQueue.length > 0 && (
+          <div style={{ marginTop: '16px', minWidth: '280px', maxWidth: '400px' }}>
+            <ReservationQueue 
+              coordinationState={coordinationState}
+              onLeaveQueue={handleLeaveQueue}
+            />
           </div>
         )}
 
@@ -1308,6 +1512,15 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
         </div>
+        
+        {/* NOVÉ: Reservation Queue - pouze pokud existuje */}
+        {coordinationState && coordinationState.reservationQueue.length > 0 && (
+          <ReservationQueue 
+            coordinationState={coordinationState}
+            onLeaveQueue={handleLeaveQueue}
+            className="mb-4"
+          />
+        )}
         
         {/* Logout Button */}
         <button 

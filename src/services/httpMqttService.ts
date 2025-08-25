@@ -72,12 +72,12 @@ export class HttpMqttService {
   }
 
   private startStatusPolling(): void {
-    console.log('🔄 HTTP MQTT Service: Starting status polling every 0.5s...');
+    console.log('🔄 HTTP MQTT Service: Starting status polling every 5s...');
     
-    // Poll every 0.5 seconds for fast status updates
+    // Poll every 5 seconds for reasonable status updates (0.5s was too aggressive)
     this.statusPollingInterval = setInterval(async () => {
       try {
-        console.log('📡 HTTP MQTT Service: Polling proxy endpoint...');
+        // Tichý polling - logovat jen při problémech
         const response = await fetch(this.proxyUrl, {
           method: 'GET',
           headers: {
@@ -87,7 +87,7 @@ export class HttpMqttService {
 
         if (response.ok) {
           const status = await response.json();
-          console.log('📊 HTTP MQTT Service: Proxy response:', status);
+          // Tichý režim - logovat jen změny stavu
           const wasConnected = this.currentStatus.isConnected;
           let statusChanged = false;
           
@@ -98,9 +98,7 @@ export class HttpMqttService {
             statusChanged = true;
           }
           
-          // DEBUG: Log messages state
-          console.log('🔍 HTTP MQTT Debug: status.messages =', status.messages);
-          console.log('🔍 HTTP MQTT Debug: IoT/Brana/Status =', status.messages?.['IoT/Brana/Status']);
+          // Zpracovat MQTT zprávy
           
           // Update gate and garage status from messages
           if (status.messages) {
@@ -167,7 +165,7 @@ export class HttpMqttService {
           this.notifyStatusChange();
         }
       }
-    }, 500); // 0.5s polling pro rychlou odezvu
+    }, 5000); // 5s polling - rozumný kompromis mezi rychlostí a výkonem
   }
 
   // Force check gate log messages on initial connection

@@ -46,6 +46,15 @@ type StatusCallback = (status: IMqttStatus) => void;
 type GateLogCallback = (logEntry: IGateLogEntry) => void;
 type UnsubscribeFunction = () => void;
 
+// 🔐 Globální singleton ochrana proti hot reloading
+declare global {
+  interface Window {
+    __MQTT_SERVICE_INSTANCES__: MqttService[];
+    __MQTT_CLIENT_COUNT__: number;
+    __GLOBAL_MQTT_CLIENT__: MqttClient | null;
+  }
+}
+
 export class MqttService {
   private client: MqttClient | null = null;
   private statusCallbacks: StatusCallback[] = [];
@@ -59,17 +68,26 @@ export class MqttService {
     const hostname = window.location.hostname;
     console.log('🔍 MQTT Service: Detecting network for hostname:', hostname);
     
-    // Pokud jsme na lokální síti (192.168, 10., 172.16-31, localhost, nebo přímo IP RPi)
+    // OPRAVA: Pro development na localhost VŽDY použít externí IP
+    // Lokální broker 172.19.3.200 neexistuje!
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1'
+    ) {
+      console.log('🏠 MQTT Service: Localhost detected, using EXTERNAL MQTT broker (local broker not available)');
+      return 'ws://89.24.76.191:9001';
+    }
+    
+    // Pro skutečně lokální síť (192.168.x.x, 10.x.x.x)
     if (
       hostname.startsWith('192.168.') ||
       hostname.startsWith('10.') ||
-      hostname.startsWith('172.19.') || // Konkrétně naše síť 172.19.3.x
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      hostname === '172.19.3.200' // Přímo RPi IP
+      hostname.startsWith('172.19.') // Konkrétně naše síť 172.19.3.x
     ) {
-      console.log('🏠 MQTT Service: Local network detected, using local MQTT broker');
-      return 'ws://172.19.3.200:9001';
+      console.log('🏠 MQTT Service: Local network detected, checking if local broker exists...');
+      // TODO: V budoucnu ověřit dostupnost lokálního brokeru
+      console.log('🌐 MQTT Service: Using external broker as fallback');
+      return 'ws://89.24.76.191:9001';
     }
     
     // Jinak externí IP
@@ -90,9 +108,9 @@ export class MqttService {
     private readonly options: IMqttConnectionOptions = {
       clientId: `gate-control-${Math.random().toString(16).substring(2, 8)}`,
       clean: true,  // ⚡ TRUE pro okamžité retained messages
-      reconnectPeriod: 3000,  // ⚡ Rychlejší reconnect
-      connectTimeout: 8000,   // ⚡ Kratší timeout 
-      keepalive: 30,          // ⚡ Rychlejší keepalive jako v simple HTML
+      reconnectPeriod: 5000,  // ⚡ Sladěno s MQTT proxy (5s místo 3s)
+      connectTimeout: 15000,  // ⚡ Delší timeout pro stabilitu
+      keepalive: 60,          // ⚡ Sladěno s MQTT proxy (60s místo 30s)
       resubscribe: true,
       queueQoSZero: true,     // ⚡ Optimalizace pro rychlé zprávy
       will: {
@@ -102,19 +120,79 @@ export class MqttService {
         retain: false
       }
     }
-  ) {}
+  ) {
+    // 🔐 Globální tracking pro zabránění vícenásobných připojení
+    if (typeof window !== 'undefined') {
+      if (!window.__MQTT_SERVICE_INSTANCES__) {
+        window.__MQTT_SERVICE_INSTANCES__ = [];
+        window.__MQTT_CLIENT_COUNT__ = 0;
+      }
+      
+      // Odpojit a vyčistit všechny staré instance při hot reload
+      if (window.__MQTT_SERVICE_INSTANCES__.length > 0) {
+        console.log(`🧹 Hot reload detected - cleaning up ${window.__MQTT_SERVICE_INSTANCES__.length} old MQTT instances`);
+        window.__MQTT_SERVICE_INSTANCES__.forEach((oldInstance, index) => {
+          console.log(`🔌 Disconnecting old instance ${index + 1}`);
+          try {
+            oldInstance.disconnect();
+          } catch (error) {
+            console.warn(`⚠️ Error disconnecting old instance ${index + 1}:`, error);
+          }
+        });
+        window.__MQTT_SERVICE_INSTANCES__ = [];
+        window.__MQTT_CLIENT_COUNT__ = 0;
+      }
+      
+      window.__MQTT_SERVICE_INSTANCES__.push(this);
+      console.log(`📊 MQTT Service constructor: Registered instance ${window.__MQTT_SERVICE_INSTANCES__.length}`);
+    }
+  }
 
   public async connect(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       try {
+        // 🔐 Globální ochrana proti vícenásobným připojením
+        if (typeof window !== 'undefined') {
+          // Silná ochrana - pokud už existují připojení, vyčistit je
+          if (window.__MQTT_CLIENT_COUNT__ > 0) {
+            console.warn(`🚨 MQTT Service: Already have ${window.__MQTT_CLIENT_COUNT__} active connections, forcing cleanup...`);
+            
+            // Force cleanup všech existujících připojení
+            if (window.__MQTT_SERVICE_INSTANCES__) {
+              window.__MQTT_SERVICE_INSTANCES__.forEach((oldInstance, index) => {
+                console.log(`🧹 Force cleanup of MQTT instance ${index + 1}`);
+                try {
+                  oldInstance.disconnect();
+                } catch (error) {
+                  console.warn(`⚠️ Error in force cleanup ${index + 1}:`, error);
+                }
+              });
+            }
+            
+            // Reset counter
+            window.__MQTT_CLIENT_COUNT__ = 0;
+            console.log('🔄 Reset MQTT client counter to 0');
+          }
+          
+          window.__MQTT_CLIENT_COUNT__++;
+          console.log(`📊 MQTT Connect: Setting counter to ${window.__MQTT_CLIENT_COUNT__}`);
+        }
+        
+        // Disconnect any existing connection first to prevent multiple connections
+        if (this.client) {
+          console.log('🔄 MQTT Service: Cleaning up existing connection before reconnect');
+          this.disconnect();
+        }
+        
         console.log(`🔌 Connecting to MQTT broker: ${this.brokerUrl}`);
         console.log('⚙️ MQTT options:', this.options);
         
-        // Handle protocol selection
-        const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+        // 🌍 OPRAVA: VŽDY používej HTTP proxy - broker odmítá vícenásobná WebSocket připojení
+        // Původní problém: broker na 89.24.76.191:9001 odmítá nová připojení s "connack timeout"
+        const forceHttpProxy = true; // Vynutit HTTP proxy kvůli connection limit na brokeru
         
-        if (isHttps) {
-          console.log('🌐 MQTT Service: HTTPS detected, trying HTTP proxy first...');
+        if (forceHttpProxy) {
+          console.log('🌐 MQTT Service: Using HTTP proxy (broker connection limit protection)...');
           // Try HTTP proxy service on HTTPS
           httpMqttService.connect()
             .then(() => {
@@ -178,6 +256,12 @@ export class MqttService {
         
         this.client = mqtt.connect(brokerUrl, this.options);
         console.log('🔗 MQTT client created:', !!this.client);
+        
+        // 🌍 Uložit do globálního objektu pro sdílení mezi instancemi
+        if (typeof window !== 'undefined') {
+          window.__GLOBAL_MQTT_CLIENT__ = this.client;
+          console.log('🌍 Global MQTT client stored');
+        }
 
         this.client.on('connect', (connack: IConnackPacket) => {
           const timestamp = new Date().toISOString();
@@ -214,6 +298,7 @@ export class MqttService {
           this.notifyStatusChange();
           
           // Check if it's a mixed content error on HTTPS
+          const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
           if (isHttps && error.message.includes('insecure WebSocket')) {
             console.error('💡 Mixed content blocked - MQTT requires HTTP or manual browser permission');
             const mixedContentError = new Error('MQTT blokované kvôli mixed content policy - povoľte v prehliadači alebo použite HTTP verziu');
@@ -307,8 +392,19 @@ export class MqttService {
       httpMqttService.disconnect();
     } else if (this.client) {
       console.log('🔌 Disconnecting MQTT client...');
-      this.client.end(true); // Force close
+      
+      // Remove all event listeners to prevent memory leaks
+      this.client.removeAllListeners();
+      
+      // Force close the connection immediately
+      this.client.end(true);
       this.client = null;
+    }
+    
+    // 🔐 Dekrementovat globální počítač připojení
+    if (typeof window !== 'undefined' && window.__MQTT_CLIENT_COUNT__ > 0) {
+      window.__MQTT_CLIENT_COUNT__--;
+      console.log(`📊 MQTT Disconnect: Decrementing counter to ${window.__MQTT_CLIENT_COUNT__}`);
     }
     
     this.currentStatus.isConnected = false;
@@ -341,8 +437,19 @@ export class MqttService {
   }
 
   private parseGateStatus(status: string): GateStatusType {
-    // Parse gate status based on the original HTML implementation
-    const upperStatus = status.toUpperCase();
+    // Parse gate status - support both codes (P1) and text ("Brána zavřena")
+    const cleanStatus = status.trim();
+    
+    // First try direct text match (what MQTT broker actually sends)
+    if (cleanStatus === 'Brána zavřena') return 'Brána zavřena';
+    if (cleanStatus === 'Brána otevřena') return 'Brána otevřena';
+    if (cleanStatus === 'Otevírá se...') return 'Otevírá se...';
+    if (cleanStatus === 'Zavírá se...') return 'Zavírá se...';
+    if (cleanStatus === 'Zastavena') return 'Zastavena';
+    if (cleanStatus === 'STOP režim') return 'STOP režim';
+    
+    // Fallback to original codes (P1, P2, etc.)
+    const upperStatus = cleanStatus.toUpperCase();
     switch (upperStatus) {
       case 'P1':
         return 'Brána zavřena';
@@ -357,7 +464,7 @@ export class MqttService {
       case 'P6':
         return 'STOP režim';
       default:
-        console.warn(`Unknown gate status received: ${status}`);
+        console.warn(`Unknown gate status received: "${status}" - will show as Neznámý stav`);
         return 'Neznámý stav';
     }
   }

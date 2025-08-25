@@ -1,0 +1,325 @@
+/* Active User Indicator Styles */
+.active-user-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  transition: all 0.3s ease;
+  min-height: 60px;
+}
+
+.active-user-indicator__icon {
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.active-user-indicator__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.active-user-indicator__text {
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.active-user-indicator__subtext {
+  font-size: 14px;
+  opacity: 0.8;
+  line-height: 1.2;
+}
+
+/* Stavy indikátoru */
+.active-user-indicator--active {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.active-user-indicator--queued {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.active-user-indicator--blocked {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.active-user-indicator--free {
+  background: linear-gradient(135deg, #6b7280, #4b5563);
+  color: white;
+  box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+}
+
+/* Reservation Queue Styles */
+.reservation-queue {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  margin-top: 20px;
+  overflow: hidden;
+}
+
+.reservation-queue__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.reservation-queue__header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.reservation-queue__leave-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.reservation-queue__leave-btn:hover {
+  background: #dc2626;
+}
+
+.reservation-queue__list {
+  padding: 0;
+  margin: 0;
+}
+
+.reservation-queue__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.2s ease;
+}
+
+.reservation-queue__item:hover {
+  background: #f8fafc;
+}
+
+.reservation-queue__item--current {
+  background: #eff6ff;
+  border-left: 4px solid #3b82f6;
+}
+
+.reservation-queue__position {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: #e5e7eb;
+  color: #374151;
+  border-radius: 50%;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.reservation-queue__item--current .reservation-queue__position {
+  background: #3b82f6;
+  color: white;
+}
+
+.reservation-queue__user {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.reservation-queue__name {
+  font-weight: 500;
+  font-size: 14px;
+  color: #374151;
+}
+
+.reservation-queue__time {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.reservation-queue__status {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.reservation-queue__active {
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.reservation-queue__active-label {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.reservation-queue__active-user {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .active-user-indicator {
+    padding: 10px 12px;
+    gap: 10px;
+    min-height: 50px;
+  }
+
+  .active-user-indicator__icon {
+    font-size: 20px;
+    width: 36px;
+    height: 36px;
+  }
+
+  .active-user-indicator__text {
+    font-size: 14px;
+  }
+
+  .active-user-indicator__subtext {
+    font-size: 12px;
+  }
+
+  .reservation-queue__header {
+    padding: 12px 16px;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .reservation-queue__item {
+    padding: 10px 16px;
+    gap: 10px;
+  }
+
+  .reservation-queue__position {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+
+  .reservation-queue__active {
+    padding: 12px 16px;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+  }
+}
+
+/* Animace pro změny stavu */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.active-user-indicator--active .active-user-indicator__icon {
+  animation: pulse 2s infinite;
+}
+
+.active-user-indicator--queued .active-user-indicator__icon {
+  animation: pulse 3s infinite;
+}
+
+/* Gate Coordination Button Styles */
+.gate-coordination-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.gate-coordination-btn {
+  flex: 1;
+  min-width: 120px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.gate-coordination-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.gate-coordination-btn--join {
+  background: #3b82f6;
+  color: white;
+}
+
+.gate-coordination-btn--join:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.gate-coordination-btn--leave {
+  background: #ef4444;
+  color: white;
+}
+
+.gate-coordination-btn--leave:hover:not(:disabled) {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
+.gate-coordination-btn--request {
+  background: #10b981;
+  color: white;
+}
+
+.gate-coordination-btn--request:hover:not(:disabled) {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .gate-coordination-buttons {
+    flex-direction: column;
+  }
+  
+  .gate-coordination-btn {
+    min-width: unset;
+  }
+}
