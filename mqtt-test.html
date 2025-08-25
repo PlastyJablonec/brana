@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MQTT Test</title>
+    <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>
+</head>
+<body>
+    <h1>MQTT Connection Test</h1>
+    <div id="status">Testing...</div>
+    <div id="log" style="font-family: monospace; background: #f0f0f0; padding: 10px; margin: 10px 0;"></div>
+    
+    <script>
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
+        
+        function addLog(message) {
+            const time = new Date().toLocaleTimeString();
+            log.innerHTML += `[${time}] ${message}<br>`;
+            console.log(`[${time}] ${message}`);
+        }
+        
+        addLog('🔍 Starting MQTT test...');
+        addLog('🌐 Testing external broker: ws://89.24.76.191:9001');
+        
+        try {
+            const client = mqtt.connect('ws://89.24.76.191:9001', {
+                clientId: 'html-test-' + Math.random().toString(16).substring(2, 8),
+                clean: true,
+                connectTimeout: 15000,
+                keepalive: 60,
+                reconnectPeriod: 5000
+            });
+            
+            let timeoutId = setTimeout(() => {
+                addLog('❌ TIMEOUT: No connection after 20 seconds');
+                status.innerHTML = '❌ CONNECTION FAILED - TIMEOUT';
+                client.end();
+            }, 20000);
+            
+            client.on('connect', () => {
+                clearTimeout(timeoutId);
+                addLog('✅ MQTT Connected successfully!');
+                status.innerHTML = '✅ CONNECTED';
+                
+                client.subscribe('IoT/Brana/Status');
+                addLog('📡 Subscribed to IoT/Brana/Status');
+            });
+            
+            client.on('message', (topic, message) => {
+                addLog(`📨 Message: ${topic} = ${message.toString()}`);
+            });
+            
+            client.on('error', (error) => {
+                clearTimeout(timeoutId);
+                addLog(`❌ MQTT Error: ${error.message}`);
+                status.innerHTML = '❌ ERROR: ' + error.message;
+                
+                if (error.message.includes('connack timeout')) {
+                    addLog('🔍 CONNACK TIMEOUT detected - broker not responding');
+                    addLog('💡 Possible causes: broker overloaded, firewall, incorrect URL');
+                }
+            });
+            
+            client.on('disconnect', () => {
+                addLog('🔌 MQTT Disconnected');
+                status.innerHTML = '🔌 DISCONNECTED';
+            });
+            
+        } catch (error) {
+            addLog(`💥 Exception: ${error.message}`);
+            status.innerHTML = '💥 EXCEPTION';
+        }
+        
+        // Test also with local URL that should fail
+        setTimeout(() => {
+            addLog('');
+            addLog('🏠 Testing local broker (should fail): ws://172.19.3.200:9001');
+            
+            try {
+                const localClient = mqtt.connect('ws://172.19.3.200:9001', {
+                    clientId: 'local-test-' + Math.random().toString(16).substring(2, 8),
+                    clean: true,
+                    connectTimeout: 5000,
+                    keepalive: 60
+                });
+                
+                let localTimeout = setTimeout(() => {
+                    addLog('❌ Local broker timeout (expected)');
+                    localClient.end();
+                }, 8000);
+                
+                localClient.on('connect', () => {
+                    clearTimeout(localTimeout);
+                    addLog('✅ Local broker connected (unexpected!)');
+                });
+                
+                localClient.on('error', (error) => {
+                    clearTimeout(localTimeout);
+                    addLog(`❌ Local broker error: ${error.message} (expected)`);
+                });
+                
+            } catch (error) {
+                addLog(`💥 Local test exception: ${error.message}`);
+            }
+        }, 5000);
+    </script>
+</body>
+</html>

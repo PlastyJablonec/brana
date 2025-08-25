@@ -1,0 +1,84 @@
+{
+  "timestamp": "2025-08-25T07:55:39.878517",
+  "summary": {
+    "total_tests": 4,
+    "messages_received": 0,
+    "connection_attempts": 0
+  },
+  "tests": [
+    {
+      "test": "direct_mqtt",
+      "result": {
+        "success": false,
+        "error": "Connection timeout after 15s",
+        "time": null
+      },
+      "messages_received": 0
+    },
+    {
+      "test": "http_proxy",
+      "result": {
+        "success": true,
+        "get": {
+          "connected": true,
+          "status": "DEV MQTT Proxy Active",
+          "clientId": "dev-proxy-eea10d",
+          "messages": {
+            "IoT/Brana/Status": "Br\u00e1na zav\u0159ena",
+            "IoT/Brana/Status2": "Gar\u00e1\u017eov\u00e1 vrata v pohybu...",
+            "Log/Brana/ID": "Jirka Fe\u010dko | Otev\u0159\u00edt. | RFID \ud83d\udd11"
+          },
+          "isConnecting": false
+        },
+        "post": {
+          "success": true,
+          "topic": "IoT/Brana/Ovladani",
+          "message": "debug-test",
+          "connected": true
+        }
+      }
+    },
+    {
+      "test": "network_connections",
+      "result": {
+        "count": 5,
+        "connections": [
+          "chromium   5424   pi   39u  IPv4 1564986      0t0  TCP 192.168.68.200:34158->89-24-76-191.customers.tmcz.cz:9001 (ESTABLISHED)",
+          "chromium   5424   pi   43u  IPv4 1564975      0t0  TCP 192.168.68.200:34136->89-24-76-191.customers.tmcz.cz:9001 (ESTABLISHED)",
+          "chromium   5424   pi   52u  IPv4 1562226      0t0  TCP 192.168.68.200:34146->89-24-76-191.customers.tmcz.cz:9001 (ESTABLISHED)",
+          "chromium   5424   pi   54u  IPv4 1558769      0t0  TCP 192.168.68.200:59414->89-24-76-191.customers.tmcz.cz:9001 (ESTABLISHED)",
+          "node     134663   pi   19u  IPv4  513183      0t0  TCP 192.168.68.200:50166->89-24-76-191.customers.tmcz.cz:9001 (ESTABLISHED)"
+        ]
+      }
+    },
+    {
+      "test": "multiple_connections",
+      "result": {
+        "successful": 0,
+        "total": 3,
+        "details": [
+          {
+            "client_id": "debug-multi-2-1756101334",
+            "connected": false,
+            "error": null
+          },
+          {
+            "client_id": "debug-multi-0-1756101334",
+            "connected": false,
+            "error": null
+          },
+          {
+            "client_id": "debug-multi-1-1756101334",
+            "connected": false,
+            "error": null
+          }
+        ]
+      }
+    }
+  ],
+  "recommendations": [
+    "\u274c Direct MQTT connection failed - check broker accessibility and firewall",
+    "\u26a0\ufe0f Too many MQTT connections (5) - investigate connection leaks",
+    "\u274c Low connection success rate (0.0%) - broker may be overloaded"
+  ]
+}
