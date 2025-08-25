@@ -1,4 +1,3 @@
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 // Typy pro koordinaci brány
@@ -21,7 +20,7 @@ export interface GateCoordination {
 
 
 class GateCoordinationService {
-  private coordinationDoc = doc(db, 'gate_coordination', 'current_state');
+  private coordinationDoc = db.collection('gate_coordination').doc('current_state');
   private unsubscribe: (() => void) | null = null;
   private currentSessionId: string;
   
@@ -42,28 +41,32 @@ class GateCoordinationService {
   async initialize(): Promise<void> {
     try {
       // Vytvoř výchozí stav, pokud neexistuje
-      const coordDoc = await getDoc(this.coordinationDoc);
-      if (!coordDoc.exists()) {
+      const coordDoc = await this.coordinationDoc.get();
+      if (!coordDoc.exists) {
         const initialState: GateCoordination = {
           activeUser: null,
           reservationQueue: [],
           gateState: 'CLOSED',
           lastActivity: Date.now(),
         };
-        await setDoc(this.coordinationDoc, initialState);
+        await this.coordinationDoc.set(initialState);
+        console.log('🔧 GateCoordinationService: Vytvořen initial state');
       }
 
       // Naslouchej změnám v real-time
-      this.unsubscribe = onSnapshot(this.coordinationDoc, (doc) => {
-        if (doc.exists()) {
+      this.unsubscribe = this.coordinationDoc.onSnapshot((doc: any) => {
+        if (doc.exists) {
           const state = doc.data() as GateCoordination;
+          console.log('🔧 GateCoordinationService: State change:', state);
           if (this.onStateChange) {
             this.onStateChange(state);
           }
+        } else {
+          console.warn('🔧 GateCoordinationService: Dokument neexistuje');
         }
       });
 
-      console.log('🔧 GateCoordinationService: Inicializováno');
+      console.log('🔧 GateCoordinationService: Inicializováno s Firebase v8 API');
     } catch (error) {
       console.error('🔧 GateCoordinationService: Chyba při inicializaci:', error);
       throw error;
@@ -76,6 +79,7 @@ class GateCoordinationService {
       this.unsubscribe();
       this.unsubscribe = null;
     }
+    console.log('🔧 GateCoordinationService: Služba ukončena');
   }
 
   // Registrace callback funkcí
@@ -94,8 +98,8 @@ class GateCoordinationService {
   // Získání aktuálního stavu koordinace
   async getCurrentState(): Promise<GateCoordination | null> {
     try {
-      const docSnap = await getDoc(this.coordinationDoc);
-      return docSnap.exists() ? docSnap.data() as GateCoordination : null;
+      const docSnap = await this.coordinationDoc.get();
+      return docSnap.exists ? docSnap.data() as GateCoordination : null;
     } catch (error) {
       console.error('🔧 GateCoordinationService: Chyba při načítání stavu:', error);
       return null;
@@ -125,7 +129,7 @@ class GateCoordinationService {
           lastActivity: Date.now()
         };
 
-        await setDoc(this.coordinationDoc, updatedState);
+        await this.coordinationDoc.set(updatedState);
         console.log('🔧 GateCoordinationService: Uživatel', userDisplayName, 'je nyní aktivní');
         return 'GRANTED';
       }
@@ -148,7 +152,7 @@ class GateCoordinationService {
         activeUser: { ...user, sessionId: this.currentSessionId },
         lastActivity: Date.now()
       };
-      await setDoc(this.coordinationDoc, updatedState);
+      await this.coordinationDoc.set(updatedState);
       return 'GRANTED';
 
     } catch (error) {
@@ -175,7 +179,7 @@ class GateCoordinationService {
         lastActivity: Date.now()
       };
 
-      await setDoc(this.coordinationDoc, updatedState);
+      await this.coordinationDoc.set(updatedState);
       console.log('🔧 GateCoordinationService: Uživatel', userId, 'uvolnil ovládání');
 
     } catch (error) {
@@ -211,7 +215,7 @@ class GateCoordinationService {
         lastActivity: Date.now()
       };
 
-      await setDoc(this.coordinationDoc, updatedState);
+      await this.coordinationDoc.set(updatedState);
       console.log('🔧 GateCoordinationService: Uživatel', userDisplayName, 'přidán do queue');
       return true;
 
@@ -235,7 +239,7 @@ class GateCoordinationService {
         lastActivity: Date.now()
       };
 
-      await setDoc(this.coordinationDoc, updatedState);
+      await this.coordinationDoc.set(updatedState);
       console.log('🔧 GateCoordinationService: Rezervace uživatele', userId, 'odebrána');
 
     } catch (error) {
@@ -243,94 +247,114 @@ class GateCoordinationService {
     }
   }
 
-  // Aktualizace stavu brány (CLOSED, OPENING, OPEN, CLOSING)
+  // Aktualizace stavu brány (např. při MQTT změnách)
   async updateGateState(newState: 'CLOSED' | 'OPENING' | 'OPEN' | 'CLOSING' | 'STOPPED'): Promise<void> {
     try {
       const currentState = await this.getCurrentState();
       if (!currentState) return;
 
-      const updatedState: GateCoordination = {
-        ...currentState,
-        gateState: newState,
-        lastActivity: Date.now()
-      };
-
-      // CHYTRÁ LOGIKA: Pokud se brána začíná zavírat a někdo čeká v queue
-      if (newState === 'CLOSING' && currentState.reservationQueue.length > 0) {
+      // Automatické otevření při zavření brány
+      if (newState === 'CLOSED' && currentState.gateState !== 'CLOSED' && currentState.reservationQueue.length > 0) {
         const nextUser = currentState.reservationQueue[0];
-        updatedState.autoOpeningUserId = nextUser.userId;
         
-        console.log('🔧 GateCoordinationService: Brána se zavírá, ale', nextUser.userDisplayName, 'čeká → automatické otevření');
+        const updatedState: GateCoordination = {
+          ...currentState,
+          gateState: newState,
+          activeUser: nextUser,
+          reservationQueue: currentState.reservationQueue.slice(1),
+          autoOpeningUserId: nextUser.userId,
+          lastActivity: Date.now()
+        };
         
+        await this.coordinationDoc.set(updatedState);
+        
+        // Trigger auto-opening callback
         if (this.onAutoOpenTrigger) {
           this.onAutoOpenTrigger(nextUser.userId);
         }
-      }
+      } else {
+        const updatedState: GateCoordination = {
+          ...currentState,
+          gateState: newState,
+          lastActivity: Date.now()
+        };
 
-      await setDoc(this.coordinationDoc, updatedState);
+        await this.coordinationDoc.set(updatedState);
+      }
 
     } catch (error) {
       console.error('🔧 GateCoordinationService: Chyba při aktualizaci stavu brány:', error);
     }
   }
 
-  // Vyčištění starých/neaktivních session
-  async cleanupInactiveSessions(maxAgeMinutes: number = 30): Promise<void> {
+  // HELPER METODY PRO useGateCoordination hook
+
+  // Získání pozice uživatele (0 = aktivní, pozitivní číslo = pozice v queue, -1 = není zaregistrovaný)
+  getUserPosition(userId: string, state: GateCoordination): number {
+    if (state.activeUser?.userId === userId) return 0;
+    const queueIndex = state.reservationQueue.findIndex(user => user.userId === userId);
+    return queueIndex >= 0 ? queueIndex + 1 : -1;
+  }
+
+  // Kontrola, zda je uživatel blokován
+  isUserBlocked(userId: string, state: GateCoordination): boolean {
+    return state.activeUser !== null && state.activeUser.userId !== userId;
+  }
+
+  // Získání waiting time textu
+  getWaitingTime(position: number): string {
+    if (position === 0) return 'Aktivní';
+    if (position === 1) return 'Další na řadě';
+    if (position > 1) return `${position}. v pořadí`;
+    return 'Nepřipojeno';
+  }
+
+  // Vyčištění neaktivních sessionů (parametr minutes)
+  async cleanupInactiveSessions(minutes: number): Promise<void> {
+    const timeoutMs = minutes * 60 * 1000;
+    return this.cleanupStaleData(); // Využije existující logiku s timeout
+  }
+
+  // Vyčištění starých sessionů (cron job)
+  async cleanupStaleData(): Promise<void> {
     try {
       const currentState = await this.getCurrentState();
       if (!currentState) return;
 
       const now = Date.now();
-      const maxAge = maxAgeMinutes * 60 * 1000;
+      const TIMEOUT_MS = 5 * 60 * 1000; // 5 minut timeout
       let hasChanges = false;
 
-      // Vyčisti neaktivní aktivní uživatele
-      if (currentState.activeUser && (now - currentState.activeUser.timestamp) > maxAge) {
+      // Vyčisti starého aktivního uživatele
+      if (currentState.activeUser && (now - currentState.activeUser.timestamp) > TIMEOUT_MS) {
         currentState.activeUser = null;
         hasChanges = true;
-        console.log('🔧 GateCoordinationService: Vyčištěn neaktivní aktivní uživatel');
       }
 
       // Vyčisti staré rezervace
-      const validReservations = currentState.reservationQueue.filter(user => (now - user.timestamp) <= maxAge);
+      const validReservations = currentState.reservationQueue.filter(user => {
+        return (now - user.timestamp) <= TIMEOUT_MS;
+      });
+
       if (validReservations.length !== currentState.reservationQueue.length) {
         currentState.reservationQueue = validReservations;
         hasChanges = true;
-        console.log('🔧 GateCoordinationService: Vyčištěny staré rezervace');
       }
 
       if (hasChanges) {
-        await setDoc(this.coordinationDoc, {
+        await this.coordinationDoc.set({
           ...currentState,
           lastActivity: now
         });
+        console.log('🔧 GateCoordinationService: Stará data vyčištěna');
       }
 
     } catch (error) {
-      console.error('🔧 GateCoordinationService: Chyba při čištění session:', error);
+      console.error('🔧 GateCoordinationService: Chyba při čištění dat:', error);
     }
-  }
-
-  // Utility funkce pro UI
-  getUserPosition(userId: string, currentState: GateCoordination): number {
-    if (currentState.activeUser?.userId === userId) return 0; // Aktivní
-    const queueIndex = currentState.reservationQueue.findIndex(user => user.userId === userId);
-    return queueIndex >= 0 ? queueIndex + 1 : -1; // Pozice v queue (+1 pro aktivního)
-  }
-
-  isUserBlocked(userId: string, currentState: GateCoordination): boolean {
-    const isActiveUser = currentState.activeUser?.userId === userId;
-    const isInQueue = currentState.reservationQueue.some(user => user.userId === userId);
-    
-    // Blokuj, pokud není aktivní ani v queue
-    return !isActiveUser && !isInQueue && currentState.activeUser !== null;
-  }
-
-  getWaitingTime(position: number): string {
-    if (position === 0) return 'Aktivní';
-    if (position === 1) return 'Další na řadě';
-    return `${position}. v pořadí`;
   }
 }
 
+// Export singleton instance
 export const gateCoordinationService = new GateCoordinationService();
+export default gateCoordinationService;
