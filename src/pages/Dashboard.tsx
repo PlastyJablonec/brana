@@ -711,6 +711,37 @@ const Dashboard: React.FC = () => {
     };
   }, [currentUser]);
 
+  // Auto-cleanup: Release control when user closes app or goes offline
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      console.log('🔄 Dashboard: App closing - releasing gate control...');
+      if (gateCoordinationStatus.isActive) {
+        // Synchronous release (no await in beforeunload)
+        releaseControl().catch(console.error);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden && gateCoordinationStatus.isActive) {
+        console.log('🔄 Dashboard: App hidden - releasing gate control after delay...');
+        // Release control after 5 minutes of being hidden
+        setTimeout(() => {
+          if (document.hidden) {
+            releaseControl().catch(console.error);
+          }
+        }, 5 * 60 * 1000); // 5 minutes
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [gateCoordinationStatus.isActive, releaseControl]);
+
   // GPS location check every 30 seconds
   useEffect(() => {
     const locationCheck = setInterval(() => {
@@ -732,6 +763,20 @@ const Dashboard: React.FC = () => {
 
     return () => clearInterval(locationCheck);
   }, [locationPermission]);
+
+  // Periodic cleanup of stale coordination sessions every 2 minutes
+  useEffect(() => {
+    const cleanupInterval = setInterval(async () => {
+      try {
+        console.log('🧹 Dashboard: Running periodic coordination cleanup...');
+        await cleanupSessions();
+      } catch (error) {
+        console.warn('⚠️ Dashboard: Periodic cleanup failed:', error);
+      }
+    }, 2 * 60 * 1000); // Every 2 minutes
+
+    return () => clearInterval(cleanupInterval);
+  }, [cleanupSessions]);
 
   // Load garage settings and setup garage timer
   useEffect(() => {
@@ -833,6 +878,23 @@ const Dashboard: React.FC = () => {
     try {
       console.log('🔧 DEBUG: Spouštím cleanup coordination sessions...');
       await cleanupSessions();
+      
+      // FORCE reset - directly clear Firebase state
+      console.log('🔧 DEBUG: Force clearing Firebase coordination state...');
+      const { gateCoordinationService } = await import('../services/gateCoordinationService');
+      const currentState = await gateCoordinationService.getCurrentState();
+      if (currentState) {
+        console.log('🔧 DEBUG: Current state before reset:', currentState);
+        // Force clear activeUser and queue
+        await gateCoordinationService['coordinationDoc'].set({
+          activeUser: null,
+          reservationQueue: [],
+          gateState: 'CLOSED',
+          lastActivity: Date.now(),
+        });
+        console.log('✅ DEBUG: Firebase coordination state forcibly cleared');
+      }
+      
       playSound('success');
       alert('Koordinační stav byl resetován. Obnovte stránku.');
     } catch (error) {
