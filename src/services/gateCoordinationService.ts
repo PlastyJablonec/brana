@@ -40,9 +40,17 @@ class GateCoordinationService {
   // Inicializace služby a naslouchání změnám
   async initialize(): Promise<void> {
     try {
+      console.log('🚨 DEBUG: GateCoordinationService.initialize() START');
+      console.log('🚨 DEBUG: db object:', db);
+      console.log('🚨 DEBUG: coordinationDoc:', this.coordinationDoc);
+      
       // Vytvoř výchozí stav, pokud neexistuje
+      console.log('🚨 DEBUG: Načítám dokument z Firestore...');
       const coordDoc = await this.coordinationDoc.get();
+      console.log('🚨 DEBUG: Dokument načten, exists:', coordDoc.exists, 'data:', coordDoc.data());
+      
       if (!coordDoc.exists) {
+        console.log('🚨 DEBUG: Dokument neexistuje, vytvářím initial state...');
         const initialState: GateCoordination = {
           activeUser: null,
           reservationQueue: [],
@@ -50,25 +58,37 @@ class GateCoordinationService {
           lastActivity: Date.now(),
         };
         await this.coordinationDoc.set(initialState);
-        console.log('🔧 GateCoordinationService: Vytvořen initial state');
+        console.log('✅ GateCoordinationService: Vytvořen initial state');
+      } else {
+        console.log('✅ GateCoordinationService: Dokument už existuje');
       }
 
       // Naslouchej změnám v real-time
+      console.log('🚨 DEBUG: Registruji onSnapshot listener...');
       this.unsubscribe = this.coordinationDoc.onSnapshot((doc: any) => {
+        console.log('🔔 SNAPSHOT CALLBACK: doc.exists =', doc.exists, 'data =', doc.data());
         if (doc.exists) {
           const state = doc.data() as GateCoordination;
           console.log('🔧 GateCoordinationService: State change:', state);
+          console.log('🔧 ACTIVE USER DETAILS:', state.activeUser ? {
+            userId: state.activeUser.userId,
+            userDisplayName: state.activeUser.userDisplayName,
+            email: state.activeUser.email
+          } : 'null');
           if (this.onStateChange) {
+            console.log('🔧 GateCoordinationService: Volám onStateChange callback');
             this.onStateChange(state);
+          } else {
+            console.warn('⚠️ GateCoordinationService: onStateChange callback není nastaven!');
           }
         } else {
           console.warn('🔧 GateCoordinationService: Dokument neexistuje');
         }
       });
 
-      console.log('🔧 GateCoordinationService: Inicializováno s Firebase v8 API');
+      console.log('✅ GateCoordinationService: Inicializováno s Firebase v8 API');
     } catch (error) {
-      console.error('🔧 GateCoordinationService: Chyba při inicializaci:', error);
+      console.error('❌ GateCoordinationService: KRITICKÁ CHYBA při inicializaci:', error);
       throw error;
     }
   }

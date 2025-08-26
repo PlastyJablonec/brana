@@ -5,6 +5,8 @@ import CameraView from '../components/CameraView';
 import ThemeToggle from '../components/ThemeToggle';
 import ConnectionLoader from '../components/ConnectionLoader';
 import MqttDebug from '../components/MqttDebug';
+import { CoordinationDebug } from '../components/CoordinationDebug';
+import { ComplexDebugTool } from '../components/ComplexDebugTool';
 import { mqttService } from '../services/mqttService';
 import { activityService } from '../services/activityService';
 import { useGateTimer } from '../hooks/useGateTimer';
@@ -721,9 +723,16 @@ const Dashboard: React.FC = () => {
       return;
     }
 
+    // DEBUG: Zobraz stav koordinace
+    console.log('🚨 DEBUG: handleGateControl - gateCoordinationStatus:', gateCoordinationStatus);
+    console.log('🚨 DEBUG: isBlocked:', gateCoordinationStatus.isBlocked);
+    console.log('🚨 DEBUG: isInQueue:', gateCoordinationStatus.isInQueue);
+    console.log('🚨 DEBUG: isActive:', gateCoordinationStatus.isActive);
+
     // NOVÉ: Inteligentní koordinace - tlačítko reaguje na stav uživatele
     if (gateCoordinationStatus.isBlocked && !gateCoordinationStatus.isInQueue) {
       // Uživatel je blokován → zařadí se do fronty
+      console.log('🚨 DEBUG: Uživatel je blokován, zařazuji do fronty...');
       playSound('click');
       const success = await joinQueue();
       if (success) {
@@ -736,6 +745,7 @@ const Dashboard: React.FC = () => {
 
     if (gateCoordinationStatus.isInQueue) {
       // Uživatel je ve frontě → opustí frontu
+      console.log('🚨 DEBUG: Uživatel je ve frontě, opouštím...');
       playSound('click');
       await leaveQueue();
       playSound('success');
@@ -744,12 +754,15 @@ const Dashboard: React.FC = () => {
 
     // NOVÉ: Pokud není aktivní, zkus získat kontrolu
     if (!gateCoordinationStatus.isActive) {
+      console.log('🚨 DEBUG: Uživatel není aktivní, žádám o kontrolu...');
       const controlGranted = await requestControl();
       if (!controlGranted) {
         playSound('error');
         return; // Chyba už byla zobrazena v requestControl
       }
     }
+
+    console.log('🚨 DEBUG: Pokračuji s normálním MQTT příkazem...');
 
     setLoading(true);
     let mqttCommandSucceeded = false;
@@ -1541,6 +1554,10 @@ const Dashboard: React.FC = () => {
         </button>
       </div>
     </div>
+    
+    {/* Debug koordinace - pouze pro vývoj */}
+    <CoordinationDebug />
+    <ComplexDebugTool />
     </>
   );
 };

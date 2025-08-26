@@ -21,18 +21,20 @@ export function useGateCoordination() {
 
   // Inicializace služby
   useEffect(() => {
+    console.log('🚨 DEBUG: useGateCoordination useEffect START - currentUser:', currentUser?.email);
     let isInitialized = false;
 
     const initializeService = async () => {
       try {
+        console.log('🚨 DEBUG: Spouštím gateCoordinationService.initialize()');
         await gateCoordinationService.initialize();
         isInitialized = true;
         setIsLoading(false);
-        console.log('🔧 useGateCoordination: Služba inicializována');
+        console.log('✅ useGateCoordination: Služba inicializována ÚSPĚŠNĚ');
       } catch (err) {
         setError('Chyba při inicializaci koordinace uživatelů');
         setIsLoading(false);
-        console.error('🔧 useGateCoordination: Inicializace selhala:', err);
+        console.error('❌ useGateCoordination: Inicializace SELHALA:', err);
       }
     };
 
@@ -100,6 +102,15 @@ export function useGateCoordination() {
     const position = gateCoordinationService.getUserPosition(userId, coordinationState);
     const isBlocked = gateCoordinationService.isUserBlocked(userId, coordinationState);
     const waitingTimeText = gateCoordinationService.getWaitingTime(position);
+    
+    console.log('🚨 DEBUG useGateCoordination STATUS:', {
+      currentUserId: userId,
+      currentUserEmail: currentUser.email,
+      position,
+      isBlocked,
+      activeUserId: coordinationState.activeUser?.userId,
+      activeUserEmail: coordinationState.activeUser?.email
+    });
 
     return {
       isActive: position === 0,
