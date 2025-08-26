@@ -5,8 +5,6 @@ import CameraView from '../components/CameraView';
 import ThemeToggle from '../components/ThemeToggle';
 import ConnectionLoader from '../components/ConnectionLoader';
 import MqttDebug from '../components/MqttDebug';
-import { CoordinationDebug } from '../components/CoordinationDebug';
-import { ComplexDebugTool } from '../components/ComplexDebugTool';
 import { mqttService } from '../services/mqttService';
 import { activityService } from '../services/activityService';
 import { useGateTimer } from '../hooks/useGateTimer';
@@ -1847,9 +1845,6 @@ const Dashboard: React.FC = () => {
       </div>
     </div>
     
-    {/* Debug koordinace - pouze pro vývoj */}
-    <CoordinationDebug />
-    <ComplexDebugTool />
     </>
   );
 };
