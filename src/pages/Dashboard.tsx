@@ -118,6 +118,8 @@ const Dashboard: React.FC = () => {
   const handleConfirmClose = useCallback(async () => {
     if (!currentUser) return;
     
+    console.log('🚪 SLIDER: Spouštím zavření brány přes slider...');
+    
     setShowCloseConfirmSlider(false);
     setCloseSliderPosition(0);
     setIsSliderDragging(false);
@@ -127,15 +129,20 @@ const Dashboard: React.FC = () => {
       setLoading(true);
       playSound('click');
       
+      console.log('🚪 SLIDER: Odesílám MQTT příkaz pro zavření brány...');
+      
       const userInfo = getUserIdentifier();
       
+      // MQTT pro zavření brány
       await mqttService.publishGateCommand(currentUser.email || '');
+      console.log('✅ SLIDER: MQTT příkaz pro bránu odeslán úspěšně');
       
       // Send user ID to Log/Brana/ID topic (like original HTML)
       const logMessage = `ID: ${userInfo}`;
       await mqttService.publishMessage('Log/Brana/ID', logMessage);
-      console.log('🚪 Close confirmed via slider - command sent');
+      console.log('✅ SLIDER: Log message odeslán:', logMessage);
       
+      console.log('🚪 SLIDER: Close confirmed via slider - command sent successfully');
       playSound('success');
     } catch (error) {
       console.error('❌ Chyba při zavírání brány přes slider:', error);
@@ -1298,17 +1305,53 @@ const Dashboard: React.FC = () => {
           <div className="md-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', minWidth: '280px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <h3 className="md-card-title" style={{ fontSize: '1rem', textAlign: 'center', margin: 0 }}>Brána</h3>
-              {/* NOVÉ: Informační lišta o připojených uživatelích */}
+              
+              {/* Location proximity information - PŘESUNUTO NAHORU */}
+              {currentUser?.permissions?.requireLocationProximity && !isLocationProximityAllowed && (
+                <div style={{ 
+                  fontSize: '14px', 
+                  fontWeight: '500', 
+                  color: 'var(--md-error)',
+                  marginTop: '12px',
+                  textAlign: 'center',
+                  padding: '12px',
+                  backgroundColor: 'var(--md-error-container)',
+                  borderRadius: '12px',
+                  border: '1px solid var(--md-error)'
+                }}>
+                  {distanceFromGate ? (
+                    <>
+                      📍 Vzdálenost: {distanceFromGate}m
+                      <br />
+                      <span style={{ fontSize: '12px', color: 'var(--md-on-error-container)' }}>
+                        Přijďte blíž k bráně pro ovládání
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      📍 Ověřuji polohu...
+                      <br />
+                      <span style={{ fontSize: '12px', color: 'var(--md-on-error-container)' }}>
+                        Pro ovládání je nutné být blíž k bráně
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* NOVÉ: Informační lišta o připojených uživatelích - ZVĚTŠENÁ */}
               {gateCoordinationStatus.connectedUsers > 1 && (
                 <div style={{
                   background: 'var(--md-tertiary-container)',
                   color: 'var(--md-on-tertiary-container)',
-                  padding: '4px 8px',
+                  padding: '8px 12px',
                   borderRadius: '12px',
-                  fontSize: '0.75rem',
-                  fontWeight: '600'
+                  fontSize: '0.875rem',
+                  fontWeight: '600',
+                  marginTop: '8px',
+                  textAlign: 'center'
                 }}>
-                  👥 {gateCoordinationStatus.connectedUsers} uživatelů
+                  👥 {gateCoordinationStatus.connectedUsers} uživatelů připojeno
                 </div>
               )}
             </div>
@@ -1331,6 +1374,7 @@ const Dashboard: React.FC = () => {
                 fontWeight: '600',
                 background: !isLocationProximityAllowed ? 'var(--md-surface-variant)' :
                            gateStatus.includes('STOP režim') ? 'var(--md-error-container)' :
+                           gateCoordinationStatus.queueLength > 0 && gateCoordinationStatus.isActive ? 'var(--md-tertiary)' :
                            gateStatus.includes('zavřen') ? 'var(--md-error)' : 
                            gateStatus.includes('otevřen') ? 'var(--md-success)' : 'var(--md-primary)',
                 color: !isLocationProximityAllowed ? 'var(--md-on-surface-variant)' : 'white',
@@ -1381,11 +1425,17 @@ const Dashboard: React.FC = () => {
                       return `🚪 ${gateCoordinationStatus.waitingTimeText}`;
                     }
                     if (!gateCoordinationStatus.isActive && gateCoordinationStatus.canStartControl) {
-                      // Můžu začít ovládat - zobraz aktuální stav brány
+                      // Můžu začít ovládat - zobraz aktuální stav brány + indikace frontý
+                      if (gateCoordinationStatus.queueLength > 0) {
+                        return `${gateStatus} (${gateCoordinationStatus.queueLength} čeká)`;
+                      }
                       return gateStatus;
                     }
                     if (gateCoordinationStatus.isActive) {
-                      // Už jsem aktivní - zobraz normální stav brány
+                      // Už jsem aktivní - zobraz normální stav brány + indikace fronty
+                      if (gateCoordinationStatus.queueLength > 0) {
+                        return `${gateStatus} (${gateCoordinationStatus.queueLength} čeká)`;
+                      }
                       return gateStatus;
                     }
                     // Fallback
@@ -1400,38 +1450,6 @@ const Dashboard: React.FC = () => {
                     animation: 'pulse-text 1s infinite alternate'
                   }}>
                     {loading ? 'Odesílám...' : 'Pohyb brány'}
-                  </div>
-                )}
-                {/* Location proximity information */}
-                {currentUser?.permissions?.requireLocationProximity && !isLocationProximityAllowed && (
-                  <div style={{ 
-                    fontSize: '14px', 
-                    fontWeight: '500', 
-                    color: 'var(--md-error)',
-                    marginTop: '12px',
-                    textAlign: 'center',
-                    padding: '12px',
-                    backgroundColor: 'var(--md-error-container)',
-                    borderRadius: '12px',
-                    border: '1px solid var(--md-error)'
-                  }}>
-                    {distanceFromGate ? (
-                      <>
-                        📍 Vzdálenost: {distanceFromGate}m
-                        <br />
-                        <span style={{ fontSize: '12px', color: 'var(--md-on-error-container)' }}>
-                          Přijďte blíž k bráně pro ovládání
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        📍 Ověřuji polohu...
-                        <br />
-                        <span style={{ fontSize: '12px', color: 'var(--md-on-error-container)' }}>
-                          Pro ovládání je nutné být blíž k bráně
-                        </span>
-                      </>
-                    )}
                   </div>
                 )}
                 {/* Timer uvnitř tlačítka */}
