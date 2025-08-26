@@ -1403,16 +1403,35 @@ const Dashboard: React.FC = () => {
                   </div>
                 )}
                 {/* Location proximity information */}
-                {currentUser?.permissions?.requireLocationProximity && !isLocationProximityAllowed && distanceFromGate && (
+                {currentUser?.permissions?.requireLocationProximity && !isLocationProximityAllowed && (
                   <div style={{ 
                     fontSize: '14px', 
                     fontWeight: '500', 
                     color: 'var(--md-error)',
-                    marginTop: '8px'
+                    marginTop: '12px',
+                    textAlign: 'center',
+                    padding: '12px',
+                    backgroundColor: 'var(--md-error-container)',
+                    borderRadius: '12px',
+                    border: '1px solid var(--md-error)'
                   }}>
-                    Vzdálenost: {distanceFromGate}m
-                    <br />
-                    <span style={{ fontSize: '12px' }}>Přijďte blíž k bráně</span>
+                    {distanceFromGate ? (
+                      <>
+                        📍 Vzdálenost: {distanceFromGate}m
+                        <br />
+                        <span style={{ fontSize: '12px', color: 'var(--md-on-error-container)' }}>
+                          Přijďte blíž k bráně pro ovládání
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        📍 Ověřuji polohu...
+                        <br />
+                        <span style={{ fontSize: '12px', color: 'var(--md-on-error-container)' }}>
+                          Pro ovládání je nutné být blíž k bráně
+                        </span>
+                      </>
+                    )}
                   </div>
                 )}
                 {/* Timer uvnitř tlačítka */}
@@ -1652,6 +1671,39 @@ const Dashboard: React.FC = () => {
                 {garageTimerStatus ? garageTimerService.getDisplayText() : 'Garáž - načítám...'}
               </span>
             </button>
+
+            {/* Location proximity information for garage */}
+            {currentUser?.permissions?.requireLocationProximity && !isLocationProximityAllowed && (
+              <div style={{ 
+                fontSize: '14px', 
+                fontWeight: '500', 
+                color: 'var(--md-error)',
+                marginTop: '8px',
+                textAlign: 'center',
+                padding: '12px',
+                backgroundColor: 'var(--md-error-container)',
+                borderRadius: '12px',
+                border: '1px solid var(--md-error)'
+              }}>
+                {distanceFromGate ? (
+                  <>
+                    📍 Vzdálenost: {distanceFromGate}m
+                    <br />
+                    <span style={{ fontSize: '12px', color: 'var(--md-on-error-container)' }}>
+                      Přijďte blíž k bráně pro ovládání garáže
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    📍 Ověřuji polohu...
+                    <br />
+                    <span style={{ fontSize: '12px', color: 'var(--md-on-error-container)' }}>
+                      Pro ovládání garáže je nutné být blíž k bráně
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
 
