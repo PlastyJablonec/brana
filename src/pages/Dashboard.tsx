@@ -32,6 +32,7 @@ const Dashboard: React.FC = () => {
     joinQueue,
     leaveQueue,
     updateGateState,
+    cleanupSessions,
     clearError: clearCoordinationError
   } = useGateCoordination();
   const [gateStatus, setGateStatus] = useState('Neznámý stav');
@@ -819,6 +820,19 @@ const Dashboard: React.FC = () => {
       }
     }
   }, [currentUser, leaveQueue]);
+
+  // DEBUGGING: Reset coordination state - temporary function
+  const handleResetCoordination = useCallback(async () => {
+    try {
+      console.log('🔧 DEBUG: Spouštím cleanup coordination sessions...');
+      await cleanupSessions();
+      playSound('success');
+      alert('Koordinační stav byl resetován. Obnovte stránku.');
+    } catch (error) {
+      console.error('❌ Chyba při resetování koordinace:', error);
+      playSound('error');
+    }
+  }, [cleanupSessions]);
 
   // NOVÉ: Global event listeners for slider dragging
   useEffect(() => {
@@ -1823,6 +1837,25 @@ const Dashboard: React.FC = () => {
             onLeaveQueue={handleLeaveQueue}
             className="mb-4"
           />
+        )}
+        
+        {/* DEBUGGING: Temporary Reset Button */}
+        {currentUser?.role === 'admin' && (
+          <button 
+            onClick={handleResetCoordination}
+            className="md-button md-button-outlined md-ripple"
+            style={{ 
+              backgroundColor: 'var(--md-warning-container)', 
+              color: 'var(--md-on-warning-container)',
+              border: '1px solid var(--md-warning)',
+              width: '100%', 
+              marginBottom: '16px',
+              fontSize: '12px',
+              fontWeight: '600'
+            }}
+          >
+            🔧 Reset Koordinace (Debug)
+          </button>
         )}
         
         {/* Logout Button */}
