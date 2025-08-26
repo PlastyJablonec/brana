@@ -32,6 +32,7 @@ export const mockAdminUser: User = {
     stopMode: true,
     viewLogs: true,
     manageUsers: true, // Klíčové admin oprávnění
+    viewGateActivity: true,
     requireLocation: false,
     allowGPS: true,
     requireLocationProximity: false
@@ -57,6 +58,7 @@ export const mockRegularUser: User = {
     stopMode: false,
     viewLogs: true,
     manageUsers: false, // Nemá admin oprávnění
+    viewGateActivity: false,
     requireLocation: true,
     allowGPS: true,
     requireLocationProximity: true
@@ -84,6 +86,7 @@ export const mockPendingUsers: User[] = [
       stopMode: false,
       viewLogs: false,
       manageUsers: false,
+      viewGateActivity: false,
       requireLocation: false,
       allowGPS: false,
       requireLocationProximity: false
@@ -107,6 +110,7 @@ export const mockPendingUsers: User[] = [
       stopMode: false,
       viewLogs: false,
       manageUsers: false,
+      viewGateActivity: false,
       requireLocation: false,
       allowGPS: false,
       requireLocationProximity: false
@@ -131,6 +135,7 @@ export const mockPendingUsers: User[] = [
       stopMode: false,
       viewLogs: false,
       manageUsers: false,
+      viewGateActivity: false,
       requireLocation: false,
       allowGPS: false,
       requireLocationProximity: false
@@ -156,6 +161,7 @@ export const mockRejectedUser: User = {
     stopMode: false,
     viewLogs: false,
     manageUsers: false,
+    viewGateActivity: false,
     requireLocation: false,
     allowGPS: false,
     requireLocationProximity: false
@@ -235,6 +241,7 @@ export const mockFirestoreUsers = {
       stopMode: false,
       viewLogs: false,
       manageUsers: false,
+      viewGateActivity: false,
       requireLocation: false,
       allowGPS: false,
       requireLocationProximity: false

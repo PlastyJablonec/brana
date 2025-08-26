@@ -49,6 +49,11 @@ const Dashboard: React.FC = () => {
   const [distanceFromGate, setDistanceFromGate] = useState<number | null>(null);
   const [isLocationProximityAllowed, setIsLocationProximityAllowed] = useState<boolean>(true);
   const [showMqttDebug, setShowMqttDebug] = useState(false);
+  
+  // NOVÉ: Stav pro potvrzovací slider zavírání brány
+  const [showCloseConfirmSlider, setShowCloseConfirmSlider] = useState(false);
+  const [closeSliderPosition, setCloseSliderPosition] = useState(0);
+  const [isSliderDragging, setIsSliderDragging] = useState(false);
 
   // Connection loading states
   const [showConnectionLoader, setShowConnectionLoader] = useState(true);
@@ -71,6 +76,82 @@ const Dashboard: React.FC = () => {
       return step;
     }));
   };
+
+  // NOVÉ: Mapování MQTT stavů brány na koordinační stavy
+  const mapGateStatusToCoordination = useCallback((mqttStatus: string): 'CLOSED' | 'OPENING' | 'OPEN' | 'CLOSING' | 'STOPPED' | null => {
+    if (mqttStatus.includes('zavřen') || mqttStatus.includes('Zavřena')) return 'CLOSED';
+    if (mqttStatus.includes('otevřen') || mqttStatus.includes('Otevřena')) return 'OPEN';
+    if (mqttStatus.includes('Otevírá se') || mqttStatus.includes('otevírá')) return 'OPENING';
+    if (mqttStatus.includes('Zavírá se') || mqttStatus.includes('zavírá')) return 'CLOSING';
+    if (mqttStatus.includes('STOP režim') || mqttStatus.includes('stop')) return 'STOPPED';
+    return null; // Neznámý stav
+  }, []);
+
+  // NOVÉ: Funkce pro ovládání close confirmation slideru
+  const handleSliderStart = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault();
+    setIsSliderDragging(true);
+  }, []);
+
+  const handleSliderMove = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    if (!isSliderDragging) return;
+    
+    e.preventDefault();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const position = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+    setCloseSliderPosition(position);
+    
+    // Pokud uživatel dotáhne slider na konec (>90%), potvrď zavření
+    if (position > 90) {
+      handleConfirmClose();
+    }
+  }, [isSliderDragging]);
+
+  const handleSliderEnd = useCallback(() => {
+    setIsSliderDragging(false);
+    // Pokud slider není na konci, vrať ho na začátek
+    if (closeSliderPosition < 90) {
+      setCloseSliderPosition(0);
+    }
+  }, [closeSliderPosition]);
+
+  const handleConfirmClose = useCallback(async () => {
+    if (!currentUser) return;
+    
+    setShowCloseConfirmSlider(false);
+    setCloseSliderPosition(0);
+    setIsSliderDragging(false);
+    
+    // Proveď zavření brány
+    try {
+      setLoading(true);
+      playSound('click');
+      
+      const userInfo = getUserIdentifier();
+      
+      await mqttService.publishGateCommand(currentUser.email || '');
+      
+      // Send user ID to Log/Brana/ID topic (like original HTML)
+      const logMessage = `ID: ${userInfo}`;
+      await mqttService.publishMessage('Log/Brana/ID', logMessage);
+      console.log('🚪 Close confirmed via slider - command sent');
+      
+      playSound('success');
+    } catch (error) {
+      console.error('❌ Chyba při zavírání brány přes slider:', error);
+      playSound('error');
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUser]);
+
+  const handleCancelCloseSlider = useCallback(() => {
+    setShowCloseConfirmSlider(false);
+    setCloseSliderPosition(0);
+    setIsSliderDragging(false);
+    playSound('click');
+  }, []);
 
   // Check if all critical steps are completed (hide loader)
   const checkConnectionComplete = async () => {
@@ -385,8 +466,9 @@ const Dashboard: React.FC = () => {
 
   // NOVÉ: Handler pro automatické otevření brány z koordinační služby
   useEffect(() => {
-    const handleAutoOpen = async (event: CustomEvent) => {
-      const { userId, userDisplayName } = event.detail;
+    const handleAutoOpen = async (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { userId, userDisplayName } = customEvent.detail;
       console.log('🚪 AUTO-OPEN: Event přijat pro', userDisplayName);
       
       if (!currentUser?.permissions.gate) {
@@ -413,10 +495,10 @@ const Dashboard: React.FC = () => {
       }
     };
 
-    window.addEventListener('gate-auto-open', handleAutoOpen as EventListener);
+    window.addEventListener('gate-auto-open', handleAutoOpen);
     
     return () => {
-      window.removeEventListener('gate-auto-open', handleAutoOpen as EventListener);
+      window.removeEventListener('gate-auto-open', handleAutoOpen);
     };
   }, [currentUser, mqttConnected, mqttService]);
 
@@ -740,6 +822,47 @@ const Dashboard: React.FC = () => {
     }
   }, [currentUser, leaveQueue]);
 
+  // NOVÉ: Global event listeners for slider dragging
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (isSliderDragging) {
+        handleSliderMove(e as any);
+      }
+    };
+
+    const handleGlobalMouseUp = () => {
+      if (isSliderDragging) {
+        handleSliderEnd();
+      }
+    };
+
+    const handleGlobalTouchMove = (e: TouchEvent) => {
+      if (isSliderDragging) {
+        handleSliderMove(e as any);
+      }
+    };
+
+    const handleGlobalTouchEnd = () => {
+      if (isSliderDragging) {
+        handleSliderEnd();
+      }
+    };
+
+    if (isSliderDragging) {
+      document.addEventListener('mousemove', handleGlobalMouseMove);
+      document.addEventListener('mouseup', handleGlobalMouseUp);
+      document.addEventListener('touchmove', handleGlobalTouchMove);
+      document.addEventListener('touchend', handleGlobalTouchEnd);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+      document.removeEventListener('touchmove', handleGlobalTouchMove);
+      document.removeEventListener('touchend', handleGlobalTouchEnd);
+    };
+  }, [isSliderDragging, handleSliderMove, handleSliderEnd]);
+
   const handleGateControl = async () => {
     // Play click sound
     playSound('click');
@@ -806,13 +929,13 @@ const Dashboard: React.FC = () => {
       // Po získání kontroly pokračuj s MQTT příkazem
     }
 
-    // NOVÉ: Blokování zavření když někdo čeká ve frontě
+    // NOVÉ: Zobrazení slideru pro potvrzení zavření když někdo čeká ve frontě
     if (gateCoordinationStatus.isActive && 
         (gateStatus.includes('otevřen') || gateStatus.includes('Otevřena')) && 
         gateCoordinationStatus.queueLength > 0) {
-      console.log('🚨 DEBUG: Blokuji zavření - někdo čeká ve frontě');
-      playSound('error');
-      alert(`Nelze zavřít bránu! Ve frontě čeká ${gateCoordinationStatus.queueLength} ${gateCoordinationStatus.queueLength === 1 ? 'uživatel' : 'uživatelů'}.`);
+      console.log('🚨 DEBUG: Zobrazuji slider pro potvrzení zavření - někdo čeká ve frontě');
+      playSound('click');
+      setShowCloseConfirmSlider(true);
       return;
     }
 
@@ -1058,15 +1181,7 @@ const Dashboard: React.FC = () => {
     return 'error';
   };
 
-  // NOVÉ: Mapování MQTT stavů brány na koordinační stavy
-  const mapGateStatusToCoordination = (mqttStatus: string): 'CLOSED' | 'OPENING' | 'OPEN' | 'CLOSING' | 'STOPPED' | null => {
-    if (mqttStatus.includes('zavřen') || mqttStatus.includes('Zavřena')) return 'CLOSED';
-    if (mqttStatus.includes('otevřen') || mqttStatus.includes('Otevřena')) return 'OPEN';
-    if (mqttStatus.includes('Otevírá se') || mqttStatus.includes('otevírá')) return 'OPENING';
-    if (mqttStatus.includes('Zavírá se') || mqttStatus.includes('zavírá')) return 'CLOSING';
-    if (mqttStatus.includes('STOP režim') || mqttStatus.includes('stop')) return 'STOPPED';
-    return null; // Neznámý stav
-  };
+  // Duplicitní mapGateStatusToCoordination odstraněna - používám verzi nahoře
 
   // Debug log during each render
   console.log('🔧 Dashboard render - mqttConnected:', mqttConnected, 'gateStatus:', gateStatus, 'garageStatus:', garageStatus);
@@ -1373,6 +1488,125 @@ const Dashboard: React.FC = () => {
             ) : (
               <div style={{ color: 'orange', fontSize: '0.8em', marginTop: '8px' }}>
                 DEBUG: viewGateActivity = {String(currentUser?.permissions.viewGateActivity)} (role: {currentUser?.role})
+              </div>
+            )}
+            
+            {/* NOVÉ: Close Confirmation Slider */}
+            {showCloseConfirmSlider && (
+              <div style={{
+                width: '100%',
+                marginTop: '16px',
+                padding: '16px',
+                background: 'var(--md-error-container)',
+                borderRadius: '12px',
+                border: '2px solid var(--md-error)'
+              }}>
+                <div style={{
+                  textAlign: 'center',
+                  marginBottom: '12px',
+                  color: 'var(--md-on-error-container)',
+                  fontWeight: '600',
+                  fontSize: '14px'
+                }}>
+                  ⚠️ Ve frontě čeká {gateCoordinationStatus.queueLength} {gateCoordinationStatus.queueLength === 1 ? 'uživatel' : 'uživatelů'}
+                  <br />
+                  <span style={{ fontSize: '13px' }}>
+                    Přetáhněte slider pro potvrzení zavření brány
+                  </span>
+                </div>
+                
+                {/* Slider Track */}
+                <div style={{
+                  position: 'relative',
+                  width: '100%',
+                  height: '48px',
+                  background: 'var(--md-surface-variant)',
+                  borderRadius: '24px',
+                  border: '2px solid var(--md-outline)',
+                  marginBottom: '12px',
+                  cursor: isSliderDragging ? 'grabbing' : 'grab',
+                  userSelect: 'none'
+                }}
+                onMouseMove={handleSliderMove}
+                onMouseUp={handleSliderEnd}
+                onMouseLeave={handleSliderEnd}
+                onTouchMove={handleSliderMove}
+                onTouchEnd={handleSliderEnd}
+                >
+                  {/* Slider Progress */}
+                  <div style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    width: `${closeSliderPosition}%`,
+                    height: '100%',
+                    background: closeSliderPosition > 90 ? 'var(--md-success)' : 'var(--md-error)',
+                    borderRadius: '24px',
+                    transition: isSliderDragging ? 'none' : 'all 0.2s ease',
+                    pointerEvents: 'none'
+                  }} />
+                  
+                  {/* Slider Thumb */}
+                  <div style={{
+                    position: 'absolute',
+                    left: `calc(${closeSliderPosition}% - 20px)`,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: '40px',
+                    height: '40px',
+                    background: closeSliderPosition > 90 ? 'var(--md-success)' : 'var(--md-error)',
+                    borderRadius: '50%',
+                    border: '3px solid white',
+                    cursor: isSliderDragging ? 'grabbing' : 'grab',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '18px',
+                    color: 'white',
+                    boxShadow: 'var(--md-elevation-3-shadow)',
+                    transition: isSliderDragging ? 'none' : 'all 0.2s ease',
+                    userSelect: 'none'
+                  }}
+                  onMouseDown={handleSliderStart}
+                  onTouchStart={handleSliderStart}
+                  >
+                    {closeSliderPosition > 90 ? '✓' : '🔒'}
+                  </div>
+                  
+                  {/* Slider Text */}
+                  <div style={{
+                    position: 'absolute',
+                    left: '50%',
+                    top: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    color: 'var(--md-on-surface-variant)',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    pointerEvents: 'none',
+                    opacity: closeSliderPosition > 30 ? 0 : 1,
+                    transition: 'opacity 0.2s ease'
+                  }}>
+                    {closeSliderPosition > 90 ? 'POTVRZENO' : 'Přetáhněte →'}
+                  </div>
+                </div>
+                
+                {/* Cancel Button */}
+                <button
+                  onClick={handleCancelCloseSlider}
+                  className="md-button md-button-outlined md-ripple"
+                  style={{
+                    width: '100%',
+                    height: '36px',
+                    background: 'transparent',
+                    color: 'var(--md-on-error-container)',
+                    border: '1px solid var(--md-on-error-container)',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    fontWeight: '600'
+                  }}
+                >
+                  Zrušit
+                </button>
               </div>
             )}
           </div>
