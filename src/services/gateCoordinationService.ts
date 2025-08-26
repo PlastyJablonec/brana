@@ -126,7 +126,7 @@ class GateCoordinationService {
     }
   }
 
-  // Pokus o aktivaci uživatele (začátek ovládání brány)
+  // NOVÁ LOGIKA: Aktivace jen při skutečném ovládání brány
   async requestGateControl(userId: string, userDisplayName: string, email: string): Promise<'GRANTED' | 'DENIED' | 'QUEUED'> {
     try {
       const currentState = await this.getCurrentState();
@@ -141,7 +141,8 @@ class GateCoordinationService {
         sessionId: this.currentSessionId
       };
 
-      // Pokud nikdo neovládá bránu, udělej aktivního uživatele
+      // NOVÁ LOGIKA: Aktivace JEN když NIKDO aktivně neovládá
+      // (ne když je jen aplikace otevřená)
       if (!currentState.activeUser) {
         const updatedState: GateCoordination = {
           ...currentState,
@@ -150,23 +151,17 @@ class GateCoordinationService {
         };
 
         await this.coordinationDoc.set(updatedState);
-        console.log('🔧 GateCoordinationService: Uživatel', userDisplayName, 'je nyní aktivní');
+        console.log('🔧 GateCoordinationService: Uživatel', userDisplayName, 'začal ovládat bránu');
         return 'GRANTED';
       }
 
-      // Pokud už je někdo aktivní, zkontroluj konflikty
+      // Pokud už někdo aktivně ovládá, ostatní jdou do fronty
       if (currentState.activeUser.userId !== userId) {
-        if (this.onUserConflict) {
-          this.onUserConflict({
-            activeUser: currentState.activeUser,
-            currentUser: userId
-          });
-        }
-        console.log('🔧 GateCoordinationService: Konflikt - aktivní je', currentState.activeUser.userDisplayName);
-        return 'DENIED';
+        console.log('🔧 GateCoordinationService: Uživatel', userDisplayName, 'přidán do fronty - aktivní je', currentState.activeUser.userDisplayName);
+        return 'QUEUED'; // Automaticky se přidá do fronty
       }
 
-      // Stejný uživatel - obnov session
+      // Stejný uživatel - obnov session (už ovládá)
       const updatedState: GateCoordination = {
         ...currentState,
         activeUser: { ...user, sessionId: this.currentSessionId },
@@ -267,32 +262,39 @@ class GateCoordinationService {
     }
   }
 
-  // Aktualizace stavu brány (např. při MQTT změnách)
+  // NOVÁ LOGIKA: Aktualizace stavu brány s automatickým otevřením
   async updateGateState(newState: 'CLOSED' | 'OPENING' | 'OPEN' | 'CLOSING' | 'STOPPED'): Promise<void> {
     try {
       const currentState = await this.getCurrentState();
       if (!currentState) return;
 
-      // Automatické otevření při zavření brány
+      // NOVÉ: Automatické otevření při "CLOSING" (Zavírá se...) pokud někdo čeká
+      if (newState === 'CLOSING' && currentState.reservationQueue.length > 0) {
+        console.log('🚪 AUTO-OPEN: Brána se zavírá ale někdo čeká - triggering auto open');
+        
+        // Trigger callback pro automatické otevření
+        if (this.onAutoOpenTrigger) {
+          const nextUser = currentState.reservationQueue[0];
+          this.onAutoOpenTrigger(nextUser.userId);
+        }
+      }
+
+      // Automatické předání kontroly při zavření brány
       if (newState === 'CLOSED' && currentState.gateState !== 'CLOSED' && currentState.reservationQueue.length > 0) {
         const nextUser = currentState.reservationQueue[0];
         
         const updatedState: GateCoordination = {
           ...currentState,
           gateState: newState,
-          activeUser: nextUser,
-          reservationQueue: currentState.reservationQueue.slice(1),
-          autoOpeningUserId: nextUser.userId,
+          activeUser: nextUser, // Předej kontrolu dalšímu uživateli
+          reservationQueue: currentState.reservationQueue.slice(1), // Odeber z fronty
           lastActivity: Date.now()
         };
         
         await this.coordinationDoc.set(updatedState);
-        
-        // Trigger auto-opening callback
-        if (this.onAutoOpenTrigger) {
-          this.onAutoOpenTrigger(nextUser.userId);
-        }
+        console.log('🔄 HANDOVER: Kontrola předána uživateli', nextUser.userDisplayName);
       } else {
+        // Jen aktualizuj stav bez změny kontroly
         const updatedState: GateCoordination = {
           ...currentState,
           gateState: newState,
@@ -316,9 +318,20 @@ class GateCoordinationService {
     return queueIndex >= 0 ? queueIndex + 1 : -1;
   }
 
-  // Kontrola, zda je uživatel blokován
+  // NOVÁ LOGIKA: Uživatel je blokován jen když někdo AKTIVNĚ ovládá bránu
   isUserBlocked(userId: string, state: GateCoordination): boolean {
+    // Blokován jen pokud:
+    // 1. Někdo je aktivní (activeUser existuje)  
+    // 2. A není to tento uživatel
     return state.activeUser !== null && state.activeUser.userId !== userId;
+  }
+  
+  // Nová helper metoda: Může uživatel začít ovládat?
+  canUserStartControl(userId: string, state: GateCoordination): boolean {
+    // Může začít ovládat když:
+    // 1. Nikdo není aktivní NEBO
+    // 2. On už je aktivní
+    return state.activeUser === null || state.activeUser.userId === userId;
   }
 
   // Získání waiting time textu

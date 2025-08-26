@@ -7,10 +7,12 @@ export interface GateCoordinationStatus {
   isInQueue: boolean;         // Je uživatel v rezervační frontě
   position: number;           // Pozice ve frontě (0 = aktivní, -1 = není zaregistrovaný)
   canControl: boolean;        // Může uživatel ovládat bránu
+  canStartControl: boolean;   // NOVÉ: Může začít ovládat (když nikdo není aktivní)
   isBlocked: boolean;         // Jsou tlačítka zablokována kvůli jinému uživateli
   activeUser: string | null;  // Kdo právě ovládá bránu (displayName)
   queueLength: number;        // Počet čekajících v queue
   waitingTimeText: string;    // Text pro UI ("Aktivní", "Další na řadě", "3. v pořadí")
+  connectedUsers: number;     // NOVÉ: Počet připojených uživatelů (informační)
 }
 
 export function useGateCoordination() {
@@ -65,8 +67,11 @@ export function useGateCoordination() {
 
     const handleAutoOpenTrigger = (userId: string) => {
       if (currentUser?.id === userId) {
-        console.log('🔧 useGateCoordination: Automatické otevření pro uživatele', currentUser.displayName);
-        // Toto bude triggernout MQTT příkaz v Dashboard komponentě
+        console.log('🚪 AUTO-OPEN: Automatické otevření spuštěno pro', currentUser.displayName);
+        // Spustit custom event pro Dashboard komponentu
+        window.dispatchEvent(new CustomEvent('gate-auto-open', { 
+          detail: { userId, userDisplayName: currentUser.displayName }
+        }));
       }
     };
 
@@ -91,10 +96,12 @@ export function useGateCoordination() {
         isInQueue: false,
         position: -1,
         canControl: false,
+        canStartControl: false,
         isBlocked: false,
         activeUser: null,
         queueLength: 0,
-        waitingTimeText: 'Nepřipojeno'
+        waitingTimeText: 'Nepřipojeno',
+        connectedUsers: 0
       };
     }
 
@@ -103,11 +110,19 @@ export function useGateCoordination() {
     const isBlocked = gateCoordinationService.isUserBlocked(userId, coordinationState);
     const waitingTimeText = gateCoordinationService.getWaitingTime(position);
     
+    // NOVÉ: Může uživatel začít ovládat? (když nikdo aktivně neovládá)
+    const canStartControl = gateCoordinationService.canUserStartControl(userId, coordinationState);
+    
+    // NOVÉ: Počet připojených uživatelů (aktivní + ve frontě)
+    const connectedUsers = (coordinationState.activeUser ? 1 : 0) + coordinationState.reservationQueue.length;
+    
     console.log('🚨 DEBUG useGateCoordination STATUS:', {
       currentUserId: userId,
       currentUserEmail: currentUser.email,
       position,
       isBlocked,
+      canStartControl,
+      connectedUsers,
       activeUserId: coordinationState.activeUser?.userId,
       activeUserEmail: coordinationState.activeUser?.email
     });
@@ -117,10 +132,12 @@ export function useGateCoordination() {
       isInQueue: position > 0,
       position,
       canControl: position === 0,
+      canStartControl,
       isBlocked,
       activeUser: coordinationState.activeUser?.userDisplayName || null,
       queueLength: coordinationState.reservationQueue.length,
-      waitingTimeText
+      waitingTimeText,
+      connectedUsers
     };
   }, [coordinationState, currentUser]);
 

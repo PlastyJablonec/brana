@@ -322,6 +322,15 @@ const Dashboard: React.FC = () => {
       setGarageStatus(status.garageStatus); 
       setMqttConnected(status.isConnected);
 
+      // NOVÉ: Aktualizuj stav brány v koordinační službě pro automatické otevření
+      if (status.gateStatus !== prevGateStatus) {
+        const coordinationState = mapGateStatusToCoordination(status.gateStatus);
+        if (coordinationState) {
+          console.log('🚨 DEBUG: Aktualizuji gate state pro koordinaci:', coordinationState);
+          updateGateState(coordinationState);
+        }
+      }
+
       // Update connection steps
       if (status.isConnected) {
         updateConnectionStep(1, 'success', 'Připojeno');
@@ -336,25 +345,7 @@ const Dashboard: React.FC = () => {
       const isClosed = status.gateStatus.includes('zavřen') || status.gateStatus.includes('Zavřena');
       const isStopMode = status.gateStatus.includes('STOP režim') || status.gateStatus === 'STOP režim';
       
-      // NOVÉ: Aktualizace stavu brány v koordinaci uživatelů
-      let coordinationGateState: 'CLOSED' | 'OPENING' | 'OPEN' | 'CLOSING' | 'STOPPED' = 'CLOSED';
-      if (isMoving) {
-        if (prevGateStatus.includes('zavřen') || prevGateStatus.includes('Zavřena')) {
-          coordinationGateState = 'OPENING';
-        } else {
-          coordinationGateState = 'CLOSING';
-        }
-      } else if (isOpen) {
-        coordinationGateState = 'OPEN';
-      } else if (isClosed) {
-        coordinationGateState = 'CLOSED';
-      } else if (status.gateStatus.includes('STOP')) {
-        coordinationGateState = 'STOPPED';
-      }
-      
-      // Aktualizuj stav v koordinační službě
-      updateGateState(coordinationGateState);
-      console.log('🔧 Dashboard: Gate coordination state updated to:', coordinationGateState);
+      // Duplicitní mapping logic odstraněna - používá se mapGateStatusToCoordination výše
       
       if (isMoving) {
         // Spustí travel timer pouze pokud ještě neběží
@@ -391,6 +382,43 @@ const Dashboard: React.FC = () => {
       // Connection is managed globally in App.tsx - don't disconnect here!
     };
   }, []);
+
+  // NOVÉ: Handler pro automatické otevření brány z koordinační služby
+  useEffect(() => {
+    const handleAutoOpen = async (event: CustomEvent) => {
+      const { userId, userDisplayName } = event.detail;
+      console.log('🚪 AUTO-OPEN: Event přijat pro', userDisplayName);
+      
+      if (!currentUser?.permissions.gate) {
+        console.warn('🚪 AUTO-OPEN: Uživatel nemá oprávnění pro ovládání brány');
+        return;
+      }
+
+      if (!mqttConnected) {
+        console.warn('🚪 AUTO-OPEN: MQTT není připojen');
+        return;
+      }
+
+      try {
+        console.log('🚪 AUTO-OPEN: Odesílám MQTT příkaz...');
+        await mqttService.publishGateCommand(currentUser.email || '');
+        
+        // Send user ID to Log/Brana/ID topic
+        const logMessage = `ID: ${getUserIdentifier()}`;
+        await mqttService.publishMessage('Log/Brana/ID', logMessage);
+        console.log('🚪 AUTO-OPEN: Příkaz odeslán úspěšně');
+        
+      } catch (error) {
+        console.error('🚪 AUTO-OPEN: Chyba při odesílání MQTT příkazu:', error);
+      }
+    };
+
+    window.addEventListener('gate-auto-open', handleAutoOpen as EventListener);
+    
+    return () => {
+      window.removeEventListener('gate-auto-open', handleAutoOpen as EventListener);
+    };
+  }, [currentUser, mqttConnected, mqttService]);
 
   // GPS permission request - only if required by user permissions
   useEffect(() => {
@@ -700,6 +728,18 @@ const Dashboard: React.FC = () => {
     }
   }, [garageStatus]);
 
+  // Handler pro opuštění fronty z ReservationQueue komponenty
+  const handleLeaveQueue = useCallback(async () => {
+    if (currentUser) {
+      try {
+        await leaveQueue();
+        console.log('🚨 DEBUG: Uživatel opustil frontu přes ReservationQueue');
+      } catch (error) {
+        console.error('🚨 ERROR: Chyba při opouštění fronty:', error);
+      }
+    }
+  }, [currentUser, leaveQueue]);
+
   const handleGateControl = async () => {
     // Play click sound
     playSound('click');
@@ -729,39 +769,54 @@ const Dashboard: React.FC = () => {
     console.log('🚨 DEBUG: isInQueue:', gateCoordinationStatus.isInQueue);
     console.log('🚨 DEBUG: isActive:', gateCoordinationStatus.isActive);
 
-    // NOVÉ: Inteligentní koordinace - tlačítko reaguje na stav uživatele
+    // NOVÉ WORKFLOW: Inteligentní koordinace podle specifikace uživatele
+    
+    // Pokud někdo aktivně ovládá a já nejsem ve frontě → zařadit do fronty
     if (gateCoordinationStatus.isBlocked && !gateCoordinationStatus.isInQueue) {
-      // Uživatel je blokován → zařadí se do fronty
-      console.log('🚨 DEBUG: Uživatel je blokován, zařazuji do fronty...');
+      console.log('🚨 DEBUG: Někdo aktivně ovládá, zařazuji se do fronty...');
       playSound('click');
       const success = await joinQueue();
       if (success) {
         playSound('success');
+        alert(`Zařazeni do fronty. Aktivní uživatel: ${gateCoordinationStatus.activeUser}`);
       } else {
         playSound('error');
       }
       return;
     }
 
+    // Pokud jsem ve frontě → opustit frontu
     if (gateCoordinationStatus.isInQueue) {
-      // Uživatel je ve frontě → opustí frontu
-      console.log('🚨 DEBUG: Uživatel je ve frontě, opouštím...');
+      console.log('🚨 DEBUG: Opouštím frontu...');
       playSound('click');
       await leaveQueue();
       playSound('success');
       return;
     }
 
-    // NOVÉ: Pokud není aktivní, zkus získat kontrolu
-    if (!gateCoordinationStatus.isActive) {
-      console.log('🚨 DEBUG: Uživatel není aktivní, žádám o kontrolu...');
+    // NOVÉ: Pokud nikdo aktivně neovládá, můžu začít ovládat (bez blokování)
+    if (!gateCoordinationStatus.isActive && gateCoordinationStatus.canStartControl) {
+      console.log('🚨 DEBUG: Nikdo aktivně neovládá, začínám ovládat...');
       const controlGranted = await requestControl();
       if (!controlGranted) {
         playSound('error');
-        return; // Chyba už byla zobrazena v requestControl
+        // Pokud se nepodařilo získat kontrolu, možná mezitím někdo jiný začal
+        return;
       }
+      // Po získání kontroly pokračuj s MQTT příkazem
     }
 
+    // NOVÉ: Blokování zavření když někdo čeká ve frontě
+    if (gateCoordinationStatus.isActive && 
+        (gateStatus.includes('otevřen') || gateStatus.includes('Otevřena')) && 
+        gateCoordinationStatus.queueLength > 0) {
+      console.log('🚨 DEBUG: Blokuji zavření - někdo čeká ve frontě');
+      playSound('error');
+      alert(`Nelze zavřít bránu! Ve frontě čeká ${gateCoordinationStatus.queueLength} ${gateCoordinationStatus.queueLength === 1 ? 'uživatel' : 'uživatelů'}.`);
+      return;
+    }
+
+    // Pokud už jsem aktivní, pokračuj normálně s MQTT příkazem
     console.log('🚨 DEBUG: Pokračuji s normálním MQTT příkazem...');
 
     setLoading(true);
@@ -1003,31 +1058,14 @@ const Dashboard: React.FC = () => {
     return 'error';
   };
 
-  // NOVÉ: Handler funkce pro koordinaci uživatelů
-  const handleJoinQueue = async () => {
-    playSound('click');
-    const success = await joinQueue();
-    if (success) {
-      playSound('success');
-    } else {
-      playSound('error');
-    }
-  };
-
-  const handleLeaveQueue = async () => {
-    playSound('click');
-    await leaveQueue();
-    playSound('success');
-  };
-
-  const handleRequestControl = async () => {
-    playSound('click');
-    const success = await requestControl();
-    if (success) {
-      playSound('success');
-    } else {
-      playSound('error');
-    }
+  // NOVÉ: Mapování MQTT stavů brány na koordinační stavy
+  const mapGateStatusToCoordination = (mqttStatus: string): 'CLOSED' | 'OPENING' | 'OPEN' | 'CLOSING' | 'STOPPED' | null => {
+    if (mqttStatus.includes('zavřen') || mqttStatus.includes('Zavřena')) return 'CLOSED';
+    if (mqttStatus.includes('otevřen') || mqttStatus.includes('Otevřena')) return 'OPEN';
+    if (mqttStatus.includes('Otevírá se') || mqttStatus.includes('otevírá')) return 'OPENING';
+    if (mqttStatus.includes('Zavírá se') || mqttStatus.includes('zavírá')) return 'CLOSING';
+    if (mqttStatus.includes('STOP režim') || mqttStatus.includes('stop')) return 'STOPPED';
+    return null; // Neznámý stav
   };
 
   // Debug log during each render
@@ -1131,7 +1169,22 @@ const Dashboard: React.FC = () => {
         {/* Gate Control - Material Design FAB */}
         {currentUser?.permissions.gate && (
           <div className="md-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', minWidth: '280px' }}>
-            <h3 className="md-card-title" style={{ fontSize: '1rem', textAlign: 'center', margin: 0 }}>Brána</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <h3 className="md-card-title" style={{ fontSize: '1rem', textAlign: 'center', margin: 0 }}>Brána</h3>
+              {/* NOVÉ: Informační lišta o připojených uživatelích */}
+              {gateCoordinationStatus.connectedUsers > 1 && (
+                <div style={{
+                  background: 'var(--md-tertiary-container)',
+                  color: 'var(--md-on-tertiary-container)',
+                  padding: '4px 8px',
+                  borderRadius: '12px',
+                  fontSize: '0.75rem',
+                  fontWeight: '600'
+                }}>
+                  👥 {gateCoordinationStatus.connectedUsers} uživatelů
+                </div>
+              )}
+            </div>
             
             <button
               onClick={handleGateControl}
@@ -1193,17 +1246,22 @@ const Dashboard: React.FC = () => {
               <div style={{ textAlign: 'center', lineHeight: '1.3' }}>
                 <div style={{ fontSize: '20px', fontWeight: '700', marginBottom: '4px' }}>
                   {(() => {
-                    // Inteligentní text podle koordinačního stavu
+                    // NOVÝ WORKFLOW: Text podle specifikace uživatele
                     if (gateCoordinationStatus.isBlocked && !gateCoordinationStatus.isInQueue) {
                       return '📋 Zařadit do fronty';
                     }
                     if (gateCoordinationStatus.isInQueue) {
-                      return `${gateCoordinationStatus.waitingTimeText}`;
+                      return `🚪 ${gateCoordinationStatus.waitingTimeText}`;
                     }
-                    if (!gateCoordinationStatus.isActive && !gateCoordinationStatus.isBlocked) {
-                      return '🎮 Převzít ovládání';
+                    if (!gateCoordinationStatus.isActive && gateCoordinationStatus.canStartControl) {
+                      // Můžu začít ovládat - zobraz aktuální stav brány
+                      return gateStatus;
                     }
-                    // Aktivní uživatel - normální stav brány
+                    if (gateCoordinationStatus.isActive) {
+                      // Už jsem aktivní - zobraz normální stav brány
+                      return gateStatus;
+                    }
+                    // Fallback
                     return gateStatus;
                   })()}
                 </div>
