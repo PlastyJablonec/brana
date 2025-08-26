@@ -1035,6 +1035,18 @@ const Dashboard: React.FC = () => {
     console.log('🎉 Dashboard: Gate command completed successfully');
     playSound('success');
     setLoading(false);
+    
+    // Step 4: Auto-release control after successful gate operation
+    // This prevents users from staying as activeUser indefinitely
+    try {
+      console.log('🔄 Dashboard: Auto-releasing gate control after operation...');
+      setTimeout(async () => {
+        await releaseControl();
+        console.log('✅ Dashboard: Control auto-released successfully');
+      }, 2000); // Wait 2s to ensure operation completes
+    } catch (releaseError) {
+      console.warn('⚠️ Dashboard: Auto-release failed (non-critical):', releaseError);
+    }
   };
 
   const handleGarageControl = async () => {
