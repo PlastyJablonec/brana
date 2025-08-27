@@ -345,17 +345,17 @@ class GateCoordinationService {
   // Vyčištění neaktivních sessionů (parametr minutes)
   async cleanupInactiveSessions(minutes: number): Promise<void> {
     const timeoutMs = minutes * 60 * 1000;
-    return this.cleanupStaleData(); // Využije existující logiku s timeout
+    return this.cleanupStaleData(timeoutMs); // OPRAVA: Předej parametr
   }
 
   // Vyčištění starých sessionů (cron job)
-  async cleanupStaleData(): Promise<void> {
+  async cleanupStaleData(timeoutMs?: number): Promise<void> {
     try {
       const currentState = await this.getCurrentState();
       if (!currentState) return;
 
       const now = Date.now();
-      const TIMEOUT_MS = 5 * 60 * 1000; // 5 minut timeout
+      const TIMEOUT_MS = timeoutMs || (5 * 60 * 1000); // OPRAVA: Použij parametr nebo default 5 min
       let hasChanges = false;
 
       // Vyčisti starého aktivního uživatele
