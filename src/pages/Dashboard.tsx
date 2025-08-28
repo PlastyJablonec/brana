@@ -1034,7 +1034,7 @@ const Dashboard: React.FC = () => {
         await new Promise(resolve => setTimeout(resolve, 100));
         
         // Znovu načti aktuální stav z hooku (možná se mezitím aktualizoval)
-        const freshStatus = status;
+        const freshStatus = gateCoordinationStatus;
         
         if (freshStatus.isActive) {
           console.log('✅ DEBUG: Potvrzeno - jsem aktivní uživatel, pokračuji s MQTT');
@@ -1050,7 +1050,7 @@ const Dashboard: React.FC = () => {
       }
       
       // Finální check - pokud stále nejsem aktivní, něco se pokazilo
-      const finalStatus = status;
+      const finalStatus = gateCoordinationStatus;
       if (!finalStatus.isActive) {
         console.log('❌ DEBUG: Timeout - nepodařilo se získat aktivní stav, končím');
         playSound('error');

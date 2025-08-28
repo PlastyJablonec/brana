@@ -1,5 +1,5 @@
 {
-  "version": "2.15.1",
-  "buildTime": "2025-08-28T16:30:15.234Z",
-  "commit": "fixed-race-condition-coordination"
+  "version": "2.15.0",
+  "buildTime": "2025-08-28T17:25:42.867Z",
+  "commit": "be10c098b3eaa01e4e72d0e7bb5f6faea1b62290"
 }

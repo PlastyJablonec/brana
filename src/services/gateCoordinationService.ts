@@ -143,7 +143,7 @@ class GateCoordinationService {
 
       // KRITICKÁ OPRAVA: Atomická transakce pro race condition ochranu
       // Použijeme Firebase Transaction pro garantovanou atomicitu
-      const transactionResult = await this.db.runTransaction(async (transaction) => {
+      const transactionResult = await db.runTransaction(async (transaction: any) => {
         const freshDoc = await transaction.get(this.coordinationDoc);
         const freshState = freshDoc.exists ? freshDoc.data() as GateCoordination : null;
         
