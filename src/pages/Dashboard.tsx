@@ -1022,41 +1022,8 @@ const Dashboard: React.FC = () => {
         return;
       }
       
-      // KRITICKÁ OPRAVA: Čekat na Firebase real-time update potvrzení
-      console.log('🚨 DEBUG: Čekám na potvrzení aktivního stavu...');
-      
-      // Čekat až 3 sekundy na potvrzení že jsem skutečně aktivní
-      const startTime = Date.now();
-      const maxWait = 3000; // 3 sekundy max
-      
-      while (Date.now() - startTime < maxWait) {
-        // Počkat na další render cyklus
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Znovu načti aktuální stav z hooku (možná se mezitím aktualizoval)
-        const freshStatus = gateCoordinationStatus;
-        
-        if (freshStatus.isActive) {
-          console.log('✅ DEBUG: Potvrzeno - jsem aktivní uživatel, pokračuji s MQTT');
-          break;
-        }
-        
-        if (freshStatus.isBlocked) {
-          console.log('❌ DEBUG: Mezitím mě někdo předběhl, končím');
-          playSound('error');
-          setLoading(false);
-          return;
-        }
-      }
-      
-      // Finální check - pokud stále nejsem aktivní, něco se pokazilo
-      const finalStatus = gateCoordinationStatus;
-      if (!finalStatus.isActive) {
-        console.log('❌ DEBUG: Timeout - nepodařilo se získat aktivní stav, končím');
-        playSound('error');
-        setLoading(false);
-        return;
-      }
+      // ZJEDNODUŠENÁ OPRAVA: Firebase Transaction už garantuje atomicitu
+      console.log('✅ DEBUG: requestControl() úspěšný, Firebase Transaction garantuje že jsem aktivní');
     }
 
     // Ověření že jsem aktivní před MQTT příkazem
@@ -1548,6 +1515,15 @@ const Dashboard: React.FC = () => {
               <div style={{ textAlign: 'center', lineHeight: '1.3' }}>
                 <div style={{ fontSize: '20px', fontWeight: '700', marginBottom: '4px' }}>
                   {(() => {
+                    // DEBUG: Log coordination status pro debugging UI
+                    console.log('🚨 DEBUG UI STATUS:', {
+                      isBlocked: gateCoordinationStatus.isBlocked,
+                      isInQueue: gateCoordinationStatus.isInQueue,
+                      isActive: gateCoordinationStatus.isActive,
+                      canStartControl: gateCoordinationStatus.canStartControl,
+                      activeUser: gateCoordinationStatus.activeUser
+                    });
+                    
                     // NOVÝ WORKFLOW: Text podle specifikace uživatele
                     if (gateCoordinationStatus.isBlocked && !gateCoordinationStatus.isInQueue) {
                       return '📋 Zařadit do fronty';
