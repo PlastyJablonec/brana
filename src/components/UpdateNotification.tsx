@@ -50,11 +50,7 @@ const UpdateNotification: React.FC = () => {
       } else {
         // Zobraz krátkou info že není update
         setIsVisible(true);
-        setUpdateInfo({
-          hasUpdate: false,
-          currentVersion: result.currentVersion,
-          latestVersion: result.latestVersion
-        });
+        setUpdateInfo({ hasUpdate: false });
         
         // Hide po 3 sekundách
         setTimeout(() => {
@@ -129,24 +125,15 @@ const UpdateNotification: React.FC = () => {
                 Je dostupná nová verze aplikace s nejnovějšími funkcemi a opravami.
               </p>
               
-              {updateInfo.currentVersion && updateInfo.latestVersion && (
-                <div style={{ 
-                  backgroundColor: 'var(--md-surface-container-low)',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  fontSize: '0.8125rem',
-                  color: 'var(--md-on-surface-variant)'
-                }}>
-                  <div style={{ marginBottom: '4px' }}>
-                    <strong>Aktuální:</strong> {updateService.formatCommitHash(updateInfo.currentVersion.commit)} 
-                    {' '}({updateService.formatBuildTime(updateInfo.currentVersion.buildTime)})
-                  </div>
-                  <div>
-                    <strong>Nová:</strong> {updateService.formatCommitHash(updateInfo.latestVersion.commit)}
-                    {' '}({updateService.formatBuildTime(updateInfo.latestVersion.buildTime)})
-                  </div>
-                </div>
-              )}
+              <div style={{ 
+                backgroundColor: 'var(--md-surface-container-low)',
+                padding: '12px',
+                borderRadius: '8px',
+                fontSize: '0.8125rem',
+                color: 'var(--md-on-surface-variant)'
+              }}>
+                <div>Service Worker detekoval novou verzi aplikace.</div>
+              </div>
             </div>
           ) : (
             <p style={{ 

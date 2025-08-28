@@ -182,10 +182,9 @@ const Dashboard: React.FC = () => {
           console.log('🎉 Update available, prompting user...');
           updateConnectionStep(2, 'error', 'Nová verze k dispozici');
           
-          // Trigger update notification
+          // Update notification se triggernuje automaticky přes Service Worker
           setTimeout(() => {
             setShowConnectionLoader(false);
-            updateService.triggerUpdateNotification(updateResult);
           }, 1000);
           return;
         } else {
@@ -712,6 +711,21 @@ const Dashboard: React.FC = () => {
   }, [currentUser]);
 
   // Auto-cleanup: Release control when user closes app or goes offline
+  // IMMEDIATE CLEANUP on mount for debugging
+  useEffect(() => {
+    const immediateCleanup = async () => {
+      try {
+        console.log('🧹 Dashboard: Running immediate coordination cleanup on mount...');
+        await cleanupSessions();
+        console.log('✅ Dashboard: Immediate cleanup completed');
+      } catch (error) {
+        console.warn('⚠️ Dashboard: Immediate cleanup failed:', error);
+      }
+    };
+    
+    immediateCleanup();
+  }, []); // Run once on mount
+
   useEffect(() => {
     const handleBeforeUnload = () => {
       console.log('🔄 Dashboard: App closing - releasing gate control...');
