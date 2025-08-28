@@ -1012,7 +1012,7 @@ const Dashboard: React.FC = () => {
       return;
     }
 
-    // NOVÉ: Pokud nikdo aktivně neovládá, můžu začít ovládat (bez blokování)
+    // NOVÉ: Pokud nikdo aktivně neovládá, můžu začít ovládat (OPRAVENO: čekat na potvrzení)
     if (!gateCoordinationStatus.isActive && gateCoordinationStatus.canStartControl) {
       console.log('🚨 DEBUG: Nikdo aktivně neovládá, začínám ovládat...');
       const controlGranted = await requestControl();
@@ -1021,7 +1021,50 @@ const Dashboard: React.FC = () => {
         // Pokud se nepodařilo získat kontrolu, možná mezitím někdo jiný začal
         return;
       }
-      // Po získání kontroly pokračuj s MQTT příkazem
+      
+      // KRITICKÁ OPRAVA: Čekat na Firebase real-time update potvrzení
+      console.log('🚨 DEBUG: Čekám na potvrzení aktivního stavu...');
+      
+      // Čekat až 3 sekundy na potvrzení že jsem skutečně aktivní
+      const startTime = Date.now();
+      const maxWait = 3000; // 3 sekundy max
+      
+      while (Date.now() - startTime < maxWait) {
+        // Počkat na další render cyklus
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Znovu načti aktuální stav z hooku (možná se mezitím aktualizoval)
+        const freshStatus = status;
+        
+        if (freshStatus.isActive) {
+          console.log('✅ DEBUG: Potvrzeno - jsem aktivní uživatel, pokračuji s MQTT');
+          break;
+        }
+        
+        if (freshStatus.isBlocked) {
+          console.log('❌ DEBUG: Mezitím mě někdo předběhl, končím');
+          playSound('error');
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // Finální check - pokud stále nejsem aktivní, něco se pokazilo
+      const finalStatus = status;
+      if (!finalStatus.isActive) {
+        console.log('❌ DEBUG: Timeout - nepodařilo se získat aktivní stav, končím');
+        playSound('error');
+        setLoading(false);
+        return;
+      }
+    }
+
+    // Ověření že jsem aktivní před MQTT příkazem
+    if (!gateCoordinationStatus.isActive) {
+      console.log('❌ DEBUG: Nejsem aktivní uživatel, nemohu poslat MQTT příkaz');
+      playSound('error');
+      setLoading(false);
+      return;
     }
 
     // NOVÉ: Zobrazení slideru pro potvrzení zavření když někdo čeká ve frontě
@@ -1035,7 +1078,7 @@ const Dashboard: React.FC = () => {
     }
 
     // Pokud už jsem aktivní, pokračuj normálně s MQTT příkazem
-    console.log('🚨 DEBUG: Pokračuji s normálním MQTT příkazem...');
+    console.log('✅ DEBUG: Potvrzeno aktivní stav, pokračuji s MQTT příkazem...');
 
     setLoading(true);
     let mqttCommandSucceeded = false;

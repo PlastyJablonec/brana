@@ -141,34 +141,69 @@ class GateCoordinationService {
         sessionId: this.currentSessionId
       };
 
-      // NOVÁ LOGIKA: Aktivace JEN když NIKDO aktivně neovládá
-      // (ne když je jen aplikace otevřená)
-      if (!currentState.activeUser) {
-        const updatedState: GateCoordination = {
-          ...currentState,
-          activeUser: user,
-          lastActivity: Date.now()
-        };
+      // KRITICKÁ OPRAVA: Atomická transakce pro race condition ochranu
+      // Použijeme Firebase Transaction pro garantovanou atomicitu
+      const transactionResult = await this.db.runTransaction(async (transaction) => {
+        const freshDoc = await transaction.get(this.coordinationDoc);
+        const freshState = freshDoc.exists ? freshDoc.data() as GateCoordination : null;
+        
+        if (!freshState) {
+          throw new Error('Coordination document not found');
+        }
 
-        await this.coordinationDoc.set(updatedState);
-        console.log('🔧 GateCoordinationService: Uživatel', userDisplayName, 'začal ovládat bránu');
+        // ATOMICKÁ KONTROLA: Je stále nikdo aktivní?
+        if (!freshState.activeUser) {
+          // ✅ Atomicky nastav activeUser na tohoto uživatele
+          const updatedState: GateCoordination = {
+            ...freshState,
+            activeUser: user,
+            lastActivity: Date.now()
+          };
+          
+          transaction.set(this.coordinationDoc, updatedState);
+          return 'GRANTED'; // Úspěch - tento uživatel získal kontrolu
+        } else {
+          // ❌ Mezitím někdo jiný získal kontrolu
+          return 'DENIED_RACE_CONDITION';
+        }
+      });
+
+      if (transactionResult === 'GRANTED') {
+        console.log('🔧 GateCoordinationService: Uživatel', userDisplayName, 'začal ovládat bránu (atomicky)');
         return 'GRANTED';
       }
+      
+      // Pokud atomická transakce selhala (někdo jiný získal kontrolu), 
+      // načti nový stav a zařaď tohoto uživatele do fronty
+      console.log('🔧 GateCoordinationService: Race condition - načítám nový stav pro frontu');
+      
+      const freshState = await this.getCurrentState();
+      if (!freshState) {
+        return 'DENIED';
+      }
 
-      // Pokud už někdo aktivně ovládá, ostatní jdou do fronty
-      if (currentState.activeUser.userId !== userId) {
-        console.log('🔧 GateCoordinationService: Uživatel', userDisplayName, 'přidán do fronty - aktivní je', currentState.activeUser.userDisplayName);
-        return 'QUEUED'; // Automaticky se přidá do fronty
+      // Pokud už někdo aktivně ovládá a není to tento uživatel, jdi do fronty  
+      if (freshState.activeUser && freshState.activeUser.userId !== userId) {
+        console.log('🔧 GateCoordinationService: Uživatel', userDisplayName, 'přidán do fronty - aktivní je', freshState.activeUser.userDisplayName);
+        
+        // Přidej do fronty pomocí addReservation
+        const queueSuccess = await this.addReservation(userId, userDisplayName, email);
+        return queueSuccess ? 'QUEUED' : 'DENIED';
       }
 
       // Stejný uživatel - obnov session (už ovládá)
-      const updatedState: GateCoordination = {
-        ...currentState,
-        activeUser: { ...user, sessionId: this.currentSessionId },
-        lastActivity: Date.now()
-      };
-      await this.coordinationDoc.set(updatedState);
-      return 'GRANTED';
+      if (freshState.activeUser && freshState.activeUser.userId === userId) {
+        const updatedState: GateCoordination = {
+          ...freshState,
+          activeUser: { ...user, sessionId: this.currentSessionId },
+          lastActivity: Date.now()
+        };
+        await this.coordinationDoc.set(updatedState);
+        return 'GRANTED';
+      }
+
+      // Fallback
+      return 'DENIED';
 
     } catch (error) {
       console.error('🔧 GateCoordinationService: Chyba při žádosti o ovládání:', error);
