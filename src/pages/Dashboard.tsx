@@ -1035,7 +1035,7 @@ const Dashboard: React.FC = () => {
         waitCount++;
         
         // Načíst fresh status přímo z service (ne z React state)
-        const freshCoordStatus = status;
+        const freshCoordStatus = gateCoordinationStatus;
         
         if (freshCoordStatus.isActive) {
           console.log('✅ DEBUG: Firebase callback dorazil - jsem aktivní, pokračuji s MQTT');
@@ -1051,7 +1051,7 @@ const Dashboard: React.FC = () => {
       }
       
       // Finální kontrola po čekání
-      const finalStatus = status;
+      const finalStatus = gateCoordinationStatus;
       if (!finalStatus.isActive) {
         console.log('❌ DEBUG: Timeout na Firebase callback - nejsem aktivní, končím');
         playSound('error');
@@ -1061,7 +1061,7 @@ const Dashboard: React.FC = () => {
     }
 
     // Finální ověření před MQTT (pro jistotu)
-    if (!gateCoordinationStatus.isActive && !status.isActive) {
+    if (!gateCoordinationStatus.isActive) {
       console.log('❌ DEBUG: Dvojitá kontrola - stále nejsem aktivní, končím');
       playSound('error');
       setLoading(false);
