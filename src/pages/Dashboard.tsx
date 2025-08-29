@@ -1515,15 +1515,6 @@ const Dashboard: React.FC = () => {
               <div style={{ textAlign: 'center', lineHeight: '1.3' }}>
                 <div style={{ fontSize: '20px', fontWeight: '700', marginBottom: '4px' }}>
                   {(() => {
-                    // DEBUG: Log coordination status pro debugging UI
-                    console.log('🚨 DEBUG UI STATUS:', {
-                      isBlocked: gateCoordinationStatus.isBlocked,
-                      isInQueue: gateCoordinationStatus.isInQueue,
-                      isActive: gateCoordinationStatus.isActive,
-                      canStartControl: gateCoordinationStatus.canStartControl,
-                      activeUser: gateCoordinationStatus.activeUser
-                    });
-                    
                     // NOVÝ WORKFLOW: Text podle specifikace uživatele
                     if (gateCoordinationStatus.isBlocked && !gateCoordinationStatus.isInQueue) {
                       return '📋 Zařadit do fronty';
