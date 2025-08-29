@@ -1012,7 +1012,7 @@ const Dashboard: React.FC = () => {
       return;
     }
 
-    // NOVÉ: Pokud nikdo aktivně neovládá, můžu začít ovládat (OPRAVENO: čekat na potvrzení)
+    // NOVÉ: Pokud nikdo aktivně neovládá, můžu začít ovládat (FIXED: čekat na callback)
     if (!gateCoordinationStatus.isActive && gateCoordinationStatus.canStartControl) {
       console.log('🚨 DEBUG: Nikdo aktivně neovládá, začínám ovládat...');
       const controlGranted = await requestControl();
@@ -1022,13 +1022,47 @@ const Dashboard: React.FC = () => {
         return;
       }
       
-      // ZJEDNODUŠENÁ OPRAVA: Firebase Transaction už garantuje atomicitu
-      console.log('✅ DEBUG: requestControl() úspěšný, Firebase Transaction garantuje že jsem aktivní');
+      // KRITICKÁ OPRAVA: Čekat na Firebase real-time callback potvrzení
+      console.log('✅ DEBUG: requestControl() úspěšný, čekám na Firebase callback...');
+      
+      // Čekat max 2 sekundy na Firebase real-time callback
+      let waitCount = 0;
+      const maxWait = 20; // 20 x 100ms = 2 sekundy
+      
+      while (waitCount < maxWait) {
+        // Počkat 100ms před další kontrolou
+        await new Promise(resolve => setTimeout(resolve, 100));
+        waitCount++;
+        
+        // Načíst fresh status přímo z service (ne z React state)
+        const freshCoordStatus = status;
+        
+        if (freshCoordStatus.isActive) {
+          console.log('✅ DEBUG: Firebase callback dorazil - jsem aktivní, pokračuji s MQTT');
+          break;
+        }
+        
+        if (freshCoordStatus.isBlocked) {
+          console.log('❌ DEBUG: Firebase callback - někdo mě předběhl, končím');
+          playSound('error');
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // Finální kontrola po čekání
+      const finalStatus = status;
+      if (!finalStatus.isActive) {
+        console.log('❌ DEBUG: Timeout na Firebase callback - nejsem aktivní, končím');
+        playSound('error');
+        setLoading(false);
+        return;
+      }
     }
 
-    // Ověření že jsem aktivní před MQTT příkazem
-    if (!gateCoordinationStatus.isActive) {
-      console.log('❌ DEBUG: Nejsem aktivní uživatel, nemohu poslat MQTT příkaz');
+    // Finální ověření před MQTT (pro jistotu)
+    if (!gateCoordinationStatus.isActive && !status.isActive) {
+      console.log('❌ DEBUG: Dvojitá kontrola - stále nejsem aktivní, končím');
       playSound('error');
       setLoading(false);
       return;
