@@ -18,6 +18,7 @@ import { updateService } from '../services/updateService';
 import LastGateActivity from '../components/LastGateActivity';
 import { useGateCoordination } from '../hooks/useGateCoordination';
 import { ReservationQueue } from '../components/GateCoordination/ReservationQueue';
+import { gateCoordinationService } from '../services/gateCoordinationService';
 
 const Dashboard: React.FC = () => {
   const { currentUser, logout } = useAuth();
@@ -1034,39 +1035,41 @@ const Dashboard: React.FC = () => {
         await new Promise(resolve => setTimeout(resolve, 100));
         waitCount++;
         
-        // Načíst fresh status přímo z service (ne z React state)
-        const freshCoordStatus = gateCoordinationStatus;
-        
-        if (freshCoordStatus.isActive) {
-          console.log('✅ DEBUG: Firebase callback dorazil - jsem aktivní, pokračuji s MQTT');
-          break;
+        // KRITICKÁ OPRAVA: Číst čerstvý stav přímo z Firebase (ne z React state)
+        const currentCoordState = await gateCoordinationService.getCurrentState();
+        if (currentCoordState && currentUser) {
+          const userId = currentUser.id; // OPRAVA: User má property 'id', ne 'uid'
+          
+          // Zkontroluj, zda jsem aktivní uživatel v Firebase
+          if (currentCoordState.activeUser && currentCoordState.activeUser.userId === userId) {
+            console.log('✅ DEBUG: Firebase callback dorazil - jsem aktivní uživatel, pokračuji s MQTT');
+            break;
+          }
+          
+          // Zkontroluj, zda mě někdo předběhl
+          if (currentCoordState.activeUser && currentCoordState.activeUser.userId !== userId) {
+            console.log('❌ DEBUG: Firebase callback - někdo mě předběhl, končím');
+            playSound('error');
+            setLoading(false);
+            return;
+          }
         }
         
-        if (freshCoordStatus.isBlocked) {
-          console.log('❌ DEBUG: Firebase callback - někdo mě předběhl, končím');
-          playSound('error');
-          setLoading(false);
-          return;
-        }
+        console.log(`🔄 DEBUG: Wait loop ${waitCount}/${maxWait} - čekám na Firebase callback...`);
       }
       
-      // Finální kontrola po čekání
-      const finalStatus = gateCoordinationStatus;
-      if (!finalStatus.isActive) {
-        console.log('❌ DEBUG: Timeout na Firebase callback - nejsem aktivní, končím');
+      // Finální kontrola po čekání - znovu z Firebase
+      const finalCoordState = await gateCoordinationService.getCurrentState();
+      if (!finalCoordState?.activeUser || finalCoordState.activeUser.userId !== currentUser?.id) {
+        console.log('❌ DEBUG: Timeout na Firebase callback - nejsem aktivní uživatel, končím');
         playSound('error');
         setLoading(false);
         return;
       }
     }
 
-    // Finální ověření před MQTT (pro jistotu)
-    if (!gateCoordinationStatus.isActive) {
-      console.log('❌ DEBUG: Dvojitá kontrola - stále nejsem aktivní, končím');
-      playSound('error');
-      setLoading(false);
-      return;
-    }
+    // Po úspěšné Firebase kontrole pokračuj s MQTT
+    console.log('🚀 DEBUG: Firebase synchronizace úspěšná - pokračuji s MQTT příkazem');
 
     // NOVÉ: Zobrazení slideru pro potvrzení zavření když někdo čeká ve frontě
     if (gateCoordinationStatus.isActive && 
