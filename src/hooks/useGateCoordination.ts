@@ -124,7 +124,9 @@ export function useGateCoordination() {
       canStartControl,
       connectedUsers,
       activeUserId: coordinationState.activeUser?.userId,
-      activeUserEmail: coordinationState.activeUser?.email
+      activeUserEmail: coordinationState.activeUser?.email,
+      activeUserExists: !!coordinationState.activeUser,
+      queueLength: coordinationState.reservationQueue.length
     });
 
     return {

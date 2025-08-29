@@ -352,20 +352,38 @@ class GateCoordinationService {
     return queueIndex >= 0 ? queueIndex + 1 : -1;
   }
 
-  // NOVÁ LOGIKA: Uživatel je blokován jen když někdo AKTIVNĚ ovládá bránu
+  // OPRAVENÁ LOGIKA: Uživatel je blokován když někdo ovládá NEBO se brána pohybuje
   isUserBlocked(userId: string, state: GateCoordination): boolean {
-    // Blokován jen pokud:
-    // 1. Někdo je aktivní (activeUser existuje)  
-    // 2. A není to tento uživatel
-    return state.activeUser !== null && state.activeUser.userId !== userId;
+    // Blokován pokud:
+    // 1. Někdo je aktivní (activeUser existuje) NEBO
+    // 2. Brána se pohybuje (OPENING/CLOSING) - brána byla právě ovládána
+    if (state.activeUser !== null && state.activeUser.userId !== userId) {
+      return true; // Někdo jiný aktivně ovládá
+    }
+    
+    // NOVÉ: Blokován také když se brána pohybuje (někdo právě ovládal)
+    if (state.gateState === 'OPENING' || state.gateState === 'CLOSING') {
+      return true; // Brána se pohybuje - čekej až se zastaví
+    }
+    
+    return false;
   }
   
-  // Nová helper metoda: Může uživatel začít ovládat?
+  // OPRAVENÁ LOGIKA: Může uživatel začít ovládat?
   canUserStartControl(userId: string, state: GateCoordination): boolean {
     // Může začít ovládat když:
-    // 1. Nikdo není aktivní NEBO
+    // 1. Nikdo není aktivní A brána se nepohybuje NEBO
     // 2. On už je aktivní
-    return state.activeUser === null || state.activeUser.userId === userId;
+    if (state.activeUser?.userId === userId) {
+      return true; // Už je aktivní
+    }
+    
+    // NOVÉ: Nemůže ovládat když se brána pohybuje (někdo právě ovládal)
+    if (state.gateState === 'OPENING' || state.gateState === 'CLOSING') {
+      return false; // Brána se pohybuje - čekej až se zastaví
+    }
+    
+    return state.activeUser === null; // Může ovládat jen když nikdo není aktivní
   }
 
   // Získání waiting time textu

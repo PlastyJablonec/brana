@@ -1,5 +1,5 @@
 {
-  "version": "2.15.6",
-  "buildTime": "2025-08-29T14:23:00.000Z",
-  "commit": "handover-logic-fix"
+  "version": "2.15.7",
+  "buildTime": "2025-08-29T14:26:00.000Z",
+  "commit": "blocked-during-gate-movement"
 }
