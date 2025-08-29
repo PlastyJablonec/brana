@@ -1,5 +1,5 @@
 {
-  "version": "2.15.0",
-  "buildTime": "2025-08-29T13:01:45.503Z",
-  "commit": "49e0461d5ee4afe35365f35d6e06ab632c800615"
+  "version": "2.15.4",
+  "buildTime": "2025-08-29T13:02:00.000Z",
+  "commit": "firebase-callback-sync-working"
 }
