@@ -1,5 +1,5 @@
 {
-  "version": "2.15.5",
-  "buildTime": "2025-08-29T13:17:00.000Z",
-  "commit": "firebase-callback-sync-FINAL"
+  "version": "2.15.6",
+  "buildTime": "2025-08-29T14:23:00.000Z",
+  "commit": "handover-logic-fix"
 }

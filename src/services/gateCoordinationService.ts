@@ -314,20 +314,19 @@ class GateCoordinationService {
         }
       }
 
-      // Automatické předání kontroly při zavření brány
-      if (newState === 'CLOSED' && currentState.gateState !== 'CLOSED' && currentState.reservationQueue.length > 0) {
-        const nextUser = currentState.reservationQueue[0];
-        
+      // OPRAVENÁ LOGIKA: Při zavření brány uvolni všechny uživatele
+      if (newState === 'CLOSED' && currentState.gateState !== 'CLOSED') {
+        // Když se brána zavře, vymaž activeUser a frontu - všichni mohou ovládat přímo
         const updatedState: GateCoordination = {
           ...currentState,
           gateState: newState,
-          activeUser: nextUser, // Předej kontrolu dalšímu uživateli
-          reservationQueue: currentState.reservationQueue.slice(1), // Odeber z fronty
+          activeUser: null, // OPRAVA: Uvolni kontrolu místo předávání
+          reservationQueue: [], // OPRAVA: Vyčisti frontu - všichni mohou ovládat přímo
           lastActivity: Date.now()
         };
         
         await this.coordinationDoc.set(updatedState);
-        console.log('🔄 HANDOVER: Kontrola předána uživateli', nextUser.userDisplayName);
+        console.log('🔄 GATE CLOSED: Kontrola uvolněna - všichni uživatelé mohou ovládat přímo');
       } else {
         // Jen aktualizuj stav bez změny kontroly
         const updatedState: GateCoordination = {
