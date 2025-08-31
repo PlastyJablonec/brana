@@ -1554,22 +1554,8 @@ const Dashboard: React.FC = () => {
               <div style={{ textAlign: 'center', lineHeight: '1.3' }}>
                 <div style={{ fontSize: '20px', fontWeight: '700', marginBottom: '4px' }}>
                   {(() => {
-                    // NOVÝ WORKFLOW: Text podle specifikace uživatele
-                    if (gateCoordinationStatus.isBlocked && !gateCoordinationStatus.isInQueue) {
-                      return '📋 Zařadit do fronty';
-                    }
-                    if (gateCoordinationStatus.isInQueue) {
-                      return `🚪 ${gateCoordinationStatus.waitingTimeText}`;
-                    }
-                    if (!gateCoordinationStatus.isActive && gateCoordinationStatus.canStartControl) {
-                      // Můžu začít ovládat - zobraz aktuální stav brány + indikace frontý
-                      if (gateCoordinationStatus.queueLength > 0) {
-                        return `${gateStatus} (${gateCoordinationStatus.queueLength} čeká)`;
-                      }
-                      return gateStatus;
-                    }
+                    // PRIORITA 1: Když jsem aktivní uživatel - vždy zobraz stav brány
                     if (gateCoordinationStatus.isActive) {
-                      // Už jsem aktivní - zobraz normální stav brány + indikace workflow
                       if (gateCoordinationStatus.mustUseSlider) {
                         return `${gateStatus} ⚠️ Použijte slider`;
                       }
@@ -1578,6 +1564,25 @@ const Dashboard: React.FC = () => {
                       }
                       return gateStatus;
                     }
+                    
+                    // PRIORITA 2: Když jsem ve frontě
+                    if (gateCoordinationStatus.isInQueue) {
+                      return `🚪 ${gateCoordinationStatus.waitingTimeText}`;
+                    }
+                    
+                    // PRIORITA 3: Když můžu začít ovládat (nikdo není aktivní)
+                    if (gateCoordinationStatus.canStartControl) {
+                      if (gateCoordinationStatus.queueLength > 0) {
+                        return `${gateStatus} (${gateCoordinationStatus.queueLength} čeká)`;
+                      }
+                      return gateStatus;
+                    }
+                    
+                    // PRIORITA 4: Když někdo jiný ovládá - nabídni frontu
+                    if (gateCoordinationStatus.isBlocked && !gateCoordinationStatus.isInQueue) {
+                      return '📋 Zařadit do fronty';
+                    }
+                    
                     // Fallback
                     return gateStatus;
                   })()}
