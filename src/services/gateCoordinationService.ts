@@ -352,6 +352,94 @@ class GateCoordinationService {
     return queueIndex >= 0 ? queueIndex + 1 : -1;
   }
 
+  // NOVÉ WORKFLOW HELPER FUNKCE PRO POŽADOVANOU LOGIKU
+
+  // Může uživatel zavřít bránu normálním tlačítkem?
+  canUserCloseGateNormally(userId: string, state: GateCoordination): boolean {
+    const result = (state.activeUser?.userId === userId && state.reservationQueue.length === 0) ||
+                   (state.activeUser === null);
+    
+    console.log('🔧 WORKFLOW DEBUG: canUserCloseGateNormally', {
+      userId,
+      activeUserId: state.activeUser?.userId,
+      queueLength: state.reservationQueue.length,
+      result,
+      timestamp: new Date().toISOString(),
+      sessionId: this.currentSessionId
+    });
+    
+    return result;
+  }
+
+  // Musí uživatel použít slider pro zavření?
+  mustUseSliderToClose(userId: string, state: GateCoordination): boolean {
+    const result = state.activeUser?.userId === userId && state.reservationQueue.length > 0;
+    
+    console.log('🔧 WORKFLOW DEBUG: mustUseSliderToClose', {
+      userId,
+      activeUserId: state.activeUser?.userId,
+      queueLength: state.reservationQueue.length,
+      queueUsers: state.reservationQueue.map(u => u.userDisplayName),
+      result,
+      timestamp: new Date().toISOString(),
+      sessionId: this.currentSessionId
+    });
+    
+    return result;
+  }
+
+  // Zobrazit upozornění o frontě?
+  shouldShowQueueWarning(userId: string, state: GateCoordination): boolean {
+    const result = state.activeUser?.userId === userId && state.reservationQueue.length > 0;
+    
+    console.log('🔧 WORKFLOW DEBUG: shouldShowQueueWarning', {
+      userId,
+      activeUserId: state.activeUser?.userId,
+      queueLength: state.reservationQueue.length,
+      nextUserInQueue: state.reservationQueue[0]?.userDisplayName,
+      result,
+      timestamp: new Date().toISOString(),
+      sessionId: this.currentSessionId
+    });
+    
+    return result;
+  }
+
+  // DEBUGGING UTILITY - získej debug info o aktuálním stavu
+  getDebugInfo(userId: string, state: GateCoordination): any {
+    return {
+      timestamp: new Date().toISOString(),
+      sessionId: this.currentSessionId,
+      currentUser: {
+        id: userId,
+        position: this.getUserPosition(userId, state),
+        isActive: state.activeUser?.userId === userId,
+        isInQueue: state.reservationQueue.some(u => u.userId === userId),
+        canCloseNormally: this.canUserCloseGateNormally(userId, state),
+        mustUseSlider: this.mustUseSliderToClose(userId, state),
+        shouldShowWarning: this.shouldShowQueueWarning(userId, state)
+      },
+      gateState: {
+        state: state.gateState,
+        activeUser: state.activeUser ? {
+          id: state.activeUser.userId,
+          displayName: state.activeUser.userDisplayName,
+          email: state.activeUser.email,
+          state: state.activeUser.state
+        } : null,
+        queue: state.reservationQueue.map((u, index) => ({
+          position: index + 1,
+          id: u.userId,
+          displayName: u.userDisplayName,
+          email: u.email,
+          state: u.state,
+          waitingTime: Date.now() - u.timestamp
+        })),
+        totalUsers: (state.activeUser ? 1 : 0) + state.reservationQueue.length
+      }
+    };
+  }
+
   // OPRAVENÁ LOGIKA: Uživatel je blokován když někdo ovládá NEBO se brána pohybuje
   isUserBlocked(userId: string, state: GateCoordination): boolean {
     // Blokován pokud:

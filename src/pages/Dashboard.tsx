@@ -19,6 +19,7 @@ import LastGateActivity from '../components/LastGateActivity';
 import { useGateCoordination } from '../hooks/useGateCoordination';
 import { ReservationQueue } from '../components/GateCoordination/ReservationQueue';
 import { gateCoordinationService } from '../services/gateCoordinationService';
+import GateCoordinationDebug from '../components/debug/GateCoordinationDebug';
 
 const Dashboard: React.FC = () => {
   const { currentUser, logout } = useAuth();
@@ -1071,11 +1072,11 @@ const Dashboard: React.FC = () => {
     // Po úspěšné Firebase kontrole pokračuj s MQTT
     console.log('🚀 DEBUG: Firebase synchronizace úspěšná - pokračuji s MQTT příkazem');
 
-    // NOVÉ: Zobrazení slideru pro potvrzení zavření když někdo čeká ve frontě
-    if (gateCoordinationStatus.isActive && 
-        (gateStatus.includes('otevřen') || gateStatus.includes('Otevřena')) && 
-        gateCoordinationStatus.queueLength > 0) {
-      console.log('🚨 DEBUG: Zobrazuji slider pro potvrzení zavření - někdo čeká ve frontě');
+    // NOVÝ WORKFLOW: Zkontroluj zda musí uživatel použít slider pro zavření
+    if (gateCoordinationStatus.mustUseSlider && 
+        (gateStatus.includes('otevřen') || gateStatus.includes('Otevřena'))) {
+      console.log('🚨 WORKFLOW DEBUG: mustUseSlider=true - zobrazuji slider pro potvrzení zavření');
+      console.log('🚨 WORKFLOW DEBUG: Queue length:', gateCoordinationStatus.queueLength, 'Next user:', gateCoordinationStatus.activeUser);
       playSound('click');
       setShowCloseConfirmSlider(true);
       return;
@@ -1493,7 +1494,7 @@ const Dashboard: React.FC = () => {
             
             <button
               onClick={handleGateControl}
-              disabled={loading || !mqttConnected || !isLocationProximityAllowed || gateStatus.includes('STOP režim')}
+              disabled={loading || !mqttConnected || !isLocationProximityAllowed || gateStatus.includes('STOP režim') || gateCoordinationStatus.isBlocked}
               className={`gate-button-modern ${(gateStatus.includes('se...') || loading) ? 'pulsing' : ''} ${timerState.type === 'autoClose' && timerState.countdown <= 60 ? 'timer-blinking' : ''} md-ripple`}
               style={{
                 width: '280px',
@@ -1509,7 +1510,8 @@ const Dashboard: React.FC = () => {
                 fontWeight: '600',
                 background: !isLocationProximityAllowed ? 'var(--md-surface-variant)' :
                            gateStatus.includes('STOP režim') ? 'var(--md-error-container)' :
-                           gateCoordinationStatus.queueLength > 0 && gateCoordinationStatus.isActive ? 'var(--md-tertiary)' :
+                           gateCoordinationStatus.isBlocked ? 'var(--md-surface-variant)' :
+                           gateCoordinationStatus.mustUseSlider ? 'var(--md-tertiary-container)' :
                            gateStatus.includes('zavřen') ? 'var(--md-error)' : 
                            gateStatus.includes('otevřen') ? 'var(--md-success)' : 'var(--md-primary)',
                 color: !isLocationProximityAllowed ? 'var(--md-on-surface-variant)' : 'white',
@@ -1567,7 +1569,10 @@ const Dashboard: React.FC = () => {
                       return gateStatus;
                     }
                     if (gateCoordinationStatus.isActive) {
-                      // Už jsem aktivní - zobraz normální stav brány + indikace fronty
+                      // Už jsem aktivní - zobraz normální stav brány + indikace workflow
+                      if (gateCoordinationStatus.mustUseSlider) {
+                        return `${gateStatus} ⚠️ Použijte slider`;
+                      }
                       if (gateCoordinationStatus.queueLength > 0) {
                         return `${gateStatus} (${gateCoordinationStatus.queueLength} čeká)`;
                       }
@@ -1672,6 +1677,28 @@ const Dashboard: React.FC = () => {
             ) : (
               <div style={{ color: 'orange', fontSize: '0.8em', marginTop: '8px' }}>
                 DEBUG: viewGateActivity = {String(currentUser?.permissions.viewGateActivity)} (role: {currentUser?.role})
+              </div>
+            )}
+            
+            {/* NOVÝ WORKFLOW: Upozornění když někdo čeká ve frontě */}
+            {gateCoordinationStatus.shouldShowQueueWarning && !showCloseConfirmSlider && (
+              <div style={{
+                width: '100%',
+                marginTop: '16px',
+                padding: '12px',
+                background: 'var(--md-tertiary-container)',
+                color: 'var(--md-on-tertiary-container)',
+                borderRadius: '12px',
+                border: '1px solid var(--md-tertiary)',
+                fontSize: '14px',
+                fontWeight: '500',
+                textAlign: 'center'
+              }}>
+                ⚠️ Ve frontě čeká {gateCoordinationStatus.queueLength} {gateCoordinationStatus.queueLength === 1 ? 'uživatel' : 'uživatelů'}
+                <br />
+                <span style={{ fontSize: '12px', opacity: 0.8 }}>
+                  Pro zavření brány potřebujete potvrdit sliderem
+                </span>
               </div>
             )}
             
@@ -2082,6 +2109,9 @@ const Dashboard: React.FC = () => {
         </button>
       </div>
     </div>
+    
+    {/* Debug komponenta pro vývojáře */}
+    <GateCoordinationDebug show={process.env.NODE_ENV === 'development'} />
     
     </>
   );

@@ -13,6 +13,12 @@ export interface GateCoordinationStatus {
   queueLength: number;        // Počet čekajících v queue
   waitingTimeText: string;    // Text pro UI ("Aktivní", "Další na řadě", "3. v pořadí")
   connectedUsers: number;     // NOVÉ: Počet připojených uživatelů (informační)
+  
+  // NOVÉ WORKFLOW FIELDS PRO POŽADOVANOU LOGIKU
+  canCloseNormally: boolean;    // Může zavřít bránu normálním tlačítkem
+  mustUseSlider: boolean;       // Musí použít slider pro zavření
+  shouldShowQueueWarning: boolean; // Zobrazit upozornění o frontě
+  debugInfo?: any;             // Debug informace pro vývojáře
 }
 
 export function useGateCoordination() {
@@ -101,7 +107,10 @@ export function useGateCoordination() {
         activeUser: null,
         queueLength: 0,
         waitingTimeText: 'Nepřipojeno',
-        connectedUsers: 0
+        connectedUsers: 0,
+        canCloseNormally: false,
+        mustUseSlider: false,
+        shouldShowQueueWarning: false
       };
     }
 
@@ -116,17 +125,31 @@ export function useGateCoordination() {
     // NOVÉ: Počet připojených uživatelů (aktivní + ve frontě)
     const connectedUsers = (coordinationState.activeUser ? 1 : 0) + coordinationState.reservationQueue.length;
     
-    console.log('🚨 DEBUG useGateCoordination STATUS:', {
+    // NOVÉ WORKFLOW LOGIKY
+    const canCloseNormally = gateCoordinationService.canUserCloseGateNormally(userId, coordinationState);
+    const mustUseSlider = gateCoordinationService.mustUseSliderToClose(userId, coordinationState);
+    const shouldShowQueueWarning = gateCoordinationService.shouldShowQueueWarning(userId, coordinationState);
+    
+    // Comprehensive debug info
+    const debugInfo = gateCoordinationService.getDebugInfo(userId, coordinationState);
+    
+    console.log('🚨 DEBUG useGateCoordination STATUS (ENHANCED):', {
       currentUserId: userId,
       currentUserEmail: currentUser.email,
       position,
       isBlocked,
       canStartControl,
       connectedUsers,
+      // NOVÉ DEBUG FIELDS
+      canCloseNormally,
+      mustUseSlider,
+      shouldShowQueueWarning,
       activeUserId: coordinationState.activeUser?.userId,
       activeUserEmail: coordinationState.activeUser?.email,
       activeUserExists: !!coordinationState.activeUser,
-      queueLength: coordinationState.reservationQueue.length
+      queueLength: coordinationState.reservationQueue.length,
+      gateState: coordinationState.gateState,
+      timestamp: new Date().toISOString()
     });
 
     return {
@@ -139,7 +162,13 @@ export function useGateCoordination() {
       activeUser: coordinationState.activeUser?.userDisplayName || null,
       queueLength: coordinationState.reservationQueue.length,
       waitingTimeText,
-      connectedUsers
+      connectedUsers,
+      
+      // NOVÉ WORKFLOW FIELDS
+      canCloseNormally,
+      mustUseSlider,
+      shouldShowQueueWarning,
+      debugInfo: process.env.NODE_ENV === 'development' ? debugInfo : undefined
     };
   }, [coordinationState, currentUser]);
 
