@@ -178,7 +178,8 @@ const Dashboard: React.FC = () => {
       updateConnectionStep(2, 'loading', 'Kontroluji novou verzi...');
       
       try {
-        const updateResult = await updateService.checkForUpdates();
+        // const updateResult = await updateService.checkForUpdates(); // DOČASNĚ VYPNUTO
+        const updateResult = { hasUpdate: false }; // Mock response
         
         if (updateResult.hasUpdate) {
           console.log('🎉 Update available, prompting user...');

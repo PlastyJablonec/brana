@@ -2,13 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { updateService, UpdateCheckResult } from '../services/updateService';
 
 const UpdateNotification: React.FC = () => {
+  // KOMPONENTA ZJEDNODUŠENA - updateService je nyní bezpečný
+  return null; // Stále vypnuto pro jednoduchost
+  
+  /*
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     // Subscribe na update notifikace - už bez periodic check
-    const unsubscribe = updateService.onUpdateAvailable((result) => {
+    // const unsubscribe = updateService.onUpdateAvailable((result) => { // DOČASNĚ VYPNUTO
       console.log('🔔 UpdateNotification: Update available:', result);
       setUpdateInfo(result);
       setIsVisible(true);
@@ -193,6 +197,7 @@ const UpdateNotification: React.FC = () => {
       </div>
     </div>
   );
+  */
 };
 
 export default UpdateNotification;
