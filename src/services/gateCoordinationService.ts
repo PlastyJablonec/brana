@@ -314,19 +314,19 @@ class GateCoordinationService {
         }
       }
 
-      // OPRAVENÁ LOGIKA: Při zavření brány uvolni všechny uživatele
+      // OPRAVENÁ LOGIKA: Při zavření brány POUZE aktualizuj stav, NEVYMAZÁVEJ activeUser
       if (newState === 'CLOSED' && currentState.gateState !== 'CLOSED') {
-        // Když se brána zavře, vymaž activeUser a frontu - všichni mohou ovládat přímo
+        // KRITICKÁ OPRAVA: Zachovej activeUser a queue - jen aktualizuj gateState
         const updatedState: GateCoordination = {
           ...currentState,
           gateState: newState,
-          activeUser: null, // OPRAVA: Uvolni kontrolu místo předávání
-          reservationQueue: [], // OPRAVA: Vyčisti frontu - všichni mohou ovládat přímo
+          // activeUser: ZŮSTÁVÁ BEZE ZMĚNY - nepřerušuj workflow
+          // reservationQueue: ZŮSTÁVÁ BEZE ZMĚNY - nepřerušuj queue
           lastActivity: Date.now()
         };
         
         await this.coordinationDoc.set(updatedState);
-        console.log('🔄 GATE CLOSED: Kontrola uvolněna - všichni uživatelé mohou ovládat přímo');
+        console.log('🔄 GATE CLOSED: State aktualizován, activeUser zachován pro workflow kontinuitu');
       } else {
         // Jen aktualizuj stav bez změny kontroly
         const updatedState: GateCoordination = {
