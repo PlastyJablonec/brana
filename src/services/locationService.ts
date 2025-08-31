@@ -21,7 +21,7 @@ class LocationService {
   private watchId: number | null = null;
 
   /**
-   * Získá aktuální polohu pomocí GPS podle vzoru z GPS.txt
+   * Získá aktuální polohu pomocí GPS s fallback strategií
    */
   async getCurrentLocation(): Promise<GeoLocation> {
     console.log('📍 LocationService: getCurrentLocation called');
@@ -40,42 +40,74 @@ class LocationService {
 
       console.log('📍 LocationService: Requesting GPS position...');
 
-      // Získání aktuální pozice - přesně podle vzoru z GPS.txt
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          // Úspěšné získání pozice
-          console.log('📍 LocationService: GPS SUCCESS - Got position:', position);
-          
-          const location: GeoLocation = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            altitude: position.coords.altitude,
-            altitudeAccuracy: position.coords.altitudeAccuracy,
-            heading: position.coords.heading,
-            speed: position.coords.speed,
-            timestamp: Date.now()
-          };
-          
-          this.currentLocation = location;
-          this.lastUpdateTime = Date.now();
-          
-          console.log('📍 LocationService: Location stored:', this.formatLocationString(location));
-          resolve(location);
-        },
-        (error) => {
-          // Chyba při získávání pozice - zpracování podle vzoru
-          console.error('📍 LocationService: GPS ERROR:', error);
-          const locationError = this.handleLocationError(error);
-          reject(locationError);
-        },
-        {
-          // Nastavení pro získání pozice - podle vzoru z GPS.txt
-          enableHighAccuracy: true, // Vysoká přesnost (používá GPS)
-          timeout: 10000, // Timeout 10 sekund
-          maximumAge: 0 // Nepoužívat cache
-        }
-      );
+      // NOVÉ: Zvýšený timeout a postupné fallbacky
+      const tryGetLocation = (attemptCount: number, useHighAccuracy: boolean, timeout: number) => {
+        console.log(`📍 LocationService: Pokus ${attemptCount} (highAccuracy=${useHighAccuracy}, timeout=${timeout}ms)`);
+        
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            // Úspěšné získání pozice
+            console.log('📍 LocationService: GPS SUCCESS - Got position:', position);
+            
+            const location: GeoLocation = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              altitude: position.coords.altitude,
+              altitudeAccuracy: position.coords.altitudeAccuracy,
+              heading: position.coords.heading,
+              speed: position.coords.speed,
+              timestamp: Date.now()
+            };
+            
+            this.currentLocation = location;
+            this.lastUpdateTime = Date.now();
+            
+            console.log('📍 LocationService: Location stored:', this.formatLocationString(location));
+            resolve(location);
+          },
+          (error) => {
+            console.error(`📍 LocationService: Pokus ${attemptCount} selhal:`, error);
+            
+            // FALLBACK STRATEGIE:
+            if (attemptCount === 1 && error.code === 3) {
+              // 1. pokus: Vysoká přesnost selhala na timeout → zkus bez vysoké přesnosti
+              console.log('📍 LocationService: Fallback - zkouším bez vysoké přesnosti');
+              tryGetLocation(2, false, 15000);
+            } else if (attemptCount === 2 && error.code === 3) {
+              // 2. pokus: Nižší přesnost stále timeout → zkus s cache
+              console.log('📍 LocationService: Fallback - zkouším s cache');
+              tryGetLocation(3, false, 20000);
+            } else {
+              // Konečné selhání
+              console.error('📍 LocationService: Všechny pokusy selhaly');
+              const locationError = this.handleLocationError(error);
+              
+              // POSLEDNÍ FALLBACK: Vrať approximativní polohu pro testování
+              if (window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1')) {
+                console.warn('📍 LocationService: Používám fallback lokaci pro localhost');
+                const fallbackLocation: GeoLocation = {
+                  latitude: 50.08804, // Praha centrum
+                  longitude: 14.42076,
+                  accuracy: 10000, // Nízká přesnost - označuje fallback
+                  timestamp: Date.now()
+                };
+                resolve(fallbackLocation);
+              } else {
+                reject(locationError);
+              }
+            }
+          },
+          {
+            enableHighAccuracy: useHighAccuracy,
+            timeout: timeout,
+            maximumAge: attemptCount === 3 ? 300000 : 0 // Jen 3. pokus může použít 5min starou cache
+          }
+        );
+      };
+
+      // Začni prvním pokusem s vysokou přesností
+      tryGetLocation(1, true, 10000);
     });
   }
 

@@ -61,6 +61,31 @@ export function useGateCoordination() {
     if (isLoading) return;
 
     const handleStateChange = (state: GateCoordination) => {
+      // NOVÉ: Enhanced logging pro debugging
+      const previousState = coordinationState;
+      const currentUserId = currentUser?.id;
+      
+      console.log('🔄 COORDINATION STATE CHANGE:', {
+        timestamp: new Date().toISOString(),
+        currentUserId,
+        previousActiveUser: previousState?.activeUser?.userId || null,
+        newActiveUser: state.activeUser?.userId || null,
+        activeUserChanged: previousState?.activeUser?.userId !== state.activeUser?.userId,
+        previousQueueLength: previousState?.reservationQueue?.length || 0,
+        newQueueLength: state.reservationQueue?.length || 0,
+        queueChanged: (previousState?.reservationQueue?.length || 0) !== (state.reservationQueue?.length || 0),
+        gateState: state.gateState
+      });
+      
+      // NOVÉ: Notify user o významných změnách
+      if (currentUserId && previousState?.activeUser?.userId !== state.activeUser?.userId) {
+        if (state.activeUser?.userId === currentUserId) {
+          console.log('✅ Uživatel získal kontrolu nad bránou');
+        } else if (previousState?.activeUser?.userId === currentUserId && !state.activeUser) {
+          console.log('❌ Uživatel ztratil kontrolu nad bránou'); 
+        }
+      }
+      
       setCoordinationState(state);
       setError(null);
     };

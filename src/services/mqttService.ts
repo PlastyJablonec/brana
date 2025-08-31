@@ -97,7 +97,7 @@ export class MqttService {
   private gateLogCallbacks: GateLogCallback[] = [];
   private currentStatus: IMqttStatus = {
     gateStatus: 'Neznámý stav',
-    garageStatus: 'Neznámý stav',
+    garageStatus: 'Garáž zavřena', // OPRAVA: Výchozí stav místo "Neznámý stav"
     isConnected: false
   };
 

@@ -1,4 +1,5 @@
 import { db } from '../firebase/config';
+import { diagnosticsService } from './diagnosticsService';
 
 // Typy pro koordinaci brány
 export interface GateUser {
@@ -63,18 +64,32 @@ class GateCoordinationService {
         console.log('✅ GateCoordinationService: Dokument už existuje');
       }
 
-      // Naslouchej změnám v real-time
+      // Naslouchej změnám v real-time s error handling
       console.log('🚨 DEBUG: Registruji onSnapshot listener...');
       this.unsubscribe = this.coordinationDoc.onSnapshot((doc: any) => {
         console.log('🔔 SNAPSHOT CALLBACK: doc.exists =', doc.exists, 'data =', doc.data());
         if (doc.exists) {
-          const state = doc.data() as GateCoordination;
-          console.log('🔧 GateCoordinationService: State change:', state);
+          const rawData = doc.data();
+          
+          // KRITICKÁ OPRAVA: Validace a sanitizace dat před použitím
+          const state: GateCoordination = {
+            activeUser: rawData?.activeUser || null,
+            reservationQueue: Array.isArray(rawData?.reservationQueue) ? rawData.reservationQueue : [],
+            gateState: rawData?.gateState || 'CLOSED',
+            lastActivity: rawData?.lastActivity || Date.now(),
+            autoOpeningUserId: rawData?.autoOpeningUserId || undefined
+          };
+          
+          console.log('🔧 GateCoordinationService: State change (sanitizováno):', state);
           console.log('🔧 ACTIVE USER DETAILS:', state.activeUser ? {
             userId: state.activeUser.userId,
             userDisplayName: state.activeUser.userDisplayName,
             email: state.activeUser.email
           } : 'null');
+          
+          // NOVÉ: Použij diagnostickou službu pro detailní logging
+          diagnosticsService.logCoordinationState(state, 'Firestore Snapshot Update');
+          
           if (this.onStateChange) {
             console.log('🔧 GateCoordinationService: Volám onStateChange callback');
             this.onStateChange(state);
@@ -82,8 +97,35 @@ class GateCoordinationService {
             console.warn('⚠️ GateCoordinationService: onStateChange callback není nastaven!');
           }
         } else {
-          console.warn('🔧 GateCoordinationService: Dokument neexistuje');
+          console.warn('🔧 GateCoordinationService: Dokument neexistuje - vytvářím fallback state');
+          
+          // NOVÉ: Fallback state když dokument neexistuje
+          const fallbackState: GateCoordination = {
+            activeUser: null,
+            reservationQueue: [],
+            gateState: 'CLOSED',
+            lastActivity: Date.now()
+          };
+          
+          if (this.onStateChange) {
+            this.onStateChange(fallbackState);
+          }
         }
+      }, (error: any) => {
+        // NOVÉ: Error handling pro snapshot listener
+        console.error('❌ GateCoordinationService: Snapshot listener error:', error);
+        
+        if (error.code === 'permission-denied') {
+          console.error('❌ Firebase permission denied - možná problém s auth nebo adblocker');
+        } else if (error.code === 'unavailable') {
+          console.error('❌ Firebase nedostupný - síťový problém nebo blokování');
+        }
+        
+        // Pokus o reconnect po chybě
+        console.log('🔄 Pokouším se o reconnect za 3 sekundy...');
+        setTimeout(() => {
+          this.reinitialize().catch(console.error);
+        }, 3000);
       });
 
       console.log('✅ GateCoordinationService: Inicializováno s Firebase v8 API');
@@ -100,6 +142,22 @@ class GateCoordinationService {
       this.unsubscribe = null;
     }
     console.log('🔧 GateCoordinationService: Služba ukončena');
+  }
+
+  // NOVÉ: Reinicializace služby po chybě
+  async reinitialize(): Promise<void> {
+    console.log('🔄 GateCoordinationService: Reinicializuji po chybě...');
+    
+    // Nejdříve ukončí stávající listener
+    this.destroy();
+    
+    // Pak znovu inicializuj
+    try {
+      await this.initialize();
+      console.log('✅ GateCoordinationService: Reinicializace úspěšná');
+    } catch (error) {
+      console.error('❌ GateCoordinationService: Reinicializace selhala:', error);
+    }
   }
 
   // Registrace callback funkcí
@@ -141,41 +199,77 @@ class GateCoordinationService {
         sessionId: this.currentSessionId
       };
 
-      // KRITICKÁ OPRAVA: Atomická transakce pro race condition ochranu
-      // Použijeme Firebase Transaction pro garantovanou atomicitu
-      const transactionResult = await db.runTransaction(async (transaction: any) => {
-        const freshDoc = await transaction.get(this.coordinationDoc);
-        const freshState = freshDoc.exists ? freshDoc.data() as GateCoordination : null;
-        
-        if (!freshState) {
-          throw new Error('Coordination document not found');
-        }
-
-        // ATOMICKÁ KONTROLA: Je stále nikdo aktivní?
-        if (!freshState.activeUser) {
-          // ✅ Atomicky nastav activeUser na tohoto uživatele
-          const updatedState: GateCoordination = {
-            ...freshState,
-            activeUser: user,
-            lastActivity: Date.now()
-          };
-          
-          transaction.set(this.coordinationDoc, updatedState);
-          return 'GRANTED'; // Úspěch - tento uživatel získal kontrolu
-        } else {
-          // ❌ Mezitím někdo jiný získal kontrolu
-          return 'DENIED_RACE_CONDITION';
-        }
-      });
-
-      if (transactionResult === 'GRANTED') {
-        console.log('🔧 GateCoordinationService: Uživatel', userDisplayName, 'začal ovládat bránu (atomicky)');
-        return 'GRANTED';
-      }
+      // KRITICKÁ OPRAVA: Vylepšená atomická transakce s retry logikou
+      const MAX_RETRY_ATTEMPTS = 3;
+      let retryCount = 0;
       
-      // Pokud atomická transakce selhala (někdo jiný získal kontrolu), 
-      // načti nový stav a zařaď tohoto uživatele do fronty
-      console.log('🔧 GateCoordinationService: Race condition - načítám nový stav pro frontu');
+      while (retryCount < MAX_RETRY_ATTEMPTS) {
+        try {
+          const transactionResult = await db.runTransaction(async (transaction: any) => {
+            const freshDoc = await transaction.get(this.coordinationDoc);
+            const freshState = freshDoc.exists ? freshDoc.data() as GateCoordination : null;
+            
+            if (!freshState) {
+              throw new Error('Coordination document not found');
+            }
+
+            // KRITICKÁ KONTROLA: Uživatel už možná ovládá
+            if (freshState.activeUser?.userId === userId) {
+              console.log('🔧 Uživatel už ovládá - obnovuji session');
+              const updatedUser = { ...user, sessionId: this.currentSessionId };
+              const updatedState: GateCoordination = {
+                ...freshState,
+                activeUser: updatedUser,
+                lastActivity: Date.now()
+              };
+              transaction.set(this.coordinationDoc, updatedState);
+              return 'ALREADY_GRANTED';
+            }
+
+            // ATOMICKÁ KONTROLA: Je stále nikdo aktivní?
+            if (!freshState.activeUser) {
+              // ✅ Atomicky nastav activeUser na tohoto uživatele
+              const updatedState: GateCoordination = {
+                ...freshState,
+                activeUser: user,
+                lastActivity: Date.now()
+              };
+              
+              transaction.set(this.coordinationDoc, updatedState);
+              console.log(`🔧 ATOMICKY GRANTED pro ${userDisplayName} (pokus ${retryCount + 1})`);
+              return 'GRANTED';
+            } else {
+              // ❌ Mezitím někdo jiný získal kontrolu
+              console.log(`🔧 Race condition - aktivní je ${freshState.activeUser.userDisplayName} (pokus ${retryCount + 1})`);
+              return 'DENIED_RACE_CONDITION';
+            }
+          });
+          
+          // Úspěšná transakce
+          if (transactionResult === 'GRANTED' || transactionResult === 'ALREADY_GRANTED') {
+            console.log('🔧 GateCoordinationService: Uživatel', userDisplayName, 'získal kontrolu (atomicky)');
+            return 'GRANTED';
+          } else {
+            // Pokračuj na queue logiku
+            break;
+          }
+          
+        } catch (transactionError: any) {
+          retryCount++;
+          console.warn(`🔧 Transakce selhala (pokus ${retryCount}/${MAX_RETRY_ATTEMPTS}):`, transactionError);
+          
+          if (retryCount >= MAX_RETRY_ATTEMPTS) {
+            console.error('🔧 Všechny pokusy transakce selhaly - fallback na queue');
+            break;
+          }
+          
+          // Krátká pauza před retry
+          await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
+        }
+      }
+
+      // Po dokončení retry loopu - načti nový stav a zařaď tohoto uživatele do fronty
+      console.log('🔧 GateCoordinationService: Atomická transakce nedosáhla GRANTED - načítám nový stav pro frontu');
       
       const freshState = await this.getCurrentState();
       if (!freshState) {
@@ -359,14 +453,17 @@ class GateCoordinationService {
     const result = (state.activeUser?.userId === userId && state.reservationQueue.length === 0) ||
                    (state.activeUser === null);
     
-    console.log('🔧 WORKFLOW DEBUG: canUserCloseGateNormally', {
-      userId,
-      activeUserId: state.activeUser?.userId,
-      queueLength: state.reservationQueue.length,
-      result,
-      timestamp: new Date().toISOString(),
-      sessionId: this.currentSessionId
-    });
+    // OPRAVA: Debug jen když se result změní nebo je to důležité
+    if (diagnosticsService.isDebugMode()) {
+      console.log('🔧 WORKFLOW DEBUG: canUserCloseGateNormally', {
+        userId,
+        activeUserId: state.activeUser?.userId,
+        queueLength: state.reservationQueue.length,
+        result,
+        timestamp: new Date().toISOString(),
+        sessionId: this.currentSessionId
+      });
+    }
     
     return result;
   }
@@ -375,15 +472,18 @@ class GateCoordinationService {
   mustUseSliderToClose(userId: string, state: GateCoordination): boolean {
     const result = state.activeUser?.userId === userId && state.reservationQueue.length > 0;
     
-    console.log('🔧 WORKFLOW DEBUG: mustUseSliderToClose', {
-      userId,
-      activeUserId: state.activeUser?.userId,
-      queueLength: state.reservationQueue.length,
-      queueUsers: state.reservationQueue.map(u => u.userDisplayName),
-      result,
-      timestamp: new Date().toISOString(),
-      sessionId: this.currentSessionId
-    });
+    // OPRAVA: Debug jen v debug módu
+    if (diagnosticsService.isDebugMode() && result) {
+      console.log('🔧 WORKFLOW DEBUG: mustUseSliderToClose', {
+        userId,
+        activeUserId: state.activeUser?.userId,
+        queueLength: state.reservationQueue.length,
+        queueUsers: state.reservationQueue.map(u => u.userDisplayName),
+        result,
+        timestamp: new Date().toISOString(),
+        sessionId: this.currentSessionId
+      });
+    }
     
     return result;
   }
@@ -392,15 +492,18 @@ class GateCoordinationService {
   shouldShowQueueWarning(userId: string, state: GateCoordination): boolean {
     const result = state.activeUser?.userId === userId && state.reservationQueue.length > 0;
     
-    console.log('🔧 WORKFLOW DEBUG: shouldShowQueueWarning', {
-      userId,
-      activeUserId: state.activeUser?.userId,
-      queueLength: state.reservationQueue.length,
-      nextUserInQueue: state.reservationQueue[0]?.userDisplayName,
-      result,
-      timestamp: new Date().toISOString(),
-      sessionId: this.currentSessionId
-    });
+    // OPRAVA: Debug jen v debug módu a jen když je warning aktivní
+    if (diagnosticsService.isDebugMode() && result) {
+      console.log('🔧 WORKFLOW DEBUG: shouldShowQueueWarning', {
+        userId,
+        activeUserId: state.activeUser?.userId,
+        queueLength: state.reservationQueue.length,
+        nextUserInQueue: state.reservationQueue[0]?.userDisplayName,
+        result,
+        timestamp: new Date().toISOString(),
+        sessionId: this.currentSessionId
+      });
+    }
     
     return result;
   }

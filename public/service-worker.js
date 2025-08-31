@@ -8,7 +8,7 @@ const urlsToCache = [
   '/build-info.json'
 ];
 
-// Instalace service workeru
+// Instalace service workeru s error handling
 self.addEventListener('install', (event) => {
   console.log('🔧 SW: Installing service worker');
   
@@ -16,7 +16,37 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('💾 SW: Caching files');
-        return cache.addAll(urlsToCache);
+        
+        // KRITICKÁ OPRAVA: Cache files jednotlivě s error handling
+        const cachePromises = urlsToCache.map(async (url) => {
+          try {
+            const response = await fetch(url);
+            if (response.ok) {
+              return cache.put(url, response);
+            } else {
+              console.warn(`⚠️ SW: Failed to cache ${url} - status ${response.status}`);
+              return null;
+            }
+          } catch (error) {
+            console.error(`❌ SW: Error caching ${url}:`, error);
+            return null;
+          }
+        });
+        
+        // NOVÉ: Pokračuj i když některé soubory selžou
+        return Promise.allSettled(cachePromises).then(results => {
+          const failed = results.filter(r => r.status === 'rejected').length;
+          const succeeded = results.filter(r => r.status === 'fulfilled').length;
+          console.log(`💾 SW: Cache results: ${succeeded} succeeded, ${failed} failed`);
+          
+          // Instalace úspěšná i když některé soubory selhaly
+          return Promise.resolve();
+        });
+      })
+      .catch(error => {
+        console.error('❌ SW: Cache installation failed:', error);
+        // Pokračuj i při selhání cache - service worker funguje bez cache
+        return Promise.resolve();
       })
   );
   

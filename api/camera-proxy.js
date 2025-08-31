@@ -24,15 +24,36 @@ export default async function handler(req, res) {
     
     console.log('Camera Proxy: Requesting:', cameraUrl);
 
+    // KRITICKÁ OPRAVA: Kratší timeout + AbortController fallback
+    let abortController;
+    let timeoutId;
+    
+    if (typeof AbortSignal?.timeout === 'function') {
+      // Moderní prohlížeče
+      abortController = { signal: AbortSignal.timeout(5000) }; // 5s místo 10s
+    } else {
+      // Fallback pro starší prostředí
+      abortController = new AbortController();
+      timeoutId = setTimeout(() => {
+        abortController.abort();
+        console.log('Camera Proxy: Request aborted due to timeout');
+      }, 5000);
+    }
+
     // Fetch the image from the camera
     const response = await fetch(cameraUrl, {
       method: 'GET',
       headers: {
-        'User-Agent': 'Camera-Proxy/1.0'
+        'User-Agent': 'Camera-Proxy/1.0',
+        'Accept': 'image/jpeg,image/*,*/*'
       },
-      // Add timeout
-      signal: AbortSignal.timeout(10000) // 10 second timeout
+      signal: abortController.signal
     });
+
+    // Clear timeout if successful
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       console.error('Camera Proxy: Camera request failed:', response.status, response.statusText);
