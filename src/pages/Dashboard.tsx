@@ -1565,12 +1565,20 @@ const Dashboard: React.FC = () => {
                       return gateStatus;
                     }
                     
-                    // PRIORITA 2: Když jsem ve frontě
+                    // PRIORITA 2: Když se brána pohybuje - vždy ukázat stav (ne frontu)
+                    if (gateStatus.includes('se...') || gateStatus === 'Brána otevřena') {
+                      if (gateCoordinationStatus.queueLength > 0) {
+                        return `${gateStatus} (${gateCoordinationStatus.queueLength} čeká)`;
+                      }
+                      return gateStatus;
+                    }
+                    
+                    // PRIORITA 3: Když jsem ve frontě
                     if (gateCoordinationStatus.isInQueue) {
                       return `🚪 ${gateCoordinationStatus.waitingTimeText}`;
                     }
                     
-                    // PRIORITA 3: Když můžu začít ovládat (nikdo není aktivní)
+                    // PRIORITA 4: Když můžu začít ovládat (nikdo není aktivní)
                     if (gateCoordinationStatus.canStartControl) {
                       if (gateCoordinationStatus.queueLength > 0) {
                         return `${gateStatus} (${gateCoordinationStatus.queueLength} čeká)`;
@@ -1578,7 +1586,7 @@ const Dashboard: React.FC = () => {
                       return gateStatus;
                     }
                     
-                    // PRIORITA 4: Když někdo jiný ovládá - nabídni frontu
+                    // PRIORITA 5: Když někdo jiný ovládá - nabídni frontu
                     if (gateCoordinationStatus.isBlocked && !gateCoordinationStatus.isInQueue) {
                       return '📋 Zařadit do fronty';
                     }
