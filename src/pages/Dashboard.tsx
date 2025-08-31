@@ -713,20 +713,20 @@ const Dashboard: React.FC = () => {
   }, [currentUser]);
 
   // Auto-cleanup: Release control when user closes app or goes offline
-  // IMMEDIATE CLEANUP on mount for debugging
-  useEffect(() => {
-    const immediateCleanup = async () => {
-      try {
-        console.log('🧹 Dashboard: Running immediate coordination cleanup on mount...');
-        await cleanupSessions();
-        console.log('✅ Dashboard: Immediate cleanup completed');
-      } catch (error) {
-        console.warn('⚠️ Dashboard: Immediate cleanup failed:', error);
-      }
-    };
-    
-    immediateCleanup();
-  }, []); // Run once on mount
+  // KRITICKÁ OPRAVA: Disable immediate cleanup - interferuje s user registration
+  // useEffect(() => {
+  //   const immediateCleanup = async () => {
+  //     try {
+  //       console.log('🧹 Dashboard: Running immediate coordination cleanup on mount...');
+  //       await cleanupSessions();
+  //       console.log('✅ Dashboard: Immediate cleanup completed');
+  //     } catch (error) {
+  //       console.warn('⚠️ Dashboard: Immediate cleanup failed:', error);
+  //     }
+  //   };
+  //   
+  //   immediateCleanup();
+  // }, []); // DISABLED - causes activeUser registration interference
 
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -780,7 +780,7 @@ const Dashboard: React.FC = () => {
     return () => clearInterval(locationCheck);
   }, [locationPermission]);
 
-  // Periodic cleanup of stale coordination sessions every 2 minutes
+  // Periodic cleanup of stale coordination sessions - REDUCED FREQUENCY
   useEffect(() => {
     const cleanupInterval = setInterval(async () => {
       try {
@@ -789,7 +789,7 @@ const Dashboard: React.FC = () => {
       } catch (error) {
         console.warn('⚠️ Dashboard: Periodic cleanup failed:', error);
       }
-    }, 2 * 60 * 1000); // Every 2 minutes
+    }, 15 * 60 * 1000); // OPRAVA: Každých 15 minut místo 2 minut - méně interference
 
     return () => clearInterval(cleanupInterval);
   }, [cleanupSessions]);
