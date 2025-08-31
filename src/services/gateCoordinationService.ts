@@ -17,6 +17,7 @@ export interface GateCoordination {
   gateState: 'CLOSED' | 'OPENING' | 'OPEN' | 'CLOSING' | 'STOPPED';
   lastActivity: number;
   autoOpeningUserId?: string; // ID uživatele, který čeká na automatické otevření
+  connectedUsers?: { [userId: string]: { lastSeen: number, displayName: string } }; // NOVÉ: Heartbeat tracking
 }
 
 
@@ -24,6 +25,9 @@ class GateCoordinationService {
   private coordinationDoc = db.collection('gate_coordination').doc('current_state');
   private unsubscribe: (() => void) | null = null;
   private currentSessionId: string;
+  private heartbeatInterval: NodeJS.Timeout | null = null;
+  private currentUserId: string | null = null;
+  private currentUserDisplayName: string | null = null;
   
   // Event callbacks
   private onStateChange: ((state: GateCoordination) => void) | null = null;
@@ -57,6 +61,7 @@ class GateCoordinationService {
           reservationQueue: [],
           gateState: 'CLOSED',
           lastActivity: Date.now(),
+          connectedUsers: {}
         };
         await this.coordinationDoc.set(initialState);
         console.log('✅ GateCoordinationService: Vytvořen initial state');
@@ -77,7 +82,8 @@ class GateCoordinationService {
             reservationQueue: Array.isArray(rawData?.reservationQueue) ? rawData.reservationQueue : [],
             gateState: rawData?.gateState || 'CLOSED',
             lastActivity: rawData?.lastActivity || Date.now(),
-            autoOpeningUserId: rawData?.autoOpeningUserId || undefined
+            autoOpeningUserId: rawData?.autoOpeningUserId || undefined,
+            connectedUsers: rawData?.connectedUsers || {}
           };
           
           console.log('🔧 GateCoordinationService: State change (sanitizováno):', state);
@@ -141,6 +147,18 @@ class GateCoordinationService {
       this.unsubscribe();
       this.unsubscribe = null;
     }
+    
+    // Zastavit heartbeat
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    
+    // Odstranit uživatele z connected seznamu
+    if (this.currentUserId) {
+      this.removeUserHeartbeat(this.currentUserId).catch(console.error);
+    }
+    
     console.log('🔧 GateCoordinationService: Služba ukončena');
   }
 
@@ -617,6 +635,22 @@ class GateCoordinationService {
         hasChanges = true;
       }
 
+      // NOVÉ: Vyčisti staré heartbeats pro připojené uživatele
+      if (currentState.connectedUsers) {
+        const validConnectedUsers: { [userId: string]: { lastSeen: number, displayName: string } } = {};
+        
+        Object.entries(currentState.connectedUsers).forEach(([userId, userData]) => {
+          if ((now - userData.lastSeen) <= TIMEOUT_MS) {
+            validConnectedUsers[userId] = userData;
+          }
+        });
+
+        if (Object.keys(validConnectedUsers).length !== Object.keys(currentState.connectedUsers).length) {
+          currentState.connectedUsers = validConnectedUsers;
+          hasChanges = true;
+        }
+      }
+
       if (hasChanges) {
         await this.coordinationDoc.set({
           ...currentState,
@@ -628,6 +662,94 @@ class GateCoordinationService {
     } catch (error) {
       console.error('🔧 GateCoordinationService: Chyba při čištění dat:', error);
     }
+  }
+
+  // NOVÉ: Heartbeat systém pro sledování všech připojených uživatelů
+  async sendHeartbeat(userId: string, userDisplayName: string): Promise<void> {
+    try {
+      const currentState = await this.getCurrentState();
+      if (!currentState) return;
+
+      const connectedUsers = currentState.connectedUsers || {};
+      connectedUsers[userId] = {
+        lastSeen: Date.now(),
+        displayName: userDisplayName
+      };
+
+      const updatedState: GateCoordination = {
+        ...currentState,
+        connectedUsers,
+        lastActivity: Date.now()
+      };
+
+      await this.coordinationDoc.set(updatedState);
+      
+      if (diagnosticsService.isDebugMode()) {
+        console.log(`💓 Heartbeat sent for ${userDisplayName} (${userId})`);
+      }
+
+    } catch (error) {
+      console.error('🔧 GateCoordinationService: Chyba při odesílání heartbeat:', error);
+    }
+  }
+
+  // NOVÉ: Spustit heartbeat interval pro uživatele
+  startHeartbeat(userId: string, userDisplayName: string): void {
+    // Stop existující heartbeat
+    this.stopHeartbeat();
+    
+    this.currentUserId = userId;
+    this.currentUserDisplayName = userDisplayName;
+    
+    // Pošli initial heartbeat ihned
+    this.sendHeartbeat(userId, userDisplayName);
+    
+    // Spusť interval každých 30 sekund
+    this.heartbeatInterval = setInterval(() => {
+      this.sendHeartbeat(userId, userDisplayName);
+    }, 30000);
+    
+    console.log(`💓 Heartbeat started for ${userDisplayName} (${userId})`);
+  }
+
+  // NOVÉ: Zastavit heartbeat interval
+  stopHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    
+    if (this.currentUserId && this.currentUserDisplayName) {
+      console.log(`💓 Heartbeat stopped for ${this.currentUserDisplayName} (${this.currentUserId})`);
+    }
+  }
+
+  // NOVÉ: Odstranit uživatele z heartbeat tracking
+  async removeUserHeartbeat(userId: string): Promise<void> {
+    try {
+      const currentState = await this.getCurrentState();
+      if (!currentState || !currentState.connectedUsers) return;
+
+      const connectedUsers = { ...currentState.connectedUsers };
+      delete connectedUsers[userId];
+
+      const updatedState: GateCoordination = {
+        ...currentState,
+        connectedUsers,
+        lastActivity: Date.now()
+      };
+
+      await this.coordinationDoc.set(updatedState);
+      console.log(`💓 Removed heartbeat for user ${userId}`);
+
+    } catch (error) {
+      console.error('🔧 GateCoordinationService: Chyba při odstraňování heartbeat:', error);
+    }
+  }
+
+  // NOVÉ: Získat počet všech připojených uživatelů
+  getConnectedUsersCount(state: GateCoordination): number {
+    return Object.keys(state.connectedUsers || {}).length;
   }
 }
 

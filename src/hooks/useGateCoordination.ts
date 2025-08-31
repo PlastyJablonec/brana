@@ -39,6 +39,14 @@ export function useGateCoordination() {
         isInitialized = true;
         setIsLoading(false);
         console.log('✅ useGateCoordination: Služba inicializována ÚSPĚŠNĚ');
+        
+        // NOVÉ: Spustit heartbeat pro aktuálního uživatele
+        if (currentUser) {
+          gateCoordinationService.startHeartbeat(
+            currentUser.id, 
+            currentUser.displayName || currentUser.email || 'Neznámý uživatel'
+          );
+        }
       } catch (err) {
         setError('Chyba při inicializaci koordinace uživatelů');
         setIsLoading(false);
@@ -54,7 +62,7 @@ export function useGateCoordination() {
         gateCoordinationService.destroy();
       }
     };
-  }, []);
+  }, [currentUser?.id]);
 
   // Registrace callbacků pro real-time změny
   useEffect(() => {
@@ -147,8 +155,8 @@ export function useGateCoordination() {
     // NOVÉ: Může uživatel začít ovládat? (když nikdo aktivně neovládá)
     const canStartControl = gateCoordinationService.canUserStartControl(userId, coordinationState);
     
-    // NOVÉ: Počet připojených uživatelů (aktivní + ve frontě)
-    const connectedUsers = (coordinationState.activeUser ? 1 : 0) + coordinationState.reservationQueue.length;
+    // NOVÉ: Používej heartbeat systém pro správné počítání všech připojených uživatelů
+    const connectedUsers = gateCoordinationService.getConnectedUsersCount(coordinationState);
     
     // NOVÉ WORKFLOW LOGIKY
     const canCloseNormally = gateCoordinationService.canUserCloseGateNormally(userId, coordinationState);
@@ -165,6 +173,7 @@ export function useGateCoordination() {
       isBlocked,
       canStartControl,
       connectedUsers,
+      connectedUsersData: coordinationState.connectedUsers,
       // NOVÉ DEBUG FIELDS
       canCloseNormally,
       mustUseSlider,
