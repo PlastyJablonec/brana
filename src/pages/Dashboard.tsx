@@ -1014,8 +1014,8 @@ const Dashboard: React.FC = () => {
       return;
     }
 
-    // NOVÉ: Pokud nikdo aktivně neovládá, můžu začít ovládat (FIXED: čekat na callback)
-    if (!gateCoordinationStatus.isActive && gateCoordinationStatus.canStartControl) {
+    // NOVÉ: Pokud nejsem aktivní, pokusit se o registraci (ignorovat canStartControl kolísání)
+    if (!gateCoordinationStatus.isActive) {
       console.log('🚨 DEBUG: Nikdo aktivně neovládá, začínám ovládat...');
       const controlGranted = await requestControl();
       if (!controlGranted) {
@@ -1475,21 +1475,24 @@ const Dashboard: React.FC = () => {
                 </div>
               )}
 
-              {/* NOVÉ: Informační lišta o připojených uživatelích - ZVĚTŠENÁ */}
-              {gateCoordinationStatus.connectedUsers > 1 && (
-                <div style={{
-                  background: 'var(--md-tertiary-container)',
-                  color: 'var(--md-on-tertiary-container)',
-                  padding: '8px 12px',
-                  borderRadius: '12px',
-                  fontSize: '0.875rem',
-                  fontWeight: '600',
-                  marginTop: '8px',
-                  textAlign: 'center'
-                }}>
-                  👥 {gateCoordinationStatus.connectedUsers} uživatelů připojeno
-                </div>
-              )}
+              {/* NOVÉ: Informační lišta o připojených uživatelích - VŽDY ZOBRAZ */}
+              <div style={{
+                background: gateCoordinationStatus.connectedUsers > 1 ? 'var(--md-tertiary-container)' : 'var(--md-surface-variant)',
+                color: gateCoordinationStatus.connectedUsers > 1 ? 'var(--md-on-tertiary-container)' : 'var(--md-on-surface-variant)',
+                padding: '8px 12px',
+                borderRadius: '12px',
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                marginTop: '8px',
+                textAlign: 'center'
+              }}>
+                👥 {gateCoordinationStatus.connectedUsers} {gateCoordinationStatus.connectedUsers === 1 ? 'uživatel připojen' : 'uživatelů připojeno'}
+                {gateCoordinationStatus.activeUser && (
+                  <div style={{ fontSize: '0.75rem', marginTop: '4px', opacity: 0.8 }}>
+                    🎮 Aktivní: {gateCoordinationStatus.activeUser}
+                  </div>
+                )}
+              </div>
             </div>
             
             <button
