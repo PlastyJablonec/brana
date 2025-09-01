@@ -122,9 +122,13 @@ const Dashboard: React.FC = () => {
     
     console.log('🚪 SLIDER: Spouštím zavření brány přes slider...');
     
+    // NOVÉ: Okamžitě skryj slider a aktualizuj stav brány pro všechny
     setShowCloseConfirmSlider(false);
     setCloseSliderPosition(0);
     setIsSliderDragging(false);
+    
+    // NOVÉ: Aktualizuj stav brány lokálně pro okamžité UI feedback
+    updateGateState('CLOSING');
     
     // Proveď zavření brány
     try {
@@ -997,11 +1001,15 @@ const Dashboard: React.FC = () => {
       return;
     }
 
+    // OKAMŽITÉ UI FEEDBACK: Nastav loading state hned na začátku
+    setLoading(true);
+
     // KRITICKÉ: Blokovat normální ovládání pokud uživatel musí použít slider
     if (gateCoordinationStatus.mustUseSlider) {
       playSound('error');
       console.log('🚫 Normální ovládání zablokováno - použijte slider pro zavření brány');
       alert('⚠️ Při čekající frontě použijte slider pro zavření brány');
+      setLoading(false); // Reset loading state
       return;
     }
 
@@ -1024,9 +1032,9 @@ const Dashboard: React.FC = () => {
       } else {
         // Jinak → opustit frontu
         console.log('🚨 DEBUG: Opouštím frontu...');
-        playSound('click');
         await leaveQueue();
         playSound('success');
+        setLoading(false); // Reset loading state
         return;
       }
     }
@@ -1034,7 +1042,6 @@ const Dashboard: React.FC = () => {
     // Pokud někdo aktivně ovládá a já nejsem ve frontě → zařadit do fronty
     if (gateCoordinationStatus.isBlocked && !gateCoordinationStatus.isInQueue) {
       console.log('🚨 DEBUG: Někdo aktivně ovládá, zařazuji se do fronty...');
-      playSound('click');
       const success = await joinQueue();
       if (success) {
         playSound('success');
@@ -1044,15 +1051,22 @@ const Dashboard: React.FC = () => {
         playSound('error');
         console.log('❌ Nepodařilo se zařadit do fronty');
       }
+      setLoading(false); // Reset loading state
       return;
     }
 
-    // NOVÉ: Pokud nejsem aktivní, pokusit se o registraci (ignorovat canStartControl kolísání)
-    if (!gateCoordinationStatus.isActive) {
+    // OPRAVA: Umožnit aktivnímu uživateli okamžité opakované ovládání brány
+    // Pokud jsem již aktivní uživatel, přeskoč registraci a jdi rovnou na MQTT
+    if (gateCoordinationStatus.isActive) {
+      console.log('✅ DEBUG: Už jsem aktivní uživatel - pokračuji přímo s MQTT příkazem');
+      // Přeskočit celou registrační logiku a jít rovnou na MQTT
+    } else {
+      // NOVÉ: Pokud nejsem aktivní, pokusit se o registraci (ignorovat canStartControl kolísání)
       console.log('🚨 DEBUG: Nikdo aktivně neovládá, začínám ovládat...');
       const controlGranted = await requestControl();
       if (!controlGranted) {
         playSound('error');
+        setLoading(false);
         // Pokud se nepodařilo získat kontrolu, možná mezitím někdo jiný začal
         return;
       }
@@ -1102,7 +1116,7 @@ const Dashboard: React.FC = () => {
       }
     }
 
-    // Po úspěšné Firebase kontrole pokračuj s MQTT
+    // Po úspěšné kontrole (buď už jsem byl aktivní, nebo jsem se právě stal aktivním) pokračuj s MQTT
     console.log('🚀 DEBUG: Firebase synchronizace úspěšná - pokračuji s MQTT příkazem');
 
     // NOVÝ WORKFLOW: Zkontroluj zda musí uživatel použít slider pro zavření
