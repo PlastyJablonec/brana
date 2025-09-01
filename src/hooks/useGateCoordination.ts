@@ -182,17 +182,8 @@ export function useGateCoordination() {
     const rawMustUseSlider = gateCoordinationService.mustUseSliderToClose(userId, coordinationState);
     const shouldShowQueueWarning = gateCoordinationService.shouldShowQueueWarning(userId, coordinationState);
     
-    // STABILIZACE: Použij stabilní mustUseSlider stav
-    // Pokud se mustUseSlider aktivuje, udržuj ho dokud uživatel není neaktivní
+    // STABILIZACE: Použij stabilní mustUseSlider stav (bez setState v render!)
     const isCurrentlyActive = position === 0;
-    if (rawMustUseSlider && !stableMustUseSlider) {
-      setStableMustUseSlider(true);
-      console.log('🔒 STABILIZACE: Aktivuji mustUseSlider - slider je NYI POVINNÝ');
-    } else if (!isCurrentlyActive && stableMustUseSlider) {
-      setStableMustUseSlider(false);
-      console.log('🔓 STABILIZACE: Deaktivuji mustUseSlider - uživatel už není aktivní');
-    }
-    
     const mustUseSlider = stableMustUseSlider;
     
     // Comprehensive debug info
@@ -354,6 +345,24 @@ export function useGateCoordination() {
       clearInterval(cleanupInterval);
     };
   }, [isLoading, cleanupSessions]);
+
+  // STABILIZACE: Bezpečný update mustUseSlider stavu v useEffect  
+  useEffect(() => {
+    if (!coordinationState || !currentUser) return;
+    
+    const userId = currentUser.id;
+    const position = gateCoordinationService.getUserPosition(userId, coordinationState);
+    const rawMustUseSlider = gateCoordinationService.mustUseSliderToClose(userId, coordinationState);
+    const isCurrentlyActive = position === 0;
+    
+    if (rawMustUseSlider && !stableMustUseSlider) {
+      setStableMustUseSlider(true);
+      console.log('🔒 STABILIZACE: Aktivuji mustUseSlider - slider je NYI POVINNÝ');
+    } else if (!isCurrentlyActive && stableMustUseSlider) {
+      setStableMustUseSlider(false);
+      console.log('🔓 STABILIZACE: Deaktivuji mustUseSlider - uživatel už není aktivní');
+    }
+  }, [coordinationState, currentUser, stableMustUseSlider]);
 
   return {
     // Stav
