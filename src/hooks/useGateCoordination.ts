@@ -326,7 +326,7 @@ export function useGateCoordination() {
   // Vyčištění neaktivních session (volat periodicky)
   const cleanupSessions = useCallback(async (): Promise<void> => {
     try {
-      await gateCoordinationService.cleanupInactiveSessions(1); // OPRAVA: Snížení z 30 minut na 1 minutu
+      await gateCoordinationService.cleanupInactiveSessions(5); // OPRAVA: Zvýšení na 5 minut - aby se cleanup nespouštěl příliš brzy
     } catch (err) {
       console.error('🔧 useGateCoordination: Chyba cleanupSessions:', err);
     }

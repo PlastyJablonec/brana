@@ -609,7 +609,7 @@ class GateCoordinationService {
       if (!currentState) return;
 
       const now = Date.now();
-      const TIMEOUT_MS = timeoutMs || (30 * 1000); // KRITICKÁ OPRAVA: Snížení z 5 minut na 30 sekund
+      const TIMEOUT_MS = timeoutMs * 60 * 1000; // timeoutMs je v minutách, převést na ms
       let hasChanges = false;
 
       // Vyčisti starého aktivního uživatele
