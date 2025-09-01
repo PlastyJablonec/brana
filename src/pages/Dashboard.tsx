@@ -1703,12 +1703,12 @@ const Dashboard: React.FC = () => {
                       return gateStatus;
                     }
                     
-                    // PRIORITA 2: Když jsem ve frontě - zobrazit pozici a možnost opustit frontu
+                    // PRIORITA 2: Když jsem ve frontě - zobrazit STAV BRÁNY + pozici 
                     if (gateCoordinationStatus.isInQueue) {
                       if (gateCoordinationStatus.position === 1) {
-                        return `🎯 ${gateCoordinationStatus.waitingTimeText} - Klikni pro ovládání!`;
+                        return `🎯 ${gateStatus} - ${gateCoordinationStatus.waitingTimeText}`;
                       }
-                      return `⏳ ${gateCoordinationStatus.waitingTimeText} - Klikni pro opuštění fronty`;
+                      return `⏳ ${gateStatus} - ${gateCoordinationStatus.waitingTimeText}`;
                     }
                     
                     // PRIORITA 3: Když můžu začít ovládat (nikdo není aktivní)
@@ -2053,6 +2053,7 @@ const Dashboard: React.FC = () => {
             <ReservationQueue 
               coordinationState={coordinationState}
               onLeaveQueue={handleLeaveQueue}
+              gateStatus={gateStatus}
             />
           </div>
         )}
@@ -2227,6 +2228,7 @@ const Dashboard: React.FC = () => {
           <ReservationQueue 
             coordinationState={coordinationState}
             onLeaveQueue={handleLeaveQueue}
+            gateStatus={gateStatus}
             className="mb-4"
           />
         )}

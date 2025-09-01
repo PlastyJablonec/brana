@@ -6,12 +6,14 @@ import './GateCoordination.css';
 interface ReservationQueueProps {
   coordinationState: GateCoordination | null;
   onLeaveQueue: () => Promise<void>;
+  gateStatus?: string; // NOVÉ: Stav brány pro čekající uživatele
   className?: string;
 }
 
 export const ReservationQueue: React.FC<ReservationQueueProps> = ({ 
   coordinationState, 
   onLeaveQueue,
+  gateStatus = 'Neznámý stav',
   className = '' 
 }) => {
   const { currentUser } = useAuth();
@@ -36,6 +38,40 @@ export const ReservationQueue: React.FC<ReservationQueueProps> = ({
           >
             ❌ Zrušit čekání
           </button>
+        )}
+      </div>
+      
+      {/* NOVÉ: Zobrazení stavu brány pro čekající uživatele */}
+      <div className="reservation-queue__gate-status" style={{
+        padding: '12px',
+        marginBottom: '16px',
+        borderRadius: '8px',
+        background: gateStatus.includes('se...') 
+          ? 'rgba(255, 193, 7, 0.2)' 
+          : gateStatus.includes('otevřen') 
+          ? 'rgba(76, 175, 80, 0.2)' 
+          : 'rgba(158, 158, 158, 0.2)',
+        border: `2px solid ${gateStatus.includes('se...') 
+          ? 'rgba(255, 193, 7, 0.4)' 
+          : gateStatus.includes('otevřen') 
+          ? 'rgba(76, 175, 80, 0.4)' 
+          : 'rgba(158, 158, 158, 0.4)'}`,
+        textAlign: 'center',
+        fontSize: '16px',
+        fontWeight: '600',
+        color: 'var(--md-on-surface)'
+      }}>
+        🚪 Stav brány: {gateStatus}
+        {gateStatus.includes('se...') && (
+          <div style={{
+            fontSize: '14px',
+            fontWeight: '500',
+            marginTop: '4px',
+            color: 'rgba(255, 193, 7, 1)',
+            animation: 'pulse 1s infinite'
+          }}>
+            Pohyb brány...
+          </div>
         )}
       </div>
       
