@@ -1170,14 +1170,31 @@ const Dashboard: React.FC = () => {
     playSound('success');
     setLoading(false);
     
-    // Step 4: Auto-release control after successful gate operation
+    // Step 4: Intelligent auto-release control after successful gate operation
     // This prevents users from staying as activeUser indefinitely
     try {
-      console.log('🔄 Dashboard: Auto-releasing gate control after operation...');
+      console.log('🔄 Dashboard: Starting intelligent auto-release...');
+      
+      // NOVÁ LOGIKA: Inteligentní auto-release timing
+      const connectedUsers = gateCoordinationStatus.connectedUsers || 0;
+      const hasOtherUsers = connectedUsers > 1;
+      
+      // Pokud jsou další uživatelé připojeni, dej jim více času na zařazení do fronty
+      const releaseTimeout = hasOtherUsers ? 8000 : 3000; // 8s pokud jsou další uživatelé, jinak 3s
+      
+      console.log(`🔄 Dashboard: Auto-release nastaveno na ${releaseTimeout/1000}s (${connectedUsers} uživatelů připojeno)`);
+      
       setTimeout(async () => {
+        // KONTROLA PŘED AUTO-RELEASE: Zkontroluj jestli někdo nečeká ve frontě
+        const currentState = await gateCoordinationService.getCurrentState();
+        if (currentState && currentState.reservationQueue.length > 0) {
+          console.log('🚫 Dashboard: Auto-release zrušeno - někdo čeká ve frontě');
+          return; // Nezrušuj kontrolu pokud někdo čeká
+        }
+        
         await releaseControl();
         console.log('✅ Dashboard: Control auto-released successfully');
-      }, 2000); // Wait 2s to ensure operation completes
+      }, releaseTimeout);
     } catch (releaseError) {
       console.warn('⚠️ Dashboard: Auto-release failed (non-critical):', releaseError);
     }
