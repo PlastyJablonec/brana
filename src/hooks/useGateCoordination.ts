@@ -26,6 +26,9 @@ export function useGateCoordination() {
   const [coordinationState, setCoordinationState] = useState<GateCoordination | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // STABILIZACE: Udržuj mustUseSlider stav stabilní proti kolísání
+  const [stableMustUseSlider, setStableMustUseSlider] = useState(false);
 
   // Inicializace služby
   useEffect(() => {
@@ -176,8 +179,21 @@ export function useGateCoordination() {
     
     // NOVÉ WORKFLOW LOGIKY
     const canCloseNormally = gateCoordinationService.canUserCloseGateNormally(userId, coordinationState);
-    const mustUseSlider = gateCoordinationService.mustUseSliderToClose(userId, coordinationState);
+    const rawMustUseSlider = gateCoordinationService.mustUseSliderToClose(userId, coordinationState);
     const shouldShowQueueWarning = gateCoordinationService.shouldShowQueueWarning(userId, coordinationState);
+    
+    // STABILIZACE: Použij stabilní mustUseSlider stav
+    // Pokud se mustUseSlider aktivuje, udržuj ho dokud uživatel není neaktivní
+    const isCurrentlyActive = position === 0;
+    if (rawMustUseSlider && !stableMustUseSlider) {
+      setStableMustUseSlider(true);
+      console.log('🔒 STABILIZACE: Aktivuji mustUseSlider - slider je NYI POVINNÝ');
+    } else if (!isCurrentlyActive && stableMustUseSlider) {
+      setStableMustUseSlider(false);
+      console.log('🔓 STABILIZACE: Deaktivuji mustUseSlider - uživatel už není aktivní');
+    }
+    
+    const mustUseSlider = stableMustUseSlider;
     
     // Comprehensive debug info
     const debugInfo = gateCoordinationService.getDebugInfo(userId, coordinationState);
