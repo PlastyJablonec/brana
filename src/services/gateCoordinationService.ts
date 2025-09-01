@@ -616,7 +616,7 @@ class GateCoordinationService {
       if (!currentState) return;
 
       const now = Date.now();
-      const TIMEOUT_MS = timeoutMs || (5 * 60 * 1000); // OPRAVA: Použij parametr nebo default 5 min
+      const TIMEOUT_MS = timeoutMs || (30 * 1000); // KRITICKÁ OPRAVA: Snížení z 5 minut na 30 sekund
       let hasChanges = false;
 
       // Vyčisti starého aktivního uživatele

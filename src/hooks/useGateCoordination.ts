@@ -56,11 +56,27 @@ export function useGateCoordination() {
 
     initializeService();
 
-    // Cleanup
-    return () => {
+    // Cleanup funkce
+    const cleanup = () => {
       if (isInitialized) {
         gateCoordinationService.destroy();
       }
+    };
+
+    // KRITICKÁ OPRAVA: Přidání beforeunload listener pro cleanup při zavření tabu/browseru
+    const handleBeforeUnload = () => {
+      console.log('🔄 useGateCoordination: beforeunload - spouštím cleanup');
+      cleanup();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handleBeforeUnload); // iOS Safari backup
+
+    // Cleanup při unmount komponenty nebo změně currentUser
+    return () => {
+      cleanup();
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handleBeforeUnload);
     };
   }, [currentUser?.id]);
 
@@ -303,11 +319,25 @@ export function useGateCoordination() {
   // Vyčištění neaktivních session (volat periodicky)
   const cleanupSessions = useCallback(async (): Promise<void> => {
     try {
-      await gateCoordinationService.cleanupInactiveSessions(30); // 30 minut
+      await gateCoordinationService.cleanupInactiveSessions(1); // OPRAVA: Snížení z 30 minut na 1 minutu
     } catch (err) {
       console.error('🔧 useGateCoordination: Chyba cleanupSessions:', err);
     }
   }, []);
+
+  // NOVÉ: Automatický cleanup každých 30 sekund pro odstranění neaktivních uživatelů
+  useEffect(() => {
+    if (isLoading) return;
+
+    const cleanupInterval = setInterval(() => {
+      cleanupSessions();
+    }, 30000); // 30 sekund
+
+    // Cleanup interval při unmount
+    return () => {
+      clearInterval(cleanupInterval);
+    };
+  }, [isLoading, cleanupSessions]);
 
   return {
     // Stav
