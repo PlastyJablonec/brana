@@ -59,8 +59,9 @@
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
     
-    <!-- Mobile Debug Info -->
+    <!-- Mobile Debug Info - AFTER root div -->
     <script>
       // Debug console for mobile debugging
       window.addEventListener('error', function(e) {
@@ -71,14 +72,6 @@
       window.addEventListener('unhandledrejection', function(e) {
         console.error('Unhandled promise rejection:', e.reason);
         document.body.innerHTML += '<div style="position:fixed;top:40px;left:0;right:0;background:orange;color:black;padding:10px;z-index:999999;font-size:12px;">PROMISE ERROR: ' + e.reason + '</div>';
-      });
-      
-      // Show loading indicator - wait for DOM to be ready
-      document.addEventListener('DOMContentLoaded', function() {
-        var root = document.getElementById('root');
-        if (root) {
-          root.innerHTML = '<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:Arial;text-align:center;"><div style="font-size:24px;margin-bottom:20px;">📱</div><div>Loading React App...</div><div style="font-size:12px;margin-top:10px;">User Agent: ' + navigator.userAgent + '</div></div>';
-        }
       });
       
       // Basic polyfills for older mobile browsers
@@ -94,6 +87,12 @@
         };
       }
       
+      // Show loading indicator immediately - root exists now
+      var root = document.getElementById('root');
+      if (root) {
+        root.innerHTML = '<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:Arial;text-align:center;"><div style="font-size:24px;margin-bottom:20px;">📱</div><div>Loading React App...</div><div style="font-size:12px;margin-top:10px;">User Agent: ' + navigator.userAgent + '</div></div>';
+      }
+      
       // Timeout to detect if React failed to load
       setTimeout(function() {
         var root = document.getElementById('root');
@@ -102,8 +101,6 @@
         }
       }, 10000); // 10 second timeout
     </script>
-    
-    <div id="root"></div>
     <!--
       This HTML file is a template.
       If you open it directly in the browser, you will see an empty page.
