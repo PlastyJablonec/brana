@@ -992,6 +992,24 @@ const Dashboard: React.FC = () => {
 
     // NOVÉ WORKFLOW: Inteligentní koordinace podle specifikace uživatele
     
+    // Pokud jsem ve frontě
+    if (gateCoordinationStatus.isInQueue) {
+      // Pokud jsem první ve frontě → pokusit se o převzetí kontroly
+      if (gateCoordinationStatus.position === 1 && gateCoordinationStatus.canStartControl) {
+        console.log('🚨 DEBUG: Jsem první ve frontě a můžu převzít kontrolu...');
+        // Opustit frontu a pokusit se o kontrolu
+        await leaveQueue();
+        // Pokračovat s kontrolou níže
+      } else {
+        // Jinak → opustit frontu
+        console.log('🚨 DEBUG: Opouštím frontu...');
+        playSound('click');
+        await leaveQueue();
+        playSound('success');
+        return;
+      }
+    }
+    
     // Pokud někdo aktivně ovládá a já nejsem ve frontě → zařadit do fronty
     if (gateCoordinationStatus.isBlocked && !gateCoordinationStatus.isInQueue) {
       console.log('🚨 DEBUG: Někdo aktivně ovládá, zařazuji se do fronty...');
@@ -1003,15 +1021,6 @@ const Dashboard: React.FC = () => {
       } else {
         playSound('error');
       }
-      return;
-    }
-
-    // Pokud jsem ve frontě → opustit frontu
-    if (gateCoordinationStatus.isInQueue) {
-      console.log('🚨 DEBUG: Opouštím frontu...');
-      playSound('click');
-      await leaveQueue();
-      playSound('success');
       return;
     }
 
@@ -1498,7 +1507,7 @@ const Dashboard: React.FC = () => {
             
             <button
               onClick={handleGateControl}
-              disabled={loading || !mqttConnected || !isLocationProximityAllowed || gateStatus.includes('STOP režim') || gateCoordinationStatus.isBlocked}
+              disabled={loading || !mqttConnected || !isLocationProximityAllowed || gateStatus.includes('STOP režim')}
               className={`gate-button-modern ${(gateStatus.includes('se...') || loading) ? 'pulsing' : ''} ${timerState.type === 'autoClose' && timerState.countdown <= 60 ? 'timer-blinking' : ''} md-ripple`}
               style={{
                 width: '280px',
@@ -1514,7 +1523,8 @@ const Dashboard: React.FC = () => {
                 fontWeight: '600',
                 background: !isLocationProximityAllowed ? 'var(--md-surface-variant)' :
                            gateStatus.includes('STOP režim') ? 'var(--md-error-container)' :
-                           gateCoordinationStatus.isBlocked ? 'var(--md-surface-variant)' :
+                           gateCoordinationStatus.isInQueue ? 'var(--md-tertiary)' :
+                           gateCoordinationStatus.isBlocked ? 'var(--md-primary-container)' :
                            gateCoordinationStatus.mustUseSlider ? 'var(--md-tertiary-container)' :
                            gateStatus.includes('zavřen') ? 'var(--md-error)' : 
                            gateStatus.includes('otevřen') ? 'var(--md-success)' : 'var(--md-primary)',
@@ -1569,20 +1579,15 @@ const Dashboard: React.FC = () => {
                       return gateStatus;
                     }
                     
-                    // PRIORITA 2: Když se brána pohybuje - vždy ukázat stav (ne frontu)
-                    if (gateStatus.includes('se...') || gateStatus === 'Brána otevřena') {
-                      if (gateCoordinationStatus.queueLength > 0) {
-                        return `${gateStatus} (${gateCoordinationStatus.queueLength} čeká)`;
-                      }
-                      return gateStatus;
-                    }
-                    
-                    // PRIORITA 3: Když jsem ve frontě
+                    // PRIORITA 2: Když jsem ve frontě - zobrazit pozici a možnost opustit frontu
                     if (gateCoordinationStatus.isInQueue) {
-                      return `🚪 ${gateCoordinationStatus.waitingTimeText}`;
+                      if (gateCoordinationStatus.position === 1) {
+                        return `🎯 ${gateCoordinationStatus.waitingTimeText} - Klikni pro ovládání!`;
+                      }
+                      return `⏳ ${gateCoordinationStatus.waitingTimeText} - Klikni pro opuštění fronty`;
                     }
                     
-                    // PRIORITA 4: Když můžu začít ovládat (nikdo není aktivní)
+                    // PRIORITA 3: Když můžu začít ovládat (nikdo není aktivní)
                     if (gateCoordinationStatus.canStartControl) {
                       if (gateCoordinationStatus.queueLength > 0) {
                         return `${gateStatus} (${gateCoordinationStatus.queueLength} čeká)`;
@@ -1590,9 +1595,23 @@ const Dashboard: React.FC = () => {
                       return gateStatus;
                     }
                     
-                    // PRIORITA 5: Když někdo jiný ovládá - nabídni frontu
-                    if (gateCoordinationStatus.isBlocked && !gateCoordinationStatus.isInQueue) {
-                      return '📋 Zařadit do fronty';
+                    // PRIORITA 4: Když někdo jiný ovládá - VŽDY nabídni frontu (i když už jsem ve frontě)
+                    if (gateCoordinationStatus.isBlocked) {
+                      if (gateCoordinationStatus.isInQueue) {
+                        // Už jsem ve frontě - umožni opuštění
+                        return `⏳ ${gateCoordinationStatus.waitingTimeText} - Opustit frontu`;
+                      } else {
+                        // Nejsem ve frontě - nabídni zařazení
+                        return '📋 Zařadit do fronty';
+                      }
+                    }
+                    
+                    // PRIORITA 5: Když se brána pohybuje - ukázat stav
+                    if (gateStatus.includes('se...') || gateStatus === 'Brána otevřena') {
+                      if (gateCoordinationStatus.queueLength > 0) {
+                        return `${gateStatus} (${gateCoordinationStatus.queueLength} čeká)`;
+                      }
+                      return gateStatus;
                     }
                     
                     // Fallback
