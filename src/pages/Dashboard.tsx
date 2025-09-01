@@ -458,6 +458,19 @@ const Dashboard: React.FC = () => {
       } else if (isClosed) {
         console.log('🔧 Dashboard: Gate closed, stopping timers');
         stopTimer();
+        
+        // AUTO-RELEASE: Uvolni kontrolu když se brána zavře
+        if (gateCoordinationStatus.isActive) {
+          console.log('🔄 Dashboard: Auto-releasing control after gate closed');
+          setTimeout(async () => {
+            try {
+              await releaseControl();
+              console.log('✅ Dashboard: Control auto-released after gate closed');
+            } catch (error) {
+              console.warn('⚠️ Dashboard: Auto-release after close failed:', error);
+            }
+          }, 1000); // 1s delay to ensure gate is fully closed
+        }
       } else if (isStopMode) {
         console.log('🛑 Dashboard: STOP režim detected from MQTT, stopping all timers');
         stopTimer();
@@ -1170,34 +1183,9 @@ const Dashboard: React.FC = () => {
     playSound('success');
     setLoading(false);
     
-    // Step 4: Intelligent auto-release control after successful gate operation
-    // This prevents users from staying as activeUser indefinitely
-    try {
-      console.log('🔄 Dashboard: Starting intelligent auto-release...');
-      
-      // NOVÁ LOGIKA: Inteligentní auto-release timing
-      const connectedUsers = gateCoordinationStatus.connectedUsers || 0;
-      const hasOtherUsers = connectedUsers > 1;
-      
-      // Pokud jsou další uživatelé připojeni, dej jim více času na zařazení do fronty
-      const releaseTimeout = hasOtherUsers ? 8000 : 3000; // 8s pokud jsou další uživatelé, jinak 3s
-      
-      console.log(`🔄 Dashboard: Auto-release nastaveno na ${releaseTimeout/1000}s (${connectedUsers} uživatelů připojeno)`);
-      
-      setTimeout(async () => {
-        // KONTROLA PŘED AUTO-RELEASE: Zkontroluj jestli někdo nečeká ve frontě
-        const currentState = await gateCoordinationService.getCurrentState();
-        if (currentState && currentState.reservationQueue.length > 0) {
-          console.log('🚫 Dashboard: Auto-release zrušeno - někdo čeká ve frontě');
-          return; // Nezrušuj kontrolu pokud někdo čeká
-        }
-        
-        await releaseControl();
-        console.log('✅ Dashboard: Control auto-released successfully');
-      }, releaseTimeout);
-    } catch (releaseError) {
-      console.warn('⚠️ Dashboard: Auto-release failed (non-critical):', releaseError);
-    }
+    // Step 4: Auto-release removed - users keep control until gate closes
+    // This allows other users to join queue while gate is operating
+    console.log('🔄 Dashboard: Auto-release disabled - user stays active until gate operation completes');
   };
 
   const handleGarageControl = async () => {
