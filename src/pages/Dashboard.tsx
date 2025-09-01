@@ -997,6 +997,14 @@ const Dashboard: React.FC = () => {
       return;
     }
 
+    // KRITICKÉ: Blokovat normální ovládání pokud uživatel musí použít slider
+    if (gateCoordinationStatus.mustUseSlider) {
+      playSound('error');
+      console.log('🚫 Normální ovládání zablokováno - použijte slider pro zavření brány');
+      alert('⚠️ Při čekající frontě použijte slider pro zavření brány');
+      return;
+    }
+
     // DEBUG: Zobraz stav koordinace
     console.log('🚨 DEBUG: handleGateControl - gateCoordinationStatus:', gateCoordinationStatus);
     console.log('🚨 DEBUG: isBlocked:', gateCoordinationStatus.isBlocked);
@@ -1030,9 +1038,11 @@ const Dashboard: React.FC = () => {
       const success = await joinQueue();
       if (success) {
         playSound('success');
-        alert(`Zařazeni do fronty. Aktivní uživatel: ${gateCoordinationStatus.activeUser}`);
+        // Místo alert použít toast notifikaci nebo console log
+        console.log(`✅ Úspěšně zařazen do fronty. Aktivní uživatel: ${gateCoordinationStatus.activeUser}`);
       } else {
         playSound('error');
+        console.log('❌ Nepodařilo se zařadit do fronty');
       }
       return;
     }
@@ -1699,6 +1709,97 @@ const Dashboard: React.FC = () => {
                 </svg>
                 STOP
               </button>
+            )}
+
+            {/* SLIDE-TO-CLOSE slider pro aktivní uživatele s frontou */}
+            {gateCoordinationStatus.isActive && gateCoordinationStatus.mustUseSlider && (
+              <div style={{ 
+                marginTop: '16px',
+                background: 'linear-gradient(135deg, rgba(255,152,0,0.1) 0%, rgba(255,193,7,0.1) 100%)',
+                border: '2px solid rgba(255,152,0,0.3)',
+                borderRadius: '12px',
+                padding: '12px'
+              }}>
+                <div style={{ 
+                  fontSize: '14px', 
+                  fontWeight: '600', 
+                  color: 'rgba(255,152,0,1)',
+                  marginBottom: '8px',
+                  textAlign: 'center'
+                }}>
+                  ⚠️ Fronta čeká - použijte slider pro zavření
+                </div>
+                
+                <div 
+                  style={{
+                    position: 'relative',
+                    width: '100%',
+                    height: '50px',
+                    background: 'rgba(255,255,255,0.1)',
+                    borderRadius: '25px',
+                    border: '2px solid rgba(255,152,0,0.3)',
+                    cursor: isSliderDragging ? 'grabbing' : 'grab',
+                    overflow: 'hidden'
+                  }}
+                  onMouseDown={handleSliderStart}
+                  onMouseMove={handleSliderMove}
+                  onMouseUp={handleSliderEnd}
+                  onMouseLeave={handleSliderEnd}
+                  onTouchStart={handleSliderStart}
+                  onTouchMove={handleSliderMove}
+                  onTouchEnd={handleSliderEnd}
+                >
+                  {/* Progress background */}
+                  <div style={{
+                    position: 'absolute',
+                    left: '0',
+                    top: '0',
+                    width: `${closeSliderPosition}%`,
+                    height: '100%',
+                    background: 'linear-gradient(90deg, rgba(76,175,80,0.3) 0%, rgba(139,195,74,0.3) 100%)',
+                    borderRadius: '25px',
+                    transition: isSliderDragging ? 'none' : 'width 0.3s ease'
+                  }} />
+                  
+                  <div style={{
+                    position: 'absolute',
+                    left: `calc(${closeSliderPosition}% - 21px + 4px)`,
+                    top: '4px',
+                    width: '42px',
+                    height: '42px',
+                    background: closeSliderPosition > 90 ? 
+                      'linear-gradient(135deg, #4caf50, #8bc34a)' : 
+                      'linear-gradient(135deg, #ff9800, #ffc107)',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                    color: 'white',
+                    fontSize: '20px',
+                    transition: isSliderDragging ? 'none' : 'all 0.3s ease',
+                    transform: closeSliderPosition > 90 ? 'scale(1.1)' : 'scale(1)'
+                  }}>
+                    {closeSliderPosition > 90 ? '✅' : '🔒'}
+                  </div>
+                  
+                  <div style={{
+                    position: 'absolute',
+                    right: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: closeSliderPosition > 90 ? 
+                      'rgba(76,175,80,0.9)' : 
+                      'rgba(255,152,0,0.8)',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    pointerEvents: 'none',
+                    transition: 'color 0.3s ease'
+                  }}>
+                    {closeSliderPosition > 90 ? 'Pusťte pro zavření!' : 'Táhněte pro zavření →'}
+                  </div>
+                </div>
+              </div>
             )}
             
             
