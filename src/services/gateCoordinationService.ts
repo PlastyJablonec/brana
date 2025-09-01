@@ -561,19 +561,15 @@ class GateCoordinationService {
     };
   }
 
-  // OPRAVENÁ LOGIKA: Uživatel je blokován když někdo ovládá NEBO se brána pohybuje
+  // OPRAVENÁ LOGIKA: Uživatel je blokován pouze když někdo aktivně ovládá
   isUserBlocked(userId: string, state: GateCoordination): boolean {
-    // Blokován pokud:
-    // 1. Někdo je aktivní (activeUser existuje) NEBO
-    // 2. Brána se pohybuje (OPENING/CLOSING) - brána byla právě ovládána
+    // Blokován POUZE pokud někdo jiný aktivně ovládá
     if (state.activeUser !== null && state.activeUser.userId !== userId) {
       return true; // Někdo jiný aktivně ovládá
     }
     
-    // NOVÉ: Blokován také když se brána pohybuje (někdo právě ovládal)
-    if (state.gateState === 'OPENING' || state.gateState === 'CLOSING') {
-      return true; // Brána se pohybuje - čekej až se zastaví
-    }
+    // DŮLEŽITÉ: NEBLOKUJEME při pohybu brány - umožníme převzít kontrolu
+    // Důvod: Po auto-release může další uživatel chtít ovládat i během pohybu
     
     return false;
   }
@@ -581,18 +577,15 @@ class GateCoordinationService {
   // OPRAVENÁ LOGIKA: Může uživatel začít ovládat?
   canUserStartControl(userId: string, state: GateCoordination): boolean {
     // Může začít ovládat když:
-    // 1. Nikdo není aktivní A brána se nepohybuje NEBO
-    // 2. On už je aktivní
+    // 1. On už je aktivní NEBO
+    // 2. Nikdo není aktivní (bez ohledu na gateState)
     if (state.activeUser?.userId === userId) {
       return true; // Už je aktivní
     }
     
-    // NOVÉ: Nemůže ovládat když se brána pohybuje (někdo právě ovládal)
-    if (state.gateState === 'OPENING' || state.gateState === 'CLOSING') {
-      return false; // Brána se pohybuje - čekej až se zastaví
-    }
-    
-    return state.activeUser === null; // Může ovládat jen když nikdo není aktivní
+    // DŮLEŽITÉ: Umožníme ovládání i při pohybu brány pokud nikdo aktivně neovládá
+    // Use case: Po auto-release může další uživatel převzít kontrolu během pohybu
+    return state.activeUser === null;
   }
 
   // Získání waiting time textu
