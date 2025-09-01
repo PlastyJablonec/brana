@@ -10,6 +10,32 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Ovládání Brány" />
     <!-- Note: Removed CSP to allow mixed content for MQTT WebSocket -->
+    
+    <!-- Fallback styles for white screen debugging -->
+    <style>
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #fafafa;
+        color: #212121;
+      }
+      #root:empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        text-align: center;
+        padding: 20px;
+      }
+      #root:empty:after {
+        content: "🚫 React se nepodařilo načíst\A\A Možné příčiny:\A• JavaScript chyba\A• Síťový problém\A• Nekompatibilní prohlížeč";
+        white-space: pre;
+        font-size: 16px;
+        line-height: 1.5;
+      }
+    </style>
     <meta
       name="description"
       content="Moderní aplikace pro ovládání brány a garáže přes MQTT s GPS sledováním a pokročilými nastaveními."
@@ -33,6 +59,44 @@
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
+    
+    <!-- Mobile Debug Info -->
+    <script>
+      // Debug console for mobile debugging
+      window.addEventListener('error', function(e) {
+        console.error('Global error:', e.error);
+        document.body.innerHTML += '<div style="position:fixed;top:0;left:0;right:0;background:red;color:white;padding:10px;z-index:999999;font-size:12px;">ERROR: ' + e.error.message + '<br>File: ' + e.filename + ':' + e.lineno + '</div>';
+      });
+      
+      window.addEventListener('unhandledrejection', function(e) {
+        console.error('Unhandled promise rejection:', e.reason);
+        document.body.innerHTML += '<div style="position:fixed;top:40px;left:0;right:0;background:orange;color:black;padding:10px;z-index:999999;font-size:12px;">PROMISE ERROR: ' + e.reason + '</div>';
+      });
+      
+      // Show loading indicator
+      document.getElementById('root').innerHTML = '<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:Arial;text-align:center;"><div style="font-size:24px;margin-bottom:20px;">📱</div><div>Loading React App...</div><div style="font-size:12px;margin-top:10px;">User Agent: ' + navigator.userAgent + '</div></div>';
+      
+      // Basic polyfills for older mobile browsers
+      if (!Array.prototype.includes) {
+        Array.prototype.includes = function(searchElement) {
+          return this.indexOf(searchElement) !== -1;
+        };
+      }
+      
+      if (!String.prototype.includes) {
+        String.prototype.includes = function(search) {
+          return this.indexOf(search) !== -1;
+        };
+      }
+      
+      // Timeout to detect if React failed to load
+      setTimeout(function() {
+        if (document.getElementById('root').innerHTML.indexOf('Loading React App') !== -1) {
+          document.getElementById('root').innerHTML = '<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:Arial;text-align:center;background:red;color:white;padding:20px;border-radius:10px;"><div style="font-size:24px;margin-bottom:20px;">⚠️</div><div>React se nepodařilo načíst</div><div style="font-size:12px;margin-top:10px;">Zkuste obnovit stránku</div></div>';
+        }
+      }, 10000); // 10 second timeout
+    </script>
+    
     <div id="root"></div>
     <!--
       This HTML file is a template.
