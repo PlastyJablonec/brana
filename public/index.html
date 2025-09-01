@@ -73,8 +73,13 @@
         document.body.innerHTML += '<div style="position:fixed;top:40px;left:0;right:0;background:orange;color:black;padding:10px;z-index:999999;font-size:12px;">PROMISE ERROR: ' + e.reason + '</div>';
       });
       
-      // Show loading indicator
-      document.getElementById('root').innerHTML = '<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:Arial;text-align:center;"><div style="font-size:24px;margin-bottom:20px;">📱</div><div>Loading React App...</div><div style="font-size:12px;margin-top:10px;">User Agent: ' + navigator.userAgent + '</div></div>';
+      // Show loading indicator - wait for DOM to be ready
+      document.addEventListener('DOMContentLoaded', function() {
+        var root = document.getElementById('root');
+        if (root) {
+          root.innerHTML = '<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:Arial;text-align:center;"><div style="font-size:24px;margin-bottom:20px;">📱</div><div>Loading React App...</div><div style="font-size:12px;margin-top:10px;">User Agent: ' + navigator.userAgent + '</div></div>';
+        }
+      });
       
       // Basic polyfills for older mobile browsers
       if (!Array.prototype.includes) {
@@ -91,8 +96,9 @@
       
       // Timeout to detect if React failed to load
       setTimeout(function() {
-        if (document.getElementById('root').innerHTML.indexOf('Loading React App') !== -1) {
-          document.getElementById('root').innerHTML = '<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:Arial;text-align:center;background:red;color:white;padding:20px;border-radius:10px;"><div style="font-size:24px;margin-bottom:20px;">⚠️</div><div>React se nepodařilo načíst</div><div style="font-size:12px;margin-top:10px;">Zkuste obnovit stránku</div></div>';
+        var root = document.getElementById('root');
+        if (root && root.innerHTML && root.innerHTML.indexOf('Loading React App') !== -1) {
+          root.innerHTML = '<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:Arial;text-align:center;background:red;color:white;padding:20px;border-radius:10px;"><div style="font-size:24px;margin-bottom:20px;">⚠️</div><div>React se nepodařilo načíst</div><div style="font-size:12px;margin-top:10px;">Zkuste obnovit stránku</div></div>';
         }
       }, 10000); // 10 second timeout
     </script>
