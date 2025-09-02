@@ -119,6 +119,41 @@ export const useGateTimer = () => {
     }, 1000);
   };
 
+  const startExtendedAutoCloseTimer = () => {
+    stopTimer();
+    
+    // Extended timer: 8 minut (480 sekund) místo standardních 4 minut
+    let duration = 480;
+    const formatTime = (seconds: number) => {
+      const minutes = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${minutes}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    setTimerState({
+      countdown: duration,
+      displayText: `Auto-zavření za ${formatTime(duration)} (prodlouženo)`,
+      isActive: true,
+      type: 'autoClose'
+    });
+
+    intervalRef.current = setInterval(() => {
+      duration--;
+      
+      if (duration <= 0) {
+        stopTimer();
+        return;
+      }
+
+      setTimerState({
+        countdown: duration,
+        displayText: `Auto-zavření za ${formatTime(duration)} (prodlouženo)`,
+        isActive: true,
+        type: 'autoClose'
+      });
+    }, 1000);
+  };
+
   const startOpenElapsedTimer = () => {
     stopTimer();
     
@@ -164,6 +199,7 @@ export const useGateTimer = () => {
     timerState,
     startTravelTimer,
     startAutoCloseTimer,
+    startExtendedAutoCloseTimer,
     startOpenElapsedTimer,
     stopTimer
   };

@@ -332,18 +332,20 @@ class GateCoordinationService {
         return; // Uživatel není aktivní
       }
 
-      // Zkontroluj, zda je někdo v queue
-      const nextUser = currentState.reservationQueue[0];
-      
+      // OPRAVA: Po zavření brány resetuj úplně coordination stav
+      // Neaktivuj automaticky další uživatele z queue
       const updatedState: GateCoordination = {
         ...currentState,
-        activeUser: nextUser ? { ...nextUser, state: 'ACTIVE' } : null,
-        reservationQueue: nextUser ? currentState.reservationQueue.slice(1) : [],
-        lastActivity: Date.now()
+        activeUser: null,
+        reservationQueue: [], // Vyčisti také queue - po zavření brány jsou všichni "free"
+        lastActivity: Date.now(),
+        // Reset auto-open counter po zavření
+        autoOpenCount: 0,
+        autoOpeningUserId: undefined
       };
 
       await this.coordinationDoc.set(updatedState);
-      console.log('🔧 GateCoordinationService: Uživatel', userId, 'uvolnil ovládání');
+      console.log('🔧 GateCoordinationService: Uživatel', userId, 'uvolnil ovládání - coordination stav resetován');
 
     } catch (error) {
       console.error('🔧 GateCoordinationService: Chyba při uvolňování ovládání:', error);
