@@ -191,6 +191,11 @@ export class UserService {
    */
   async approveUser(userId: string, adminId: string): Promise<void> {
     try {
+      // Najdi uživatele abych zjistil jeho roli
+      const userDoc = await db.collection(this.COLLECTION).doc(userId).get();
+      const userData = userDoc.data();
+      const isAdminUser = userData?.role === 'admin';
+      
       await db.collection(this.COLLECTION).doc(userId).update({
         status: 'approved',
         approvedAt: Timestamp.now(),
@@ -202,7 +207,7 @@ export class UserService {
         'permissions.stopMode': false,
         'permissions.viewLogs': false,
         'permissions.manageUsers': false,
-        'permissions.viewGateActivity': true, // Admin uživatelé vidí gate activity
+        'permissions.viewGateActivity': isAdminUser, // JEN admin uživatelé vidí gate activity
         'permissions.requireLocation': true,
         'permissions.allowGPS': true,
         'permissions.requireLocationProximity': true,

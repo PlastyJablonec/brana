@@ -1169,6 +1169,16 @@ const Dashboard: React.FC = () => {
     // Pokud už jsem aktivní, pokračuj normálně s MQTT příkazem
     console.log('✅ DEBUG: Potvrzeno aktivní stav, pokračuji s MQTT příkazem...');
 
+    // NOVÉ: Kontrola zda se brána už nepohybuje - zabránit konfliktům
+    const isGateMoving = gateStatus.includes('se...') || gateStatus.includes('Otevírá') || gateStatus.includes('Zavírá');
+    if (isGateMoving) {
+      console.log('🚫 MQTT BLOCK: Brána se už pohybuje, blokuji další příkaz:', gateStatus);
+      playSound('error');
+      alert(`⚠️ Brána se právě ${gateStatus.includes('Otevírá') ? 'otevírá' : 'zavírá'}. Počkejte až dokončí pohyb.`);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     let mqttCommandSucceeded = false;
     
