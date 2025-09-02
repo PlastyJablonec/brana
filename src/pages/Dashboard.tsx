@@ -1196,7 +1196,7 @@ const Dashboard: React.FC = () => {
       return;
     }
 
-    setLoading(true);
+    // Loading už je true z předchozího nastavení
     let mqttCommandSucceeded = false;
     
     try {
@@ -1212,6 +1212,9 @@ const Dashboard: React.FC = () => {
       
       mqttCommandSucceeded = true; // MQTT commands succeeded
       console.log('✅ Dashboard: MQTT commands sent successfully');
+      
+      // NOVÉ: Okamžitě vypni loading po úspěšném MQTT - UI feedback
+      setLoading(false);
       
     } catch (mqttError) {
       console.error('❌ Dashboard: MQTT command failed:', mqttError);
@@ -1269,7 +1272,7 @@ const Dashboard: React.FC = () => {
     
     console.log('🎉 Dashboard: Gate command completed successfully');
     playSound('success');
-    setLoading(false);
+    // Loading už byl vypnutý po MQTT příkazu pro rychlejší UI feedback
     
     // Step 4: Auto-release removed - users keep control until gate closes
     // This allows other users to join queue while gate is operating
@@ -1776,15 +1779,7 @@ const Dashboard: React.FC = () => {
                       return `⏳ ${gateStatus} - ${gateCoordinationStatus.waitingTimeText}`;
                     }
                     
-                    // PRIORITA 3: Když můžu začít ovládat (nikdo není aktivní)
-                    if (gateCoordinationStatus.canStartControl) {
-                      if (gateCoordinationStatus.queueLength > 0) {
-                        return `${gateStatus} (${gateCoordinationStatus.queueLength} čeká)`;
-                      }
-                      return gateStatus;
-                    }
-                    
-                    // PRIORITA 4: Když někdo jiný ovládá - VŽDY nabídni frontu (i když už jsem ve frontě)
+                    // PRIORITA 3: Když někdo jiný ovládá - VŽDY nabídni frontu (PRVNÍ!)
                     if (gateCoordinationStatus.isBlocked) {
                       if (gateCoordinationStatus.isInQueue) {
                         // Už jsem ve frontě - umožni opuštění
@@ -1793,6 +1788,14 @@ const Dashboard: React.FC = () => {
                         // Nejsem ve frontě - nabídni zařazení
                         return '📋 Zařadit do fronty';
                       }
+                    }
+                    
+                    // PRIORITA 4: Když můžu začít ovládat (nikdo není aktivní)
+                    if (gateCoordinationStatus.canStartControl) {
+                      if (gateCoordinationStatus.queueLength > 0) {
+                        return `${gateStatus} (${gateCoordinationStatus.queueLength} čeká)`;
+                      }
+                      return gateStatus;
                     }
                     
                     // PRIORITA 5: Když se brána pohybuje - ukázat stav
