@@ -421,6 +421,13 @@ const Dashboard: React.FC = () => {
         if (coordinationState) {
           console.log('🚨 DEBUG: Aktualizuji gate state pro koordinaci:', coordinationState);
           updateGateState(coordinationState);
+          
+          // NOVÉ: RESET koordinace když se brána zavře - všechno vyčisti
+          if (coordinationState === 'CLOSED') {
+            console.log('🔄 RESET: Brána zavřena - resetuji koordinaci (front + active user)');
+            // Vyčisti aktivního uživatele i frontu
+            resetCoordinationOnGateClosed().catch(err => console.warn('Reset coordination failed:', err));
+          }
         }
       }
 
@@ -906,6 +913,36 @@ const Dashboard: React.FC = () => {
       }
     }
   }, [currentUser, leaveQueue]);
+
+  // NOVÉ: Reset koordinace po zavření brány - vyčisti frontu + active user
+  const resetCoordinationOnGateClosed = useCallback(async () => {
+    try {
+      console.log('🔄 RESET: Resetuji koordinaci po zavření brány...');
+      
+      // Import gateCoordinationService
+      const { gateCoordinationService } = await import('../services/gateCoordinationService');
+      const currentState = await gateCoordinationService.getCurrentState();
+      
+      if (currentState && (currentState.activeUser || currentState.reservationQueue.length > 0)) {
+        console.log('🔄 RESET: Vymažu activeUser + frontu po zavření brány');
+        
+        // Force clear activeUser and queue - brána zavřena = reset
+        await gateCoordinationService['coordinationDoc'].set({
+          activeUser: null,
+          reservationQueue: [],
+          gateState: 'CLOSED',
+          lastActivity: Date.now(),
+          connectedUsers: currentState.connectedUsers || {} // Zachovej připojené uživatele
+        });
+        
+        console.log('✅ RESET: Koordinace resetována po zavření brány');
+      } else {
+        console.log('🔄 RESET: Žádná koordinace k resetování');
+      }
+    } catch (error) {
+      console.error('❌ RESET: Chyba při resetování koordinace:', error);
+    }
+  }, []);
 
   // DEBUGGING: Reset coordination state - temporary function
   const handleResetCoordination = useCallback(async () => {
@@ -1552,7 +1589,8 @@ const Dashboard: React.FC = () => {
                   textAlign: 'center',
                   textShadow: '0 1px 2px rgba(0,0,0,0.3)'
                 }}>
-                  ⚠️ Fronta čeká - použijte slider pro zavření!
+                  ⚠️ Ve frontě čeká {gateCoordinationStatus.queueLength} {gateCoordinationStatus.queueLength === 1 ? 'uživatel' : 'uživatelé'}
+                  <br />Pro zavření brány potřebujete potvrdit sliderem
                 </div>
                 
                 <div 
