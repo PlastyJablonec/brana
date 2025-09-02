@@ -422,11 +422,28 @@ const Dashboard: React.FC = () => {
           console.log('🚨 DEBUG: Aktualizuji gate state pro koordinaci:', coordinationState);
           updateGateState(coordinationState);
           
-          // NOVÉ: RESET koordinace když se brána zavře - všechno vyčisti
+          // NOVÉ: PODMÍNĚNÝ RESET koordinace když se brána zavře
+          // JEN pokud není ve frontě nikdo (jinak nech auto-open běžet)
           if (coordinationState === 'CLOSED') {
-            console.log('🔄 RESET: Brána zavřena - resetuji koordinaci (front + active user)');
-            // Vyčisti aktivního uživatele i frontu
-            resetCoordinationOnGateClosed().catch(err => console.warn('Reset coordination failed:', err));
+            console.log('🔄 RESET CHECK: Brána zavřena - kontroluji zda resetovat koordinaci');
+            
+            // Delay aby se auto-open stihl spustit (spouští se při CLOSING)
+            setTimeout(async () => {
+              try {
+                const { gateCoordinationService } = await import('../services/gateCoordinationService');
+                const currentState = await gateCoordinationService.getCurrentState();
+                
+                // Reset jen pokud není fronta nebo už proběhlo auto-open
+                if (!currentState || currentState.reservationQueue.length === 0) {
+                  console.log('🔄 RESET: Žádná fronta - resetuji koordinaci');
+                  resetCoordinationOnGateClosed().catch(err => console.warn('Reset coordination failed:', err));
+                } else {
+                  console.log('🔄 RESET: Fronta stále existuje - ponechávám koordinaci pro auto-open');
+                }
+              } catch (err) {
+                console.warn('🔄 RESET: Chyba při kontrole fronty:', err);
+              }
+            }, 3000); // 3 sekundy delay - víc než auto-open (2s)
           }
         }
       }

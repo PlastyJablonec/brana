@@ -17,6 +17,7 @@ export interface GateCoordination {
   gateState: 'CLOSED' | 'OPENING' | 'OPEN' | 'CLOSING' | 'STOPPED';
   lastActivity: number;
   autoOpeningUserId?: string; // ID uživatele, který čeká na automatické otevření
+  autoOpenCount?: number; // NOVÉ: Počet automatických otevření v této session (max 1)
   connectedUsers?: { [userId: string]: { lastSeen: number, displayName: string } }; // NOVÉ: Heartbeat tracking
 }
 
@@ -374,6 +375,7 @@ class GateCoordinationService {
       const updatedState: GateCoordination = {
         ...currentState,
         reservationQueue: [...currentState.reservationQueue, reservationUser],
+        autoOpenCount: 0, // NOVÉ: Reset auto-open counteru při nové rezervaci
         lastActivity: Date.now()
       };
 
@@ -416,13 +418,27 @@ class GateCoordinationService {
       if (!currentState) return;
 
       // NOVÉ: Automatické otevření při "CLOSING" (Zavírá se...) pokud někdo čeká
+      // ALE JEN JEDNOU - pokud se už auto-open spustil, nespouštět znovu
       if (newState === 'CLOSING' && currentState.reservationQueue.length > 0) {
-        console.log('🚪 AUTO-OPEN: Brána se zavírá ale někdo čeká - triggering auto open');
+        const autoOpenCount = currentState.autoOpenCount || 0;
         
-        // Trigger callback pro automatické otevření
-        if (this.onAutoOpenTrigger) {
-          const nextUser = currentState.reservationQueue[0];
-          this.onAutoOpenTrigger(nextUser.userId);
+        if (autoOpenCount === 0) {
+          console.log('🚪 AUTO-OPEN: Brána se zavírá ale někdo čeká - triggering auto open (poprvé)');
+          
+          // Zvýš counter aby se nespustil podruhé
+          await this.coordinationDoc.update({
+            autoOpenCount: 1,
+            autoOpeningUserId: currentState.reservationQueue[0].userId,
+            lastActivity: Date.now()
+          });
+          
+          // Trigger callback pro automatické otevření
+          if (this.onAutoOpenTrigger) {
+            const nextUser = currentState.reservationQueue[0];
+            this.onAutoOpenTrigger(nextUser.userId);
+          }
+        } else {
+          console.log('🚪 AUTO-OPEN: Brána se zavírá ale auto-open už proběhl (' + autoOpenCount + 'x) - přeskakuji');
         }
       }
 
