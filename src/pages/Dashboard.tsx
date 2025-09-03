@@ -23,7 +23,7 @@ import GateCoordinationDebug from '../components/debug/GateCoordinationDebug';
 
 const Dashboard: React.FC = () => {
   const { currentUser, logout } = useAuth();
-  const { timerState, startTravelTimer, startAutoCloseTimer, startExtendedAutoCloseTimer, startOpenElapsedTimer, stopTimer } = useGateTimer();
+  const { timerState, startTravelTimer, startAutoCloseTimer, startOpenElapsedTimer, stopTimer } = useGateTimer();
   const { 
     coordinationState, 
     status: gateCoordinationStatus, 
@@ -47,7 +47,6 @@ const Dashboard: React.FC = () => {
   const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
   const [locationError, setLocationError] = useState<string>('');
   const [currentLocation, setCurrentLocation] = useState<any>(null);
-  const [wasAutoOpened, setWasAutoOpened] = useState(false); // Flag pro sledování auto-open eventu
   const [distanceFromGate, setDistanceFromGate] = useState<number | null>(null);
   const [isLocationProximityAllowed, setIsLocationProximityAllowed] = useState<boolean>(true);
   const [showMqttDebug, setShowMqttDebug] = useState(false);
@@ -474,15 +473,9 @@ const Dashboard: React.FC = () => {
       } else if (isOpen && !prevGateStatus.includes('otevřen')) {
         // Spustí auto-close timer pouze pokud ještě neběží
         if (timerState.type !== 'autoClose' || !timerState.isActive) {
-          if (wasAutoOpened) {
-            console.log('🔧 Dashboard: Gate opened via AUTO-OPEN, starting extended auto-close timer (8 min)');
-            startExtendedAutoCloseTimer();
-            setWasAutoOpened(false); // Reset flag
-          } else {
-            console.log('🔧 Dashboard: Gate opened normally, starting standard auto-close timer (4 min)');
-            startAutoCloseTimer();
-          }
+          console.log('🔧 Dashboard: Gate opened, starting auto-close timer');
           console.log('🔧 Dashboard: Gate status changed from', prevGateStatus, 'to', status.gateStatus);
+          startAutoCloseTimer();
         }
       } else if (isOpen && prevGateStatus.includes('otevřen')) {
         // Brána je stále otevřená - spustí auto-close timer pouze pokud žádný neběží
@@ -539,9 +532,6 @@ const Dashboard: React.FC = () => {
 
       try {
         console.log('🚪 AUTO-OPEN: Odesílám MQTT příkaz...');
-        
-        // Označím že brána byla otevřena auto-open
-        setWasAutoOpened(true);
         
         await mqttService.publishGateCommand(currentUser.email || '');
         
