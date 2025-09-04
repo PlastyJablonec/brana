@@ -98,10 +98,10 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     
     // 🌐 Multiple camera endpoints pro různé sítě
     const cameraEndpoints = isHttps ? [
-      // HTTPS: Zkusíme nejdříve allorigins.win (když funguje, je rychlý)
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(`http://89.24.76.191:10180/photo.jpg?t=${timestamp}`)}`,
-      // Fallback: pokus o Vercel proxy (může být blokován autentifikací)
+      // HTTPS: Primární Vercel API proxy (funguje na produkci)
       `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`,
+      // Fallback: Externí CORS proxy služby (záložní)
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(`http://89.24.76.191:10180/photo.jpg?t=${timestamp}`)}`,
     ] : [
       // HTTP: Můžeme použít přímý endpoint
       `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&cache=${Math.random()}`,
@@ -122,7 +122,7 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     // 🚀 Rychlé paralelní načítání s prvním úspěšným
     const fetchPromises = cameraEndpoints.map(async (url, index) => {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout pro rychlejší failover
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout pro rychlejší failover mezi více endpointy
       
       try {
         console.log(`📡 🚀 DEBUGGING: Zkouším endpoint ${index + 1}/${cameraEndpoints.length}:`);
