@@ -98,9 +98,8 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     
     // 🌐 Multiple camera endpoints pro různé sítě
     const cameraEndpoints = isHttps ? [
-      // HTTPS: Používáme veřejný CORS proxy service (obchází Vercel authentication)
+      // HTTPS: Zkusíme nejdříve allorigins.win (když funguje, je rychlý)
       `https://api.allorigins.win/raw?url=${encodeURIComponent(`http://89.24.76.191:10180/photo.jpg?t=${timestamp}`)}`,
-      `https://cors-anywhere.herokuapp.com/http://89.24.76.191:10180/photo.jpg?t=${timestamp}`,
       // Fallback: pokus o Vercel proxy (může být blokován autentifikací)
       `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`,
     ] : [
@@ -123,7 +122,7 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     // 🚀 Rychlé paralelní načítání s prvním úspěšným
     const fetchPromises = cameraEndpoints.map(async (url, index) => {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout pro debugging
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout pro rychlejší failover
       
       try {
         console.log(`📡 🚀 DEBUGGING: Zkouším endpoint ${index + 1}/${cameraEndpoints.length}:`);
@@ -234,10 +233,12 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
       setIsRealCamera(false);
       onCameraStatusChange?.('error', errorMsg);
       
-      // Poslední fallback - IMG element s primárním URL
-      console.log('📸 Poslední fallback na IMG element...');
+      // Poslední fallback - IMG element s přímým HTTP URL (někdy funguje i na HTTPS)
+      console.log('📸 Poslední fallback na IMG element s přímým HTTP...');
       if (imgRef.current) {
-        imgRef.current.src = cameraEndpoints[0];
+        const directHttpUrl = `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&fallback=img`;
+        console.log('📸 Fallback IMG URL:', directHttpUrl);
+        imgRef.current.src = directHttpUrl;
       }
     }
   }, [hasImageChanged, onCameraStatusChange]);
