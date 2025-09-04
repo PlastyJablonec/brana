@@ -149,8 +149,7 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
           } : {}
         });
         
-        console.log(`📡 📊 Response status: ${response.status} ${response.statusText}`);
-        console.log(`📡 📋 Response headers:`, Object.fromEntries(response.headers.entries()));
+        console.log(`Camera loaded: ${response.status}`);
         
         clearTimeout(timeoutId);
         
@@ -159,16 +158,12 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
         }
         
         const blob = await response.blob();
-        console.log(`📡 📦 Blob size: ${blob.size} bytes, type: ${blob.type}`);
         return { blob, url, index: index + 1 };
         
       } catch (error) {
         clearTimeout(timeoutId);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error(`📡 ❌ DEBUGGING ERROR endpoint ${index + 1}:`);
-        console.error(`📡 🚨 Error type: ${error?.constructor?.name}`);
-        console.error(`📡 💬 Error message: ${errorMessage}`);
-        console.error(`📡 🔍 Full error:`, error);
+        console.error(`Camera endpoint ${index + 1} failed:`, errorMessage);
         throw error;
       }
     });
@@ -188,7 +183,7 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
       }
       
       imgRef.current.onload = () => {
-        console.log(`📸 ✅ ÚSPĚCH endpoint ${result.index}: ${totalTime.toFixed(0)}ms, ${result.blob.size} bytes`);
+        console.log(`Camera loaded: ${totalTime.toFixed(0)}ms`);
         setLastSuccessfulLoad(Date.now());
         setShowOverlay(false);
         setIsRealCamera(true);
@@ -199,17 +194,17 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
         // Detekce změny na pozadí
         hasImageChanged(imgRef.current!).then(changed => {
           if (changed) {
-            console.log('📸 Detekována změna obsahu');
+            console.log('Camera content changed');
           } else {
-            console.log('📸 Stejný obsah');
+            console.log('Same camera content');
           }
         }).catch(err => {
-          console.log('📸 Chyba při detekci změny:', err);
+          console.log('Camera change detection error:', err);
         });
       };
       
       imgRef.current.onerror = () => {
-        console.error('📸 Chyba při zobrazení blob URL');
+        console.error('Blob URL display error');
         URL.revokeObjectURL(objectUrl);
         setOverlayText('Chyba zobrazení obrázku');
         setIsRealCamera(false);
@@ -224,20 +219,16 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     } catch (error) {
       // Všechny požadavky selhaly
       const totalTime = performance.now() - loadStartTime;
-      console.error(`📡 🚨 DEBUGGING: Všechny endpointy selhaly za ${totalTime.toFixed(0)}ms`);
-      console.error(`📡 🌐 Protokol: ${window.location.protocol}`);
-      console.error(`📡 📍 Lokace: ${window.location.href}`);
-      console.error(`📡 🔍 Agregated error:`, error);
+      console.error(`All camera endpoints failed: ${totalTime.toFixed(0)}ms`);
       const errorMsg = isHttps ? 'Kamera nedostupná (všechny cesty)' : 'Kamera nedostupná (síť)';
       setOverlayText(errorMsg);
       setIsRealCamera(false);
       onCameraStatusChange?.('error', errorMsg);
       
-      // Poslední fallback - IMG element s přímým HTTP URL (někdy funguje i na HTTPS)
-      console.log('📸 Poslední fallback na IMG element s přímým HTTP...');
+      // Poslední fallback - IMG element s přímým HTTP URL
+      console.log('Using IMG fallback...');
       if (imgRef.current) {
         const directHttpUrl = `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&fallback=img`;
-        console.log('📸 Fallback IMG URL:', directHttpUrl);
         imgRef.current.src = directHttpUrl;
       }
     }
@@ -251,7 +242,7 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
 
   // Nastav interval pro refresh kamery (každých 5 sekund)
   useEffect(() => {
-    console.log('📡 🎯 CameraView DEBUGGING: Component mounted, starting camera initialization...');
+    console.log('CameraView: Starting camera initialization...');
     refreshCamera(); // ⚡ OKAMŽITÉ první načtení
     intervalRef.current = setInterval(refreshCamera, 5000); // Každých 5 sekund refresh
     
