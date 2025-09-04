@@ -149,3 +149,4 @@ V Firestore vytvořte dokument v kolekci `users` s následující strukturou:
 ## Licence
 
 Private project - All rights reserved# Test deployment trigger
+# Trigger redeploy Thu  4 Sep 15:02:50 CEST 2025
