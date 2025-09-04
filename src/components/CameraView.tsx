@@ -98,15 +98,13 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     
     // 🌐 Multiple camera endpoints pro různé sítě
     const cameraEndpoints = isHttps ? [
-      // HTTPS: Primární Vercel API proxy (funguje na produkci)
+      // HTTPS produkce: API proxy (spolehlivé, žádné SSL problémy)
       `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`,
-      // Fallback: Externí CORS proxy služby (záložní)
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(`http://89.24.76.191:10180/photo.jpg?t=${timestamp}`)}`,
+      // Fallback: Přímý HTTPS endpoint (self-signed cert - může selhat)
+      `https://89.24.76.191:10180/photo.jpg?t=${timestamp}&cache=${Math.random()}`,
     ] : [
-      // HTTP: Můžeme použít přímý endpoint
+      // HTTP development: Přímý endpoint (spolehlivé na localhost)
       `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&cache=${Math.random()}`,
-      // A také proxy pro test
-      `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`,
     ];
     
     console.log(`🌐 ${isHttps ? 'HTTPS' : 'HTTP'} detected - trying ${cameraEndpoints.length} camera endpoints`);
