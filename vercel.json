@@ -26,5 +26,10 @@
       ]
     }
   ],
+  "deploymentProtection": {
+    "bypassFor": [
+      "/api/*"
+    ]
+  },
   "public": true
 }
