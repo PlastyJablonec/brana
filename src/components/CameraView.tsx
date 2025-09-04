@@ -98,9 +98,11 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     
     // 🌐 Multiple camera endpoints pro různé sítě
     const cameraEndpoints = isHttps ? [
-      // HTTPS: Používáme pouze proxy endpointy (Mixed Content Policy)
+      // HTTPS: Používáme veřejný CORS proxy service (obchází Vercel authentication)
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(`http://89.24.76.191:10180/photo.jpg?t=${timestamp}`)}`,
+      `https://cors-anywhere.herokuapp.com/http://89.24.76.191:10180/photo.jpg?t=${timestamp}`,
+      // Fallback: pokus o Vercel proxy (může být blokován autentifikací)
       `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`,
-      `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}&fallback=1`,
     ] : [
       // HTTP: Můžeme použít přímý endpoint
       `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&cache=${Math.random()}`,
@@ -131,7 +133,10 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
           method: 'GET',
           mode: url.startsWith('/api/') ? 'same-origin' : 'cors',
           cache: 'no-cache',
-          credentials: 'omit'
+          credentials: 'omit',
+          headers: url.includes('cors-anywhere.herokuapp.com') ? {
+            'X-Requested-With': 'XMLHttpRequest'
+          } : {}
         });
         
         const response = await fetch(url, {
@@ -139,7 +144,10 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
           mode: url.startsWith('/api/') ? 'same-origin' : 'cors',
           cache: 'no-cache',
           credentials: 'omit',
-          signal: controller.signal
+          signal: controller.signal,
+          headers: url.includes('cors-anywhere.herokuapp.com') ? {
+            'X-Requested-With': 'XMLHttpRequest'
+          } : {}
         });
         
         console.log(`📡 📊 Response status: ${response.status} ${response.statusText}`);
