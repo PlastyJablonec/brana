@@ -242,6 +242,7 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
 
   // Nastav interval pro refresh kamery (každých 5 sekund)
   useEffect(() => {
+    console.log('📡 🎯 CameraView DEBUGGING: Component mounted, starting camera initialization...');
     refreshCamera(); // ⚡ OKAMŽITÉ první načtení
     intervalRef.current = setInterval(refreshCamera, 5000); // Každých 5 sekund refresh
     

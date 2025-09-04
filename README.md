@@ -148,4 +148,4 @@ V Firestore vytvořte dokument v kolekci `users` s následující strukturou:
 
 ## Licence
 
-Private project - All rights reserved
+Private project - All rights reserved# Test deployment trigger
