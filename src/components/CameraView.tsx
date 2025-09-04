@@ -121,10 +121,18 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     // 🚀 Rychlé paralelní načítání s prvním úspěšným
     const fetchPromises = cameraEndpoints.map(async (url, index) => {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout pro debugging
       
       try {
-        console.log(`📡 Zkouším endpoint ${index + 1}/${cameraEndpoints.length}: ${url.substring(0, 60)}...`);
+        console.log(`📡 🚀 DEBUGGING: Zkouším endpoint ${index + 1}/${cameraEndpoints.length}:`);
+        console.log(`📡 🌐 URL: ${url}`);
+        console.log(`📡 🔒 Protocol: ${window.location.protocol}, HTTPS mode: ${isHttps}`);
+        console.log(`📡 ⚙️ Fetch options:`, {
+          method: 'GET',
+          mode: isHttps ? 'same-origin' : 'cors',
+          cache: 'no-cache',
+          credentials: 'omit'
+        });
         
         const response = await fetch(url, {
           method: 'GET',
@@ -134,6 +142,9 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
           signal: controller.signal
         });
         
+        console.log(`📡 📊 Response status: ${response.status} ${response.statusText}`);
+        console.log(`📡 📋 Response headers:`, Object.fromEntries(response.headers.entries()));
+        
         clearTimeout(timeoutId);
         
         if (!response.ok) {
@@ -141,12 +152,16 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
         }
         
         const blob = await response.blob();
+        console.log(`📡 📦 Blob size: ${blob.size} bytes, type: ${blob.type}`);
         return { blob, url, index: index + 1 };
         
       } catch (error) {
         clearTimeout(timeoutId);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.warn(`📸 ❌ Endpoint ${index + 1} selhal: ${errorMessage}`);
+        console.error(`📡 ❌ DEBUGGING ERROR endpoint ${index + 1}:`);
+        console.error(`📡 🚨 Error type: ${error?.constructor?.name}`);
+        console.error(`📡 💬 Error message: ${errorMessage}`);
+        console.error(`📡 🔍 Full error:`, error);
         throw error;
       }
     });
@@ -202,7 +217,10 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     } catch (error) {
       // Všechny požadavky selhaly
       const totalTime = performance.now() - loadStartTime;
-      console.error(`📸 ❌ Všechny endpointy selhaly za ${totalTime.toFixed(0)}ms`);
+      console.error(`📡 🚨 DEBUGGING: Všechny endpointy selhaly za ${totalTime.toFixed(0)}ms`);
+      console.error(`📡 🌐 Protokol: ${window.location.protocol}`);
+      console.error(`📡 📍 Lokace: ${window.location.href}`);
+      console.error(`📡 🔍 Agregated error:`, error);
       const errorMsg = isHttps ? 'Kamera nedostupná (všechny cesty)' : 'Kamera nedostupná (síť)';
       setOverlayText(errorMsg);
       setIsRealCamera(false);
