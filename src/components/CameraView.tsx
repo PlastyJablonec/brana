@@ -97,15 +97,15 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     const isHttps = window.location.protocol === 'https:';
     
     // 🌐 Multiple camera endpoints pro různé sítě
-    const cameraEndpoints = [
-      // Primární endpoint - VŽDY fungující externí IP s portem 10180
+    const cameraEndpoints = isHttps ? [
+      // HTTPS: Používáme pouze proxy endpointy (Mixed Content Policy)
+      `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`,
+      `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}&fallback=1`,
+    ] : [
+      // HTTP: Můžeme použít přímý endpoint
       `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&cache=${Math.random()}`,
-      
-      // Fallback endpoints pouze pro HTTPS (HTTP proxy)
-      ...(isHttps ? [
-        `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`,
-        `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}&fallback=1`,
-      ] : [])
+      // A také proxy pro test
+      `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`,
     ];
     
     console.log(`🌐 ${isHttps ? 'HTTPS' : 'HTTP'} detected - trying ${cameraEndpoints.length} camera endpoints`);
@@ -129,14 +129,14 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
         console.log(`📡 🔒 Protocol: ${window.location.protocol}, HTTPS mode: ${isHttps}`);
         console.log(`📡 ⚙️ Fetch options:`, {
           method: 'GET',
-          mode: isHttps ? 'same-origin' : 'cors',
+          mode: url.startsWith('/api/') ? 'same-origin' : 'cors',
           cache: 'no-cache',
           credentials: 'omit'
         });
         
         const response = await fetch(url, {
           method: 'GET',
-          mode: isHttps ? 'same-origin' : 'cors',
+          mode: url.startsWith('/api/') ? 'same-origin' : 'cors',
           cache: 'no-cache',
           credentials: 'omit',
           signal: controller.signal
