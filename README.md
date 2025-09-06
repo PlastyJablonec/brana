@@ -149,4 +149,4 @@ V Firestore vytvořte dokument v kolekci `users` s následující strukturou:
 ## Licence
 
 Private project - All rights reserved# Test deployment trigger
-# Trigger redeploy Thu  5 Sep 09:15:30 CEST 2025 - Camera endpoint fix
+# Trigger redeploy Fri  6 Sep 08:30:00 CEST 2025 - Camera endpoint optimization HTTPS strategy
