@@ -125,9 +125,158 @@ app.post('/api/mqtt-proxy', (req, res) => {
   });
 });
 
+// Camera proxy endpoints - same logic as production api/camera-proxy.js
+app.get('/api/camera-proxy', async (req, res) => {
+  try {
+    console.log('DEV Camera Proxy: Fetching camera image...');
+    
+    // Build the camera URL with current timestamp and cache buster
+    const timestamp = Date.now();
+    const cacheBuster = Math.random();
+    // Try photo.jpg first (single frame), then video as fallback
+    const photoUrl = `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&cache=${cacheBuster}`;
+    const videoUrl = `http://89.24.76.191:10180/video?t=${timestamp}&cache=${cacheBuster}`;
+    
+    let cameraUrl = photoUrl; // Try photo first (single image)
+    
+    console.log('DEV Camera Proxy: Requesting:', cameraUrl);
+
+    // CRITICAL FIX: Shorter timeout + AbortController fallback
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      abortController.abort();
+      console.log('DEV Camera Proxy: Request aborted due to timeout');
+    }, 5000);
+
+    // Fetch the image/stream from the camera
+    let response = await fetch(cameraUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'DEV-Camera-Proxy/1.0',
+        'Accept': 'multipart/x-mixed-replace,video/*,image/jpeg,image/*,*/*'
+      },
+      signal: abortController.signal
+    });
+
+    // If photo fails, try video fallback
+    if (!response.ok && cameraUrl === photoUrl) {
+      console.log('DEV Camera Proxy: Photo failed, trying video fallback...');
+      cameraUrl = videoUrl;
+      
+      response = await fetch(cameraUrl, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'DEV-Camera-Proxy/1.0',
+          'Accept': 'image/jpeg,image/*,*/*'
+        },
+        signal: abortController.signal
+      });
+    }
+
+    // Clear timeout if successful
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.error('DEV Camera Proxy: Camera request failed:', response.status, response.statusText);
+      res.status(response.status).json({ 
+        error: 'Camera not available', 
+        status: response.status,
+        statusText: response.statusText
+      });
+      return;
+    }
+
+    // Get the image data
+    const imageBuffer = Buffer.from(await response.arrayBuffer());
+
+    console.log('DEV Camera Proxy: Image fetched successfully, size:', imageBuffer.length, 'bytes');
+
+    // Set appropriate headers for image response
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Content-Length', imageBuffer.length);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    // Send the image
+    res.status(200).send(imageBuffer);
+
+  } catch (error) {
+    console.error('DEV Camera Proxy: Error fetching camera image:', error);
+    
+    if (error.name === 'AbortError') {
+      res.status(408).json({ error: 'Camera timeout' });
+    } else {
+      res.status(500).json({ error: 'Camera proxy error', details: error.message });
+    }
+  }
+});
+
+// Camera video endpoint fallback
+app.get('/api/camera-proxy/video', async (req, res) => {
+  // Same logic as main camera-proxy but force video endpoint
+  try {
+    console.log('DEV Camera Proxy: Fetching camera video...');
+    
+    const timestamp = Date.now();
+    const cacheBuster = Math.random();
+    const videoUrl = `http://89.24.76.191:10180/video?t=${timestamp}&cache=${cacheBuster}`;
+    
+    console.log('DEV Camera Proxy: Requesting video:', videoUrl);
+
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      abortController.abort();
+      console.log('DEV Camera Proxy: Video request aborted due to timeout');
+    }, 5000);
+
+    const response = await fetch(videoUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'DEV-Camera-Proxy/1.0',
+        'Accept': 'multipart/x-mixed-replace,video/*,image/jpeg,image/*,*/*'
+      },
+      signal: abortController.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.error('DEV Camera Proxy: Video request failed:', response.status, response.statusText);
+      res.status(response.status).json({ 
+        error: 'Camera video not available', 
+        status: response.status,
+        statusText: response.statusText
+      });
+      return;
+    }
+
+    const imageBuffer = Buffer.from(await response.arrayBuffer());
+    console.log('DEV Camera Proxy: Video fetched successfully, size:', imageBuffer.length, 'bytes');
+
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Content-Length', imageBuffer.length);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    res.status(200).send(imageBuffer);
+
+  } catch (error) {
+    console.error('DEV Camera Proxy: Error fetching camera video:', error);
+    
+    if (error.name === 'AbortError') {
+      res.status(408).json({ error: 'Camera video timeout' });
+    } else {
+      res.status(500).json({ error: 'Camera video proxy error', details: error.message });
+    }
+  }
+});
+
 const PORT = 3003;
 app.listen(PORT, () => {
-  console.log(`🚀 DEV MQTT Proxy server running on http://localhost:${PORT}`);
+  console.log(`🚀 DEV MQTT + Camera Proxy server running on http://localhost:${PORT}`);
   console.log('📡 Connecting to MQTT broker...');
+  console.log('📸 Camera proxy endpoints available: /api/camera-proxy, /api/camera-proxy/video');
   connectToMqtt();
 });

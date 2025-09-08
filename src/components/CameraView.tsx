@@ -109,7 +109,10 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
       // Fallback: Přímý HTTPS photo endpoint (self-signed cert - může selhat)
       `https://89.24.76.191:10180/photo.jpg?t=${timestamp}&cache=${Math.random()}`,
     ] : [
-      // HTTP development: Přímé video endpointy (preferované v pořadí)
+      // HTTP development: Dev proxy server endpointy (preferované - řeší CORS)
+      `http://localhost:3003/api/camera-proxy/video?t=${timestamp}&cache=${Math.random()}`,
+      `http://localhost:3003/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`,
+      // HTTP development: Přímé video endpointy (fallback - můžou mít CORS problémy)
       `http://89.24.76.191:10180/video?t=${timestamp}&cache=${Math.random()}`,
       `http://89.24.76.191:10180/stream.mjpg?t=${timestamp}&cache=${Math.random()}`,
       `http://89.24.76.191:10180/video.mjpg?t=${timestamp}&cache=${Math.random()}`,
