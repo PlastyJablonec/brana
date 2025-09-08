@@ -20,7 +20,11 @@ export default async function handler(req, res) {
     // Build the camera URL with current timestamp and cache buster
     const timestamp = Date.now();
     const cacheBuster = Math.random();
-    const cameraUrl = `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&cache=${cacheBuster}`;
+    // Zkus video endpoint první, pak photo.jpg jako fallback
+    const videoUrl = `http://89.24.76.191:10180/video?t=${timestamp}&cache=${cacheBuster}`;
+    const photoUrl = `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&cache=${cacheBuster}`;
+    
+    let cameraUrl = videoUrl; // Zkus video první
     
     console.log('Camera Proxy: Requesting:', cameraUrl);
 
@@ -40,15 +44,30 @@ export default async function handler(req, res) {
       }, 5000);
     }
 
-    // Fetch the image from the camera
-    const response = await fetch(cameraUrl, {
+    // Fetch the image/stream from the camera
+    let response = await fetch(cameraUrl, {
       method: 'GET',
       headers: {
         'User-Agent': 'Camera-Proxy/1.0',
-        'Accept': 'image/jpeg,image/*,*/*'
+        'Accept': 'multipart/x-mixed-replace,video/*,image/jpeg,image/*,*/*'
       },
       signal: abortController.signal
     });
+
+    // Pokud video selže, zkus photo.jpg fallback
+    if (!response.ok && cameraUrl === videoUrl) {
+      console.log('Camera Proxy: Video failed, trying photo.jpg fallback...');
+      cameraUrl = photoUrl;
+      
+      response = await fetch(cameraUrl, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Camera-Proxy/1.0',
+          'Accept': 'image/jpeg,image/*,*/*'
+        },
+        signal: abortController.signal
+      });
+    }
 
     // Clear timeout if successful
     if (timeoutId) {

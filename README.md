@@ -103,6 +103,23 @@ V Firestore vytvořte dokument v kolekci `users` s následující strukturou:
   - `IoT/Brana/Status` - Stav brány
   - `IoT/Brana/Status2` - Stav garáže
 
+## Kamera Endpointy
+
+Aplikace automaticky testuje různé camera endpointy v tomto pořadí:
+
+**Video streamy (preferované):**
+- `/video` - MJPEG video stream
+- `/stream.mjpg` - MJPEG stream  
+- `/video.mjpg` - MJPEG video
+
+**Fallback statické obrázky:**
+- `/photo.jpg` - statický JPEG snímek
+- `/snapshot` - snapshot endpoint
+- `/image` - obecný image endpoint
+
+**Testování kamery:**
+- Otevřít `test-camera-endpoints.html` v prohlížeči pro test všech endpointů
+
 ## Deployment
 
 1. **Build aplikace:**

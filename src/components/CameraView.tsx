@@ -96,14 +96,24 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     const timestamp = Date.now();
     const isHttps = window.location.protocol === 'https:';
     
-    // 🌐 Multiple camera endpoints pro různé sítě
+    // 🌐 Multiple camera endpoints pro různé sítě - MJPEG video priorita
     const cameraEndpoints = isHttps ? [
-      // HTTPS produkce: API proxy (spolehlivé, žádné SSL problémy)
+      // HTTPS produkce: API proxy pro video stream (preferovaný)
+      `/api/camera-proxy/video?t=${timestamp}&cache=${Math.random()}`,
+      // HTTPS produkce: API proxy pro static image (fallback)
       `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`,
-      // Fallback: Přímý HTTPS endpoint (self-signed cert - může selhat)
+      // Fallback: Přímé HTTPS video endpointy (self-signed cert - může selhat)
+      `https://89.24.76.191:10180/video?t=${timestamp}&cache=${Math.random()}`,
+      `https://89.24.76.191:10180/stream.mjpg?t=${timestamp}&cache=${Math.random()}`,
+      `https://89.24.76.191:10180/video.mjpg?t=${timestamp}&cache=${Math.random()}`,
+      // Fallback: Přímý HTTPS photo endpoint (self-signed cert - může selhat)
       `https://89.24.76.191:10180/photo.jpg?t=${timestamp}&cache=${Math.random()}`,
     ] : [
-      // HTTP development: Přímý endpoint (spolehlivé na localhost)
+      // HTTP development: Přímé video endpointy (preferované v pořadí)
+      `http://89.24.76.191:10180/video?t=${timestamp}&cache=${Math.random()}`,
+      `http://89.24.76.191:10180/stream.mjpg?t=${timestamp}&cache=${Math.random()}`,
+      `http://89.24.76.191:10180/video.mjpg?t=${timestamp}&cache=${Math.random()}`,
+      // HTTP development: Přímý photo endpoint (fallback)
       `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&cache=${Math.random()}`,
     ];
     
@@ -223,11 +233,32 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
       setIsRealCamera(false);
       onCameraStatusChange?.('error', errorMsg);
       
-      // Poslední fallback - IMG element s přímým HTTP URL
-      console.log('Using IMG fallback...');
+      // Poslední fallback - IMG element s přímým HTTP video stream
+      console.log('Using IMG fallback with video stream...');
       if (imgRef.current) {
-        const directHttpUrl = `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&fallback=img`;
-        imgRef.current.src = directHttpUrl;
+        // Zkus video streamy v pořadí, pak photo.jpg
+        const videoFallbacks = [
+          `http://89.24.76.191:10180/video?t=${timestamp}&fallback=img`,
+          `http://89.24.76.191:10180/stream.mjpg?t=${timestamp}&fallback=img`,
+          `http://89.24.76.191:10180/video.mjpg?t=${timestamp}&fallback=img`
+        ];
+        const photoFallbackUrl = `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&fallback=img`;
+        
+        let fallbackIndex = 0;
+        
+        const tryNextFallback = () => {
+          if (fallbackIndex < videoFallbacks.length) {
+            console.log(`Trying video fallback ${fallbackIndex + 1}:`, videoFallbacks[fallbackIndex]);
+            imgRef.current!.src = videoFallbacks[fallbackIndex];
+            fallbackIndex++;
+          } else {
+            console.log('All video fallbacks failed, trying photo.jpg...');
+            imgRef.current!.src = photoFallbackUrl;
+          }
+        };
+        
+        imgRef.current.onerror = tryNextFallback;
+        tryNextFallback(); // Spusť první fallback
       }
     }
   }, [hasImageChanged, onCameraStatusChange]);
@@ -345,8 +376,12 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
         }}
         onClick={() => {
           const isHttps = window.location.protocol === 'https:';
-          const cameraUrl = isHttps ? 'https://89.24.76.191:10180' : 'http://89.24.76.191:10180';
-          window.open(cameraUrl, '_blank');
+          // Zkus video stream první, pak kamera homepage
+          const baseUrl = isHttps ? 'https://89.24.76.191:10180' : 'http://89.24.76.191:10180';
+          const videoUrl = `${baseUrl}/video`;
+          
+          // Otevři video stream nebo fallback na kameru homepage
+          window.open(videoUrl, '_blank');
         }}
         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -378,8 +413,12 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
           <button
             onClick={() => {
           const isHttps = window.location.protocol === 'https:';
-          const cameraUrl = isHttps ? 'https://89.24.76.191:10180' : 'http://89.24.76.191:10180';
-          window.open(cameraUrl, '_blank');
+          // Zkus video stream první, pak kamera homepage
+          const baseUrl = isHttps ? 'https://89.24.76.191:10180' : 'http://89.24.76.191:10180';
+          const videoUrl = `${baseUrl}/video`;
+          
+          // Otevři video stream nebo fallback na kameru homepage
+          window.open(videoUrl, '_blank');
         }}
             className="btn-icon md-ripple"
             style={{
