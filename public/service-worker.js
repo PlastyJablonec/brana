@@ -75,8 +75,39 @@ self.addEventListener('activate', (event) => {
   return self.clients.claim();
 });
 
-// Fetch event handler
+// Fetch event handler with CRITICAL FIX for camera endpoint loops
 self.addEventListener('fetch', (event) => {
+  // 🚨 KRITICKÁ OPRAVA: Camera endpoint loop prevention
+  if (event.request.url.includes('/api/camera-proxy')) {
+    event.respondWith(
+      caches.match(event.request)
+        .then((response) => {
+          if (response) {
+            return response;
+          }
+          
+          // Fetch with timeout and error handling to prevent loops
+          return fetch(event.request, { 
+            cache: 'no-cache',
+            timeout: 5000 // 5s max
+          })
+          .catch((error) => {
+            console.warn('🚨 SW: Camera fetch failed, preventing retry loop:', error);
+            // Return placeholder response instead of failing/retrying
+            return new Response(JSON.stringify({ 
+              error: 'Camera temporarily unavailable',
+              timestamp: Date.now() 
+            }), {
+              status: 503,
+              statusText: 'Service Unavailable',
+              headers: { 'Content-Type': 'application/json' }
+            });
+          });
+        })
+    );
+    return;
+  }
+  
   // Speciální handling pro build-info.json - vždy fresh
   if (event.request.url.includes('build-info.json')) {
     event.respondWith(
@@ -99,7 +130,14 @@ self.addEventListener('fetch', (event) => {
         if (response) {
           return response;
         }
-        return fetch(event.request);
+        return fetch(event.request).catch((error) => {
+          console.warn('🚨 SW: Fetch failed for:', event.request.url, error);
+          // Graceful fallback instead of throwing
+          return new Response('Service temporarily unavailable', {
+            status: 503,
+            statusText: 'Service Unavailable'
+          });
+        });
       })
   );
 });
