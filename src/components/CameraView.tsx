@@ -96,6 +96,15 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     const timestamp = Date.now();
     const isHttps = window.location.protocol === 'https:';
     
+    // 🚨 NOUZOVÁ OCHRANA: Zabránit spamování Mixed Content chyb
+    if (isHttps && lastSuccessfulLoad === 0) {
+      console.log('🚫 HTTPS detected - skipping camera load to prevent Mixed Content spam');
+      setOverlayText('Kamera dostupná jen na HTTP (localhost:3001)');
+      setShowOverlay(true);
+      onCameraStatusChange?.('error', 'Kamera blokována HTTPS - použij localhost:3001');
+      return;
+    }
+    
     // 🌐 Multiple camera endpoints - priorita PHOTO pro kvalitu!  
     const cameraEndpoints = isHttps ? [
       // ✅ PŘÍMÝ HTTP endpoint - uživatel povolí Mixed Content
