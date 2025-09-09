@@ -1,4 +1,6 @@
 export default async function handler(req, res) {
+  console.log('🎥 Camera Index Proxy: OPRAVENO - POUŽÍVÁ FUNGUJÍCÍ VIDEO STREAM!');
+  
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -15,68 +17,25 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log('Camera Index Proxy: Fetching camera photo...');
+    console.log('🚀 Camera Index Proxy: Redirecting to WORKING VIDEO STREAM instead of photo!');
     
-    // Build the camera URL with current timestamp and cache buster  
+    // ✅ FUNGUJÍCÍ HTTP VIDEO STREAM - Python diagnostic script verified this works!
     const timestamp = Date.now();
     const cacheBuster = Math.random();
-    const photoUrl = `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&cache=${cacheBuster}`;
+    const videoUrl = `http://89.24.76.191:10180/video?t=${timestamp}&cache=${cacheBuster}&proxy=index`;
     
-    console.log('Camera Index Proxy: Requesting:', photoUrl);
+    console.log('🎯 Camera Index Proxy: Redirecting to working video stream:', videoUrl);
 
-    // KRITICKÁ OPRAVA: AbortController s timeout (Vercel compatible)
-    const abortController = new AbortController();
-    const timeoutId = setTimeout(() => {
-      abortController.abort();
-      console.log('Camera Index Proxy: Request aborted due to timeout');
-    }, 5000); // 5s timeout pro photo
-
-    // Fetch the photo from the camera
-    const response = await fetch(photoUrl, {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Camera-Index-Proxy/1.0',
-        'Accept': 'image/jpeg,image/*,*/*'
-      },
-      signal: abortController.signal
-    });
-
-    // Clear timeout if successful
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      console.error('Camera Index Proxy: Camera request failed:', response.status, response.statusText);
-      res.status(response.status).json({ 
-        error: 'Camera photo not available', 
-        status: response.status,
-        statusText: response.statusText
-      });
-      return;
-    }
-
-    // Get the photo data
-    const imageBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(imageBuffer);
-
-    console.log('Camera Index Proxy: Photo fetched successfully, size:', buffer.length, 'bytes');
-
-    // Set appropriate headers for photo response
-    res.setHeader('Content-Type', 'image/jpeg');
-    res.setHeader('Content-Length', buffer.length);
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-
-    // Send the photo
-    res.status(200).send(buffer);
+    // Redirect browser na fungující video stream místo photo.jpg 
+    // Browser bude mít Mixed Content warning, ale video funguje!
+    res.redirect(302, videoUrl);
 
   } catch (error) {
-    console.error('Camera Index Proxy: Error fetching photo:', error);
-    
-    if (error.name === 'TimeoutError') {
-      res.status(408).json({ error: 'Camera photo timeout' });
-    } else {
-      res.status(500).json({ error: 'Camera index proxy error', details: error.message });
-    }
+    console.error('❌ Camera Index Proxy: Video redirect failed:', error);
+    res.status(500).json({ 
+      error: 'Camera index proxy failed', 
+      details: error.message,
+      suggestion: 'Try direct HTTP endpoint: http://89.24.76.191:10180/video'
+    });
   }
 }

@@ -228,16 +228,16 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
       setIsRealCamera(false);
       onCameraStatusChange?.('error', errorMsg);
       
-      // Poslední fallback - IMG element s přímým HTTP video stream
-      console.log('Using IMG fallback with video stream...');
+      // 🎯 PŘÍMÝ FUNGUJÍCÍ VIDEO STREAM - HTTP endpointy!
+      console.log('🎥 Using WORKING HTTP video stream fallback...');
       if (imgRef.current) {
-        // Zkus video streamy v pořadí, pak photo.jpg (jen HTTPS - Mixed Content fix)
+        // PRIORITA: Fungující HTTP endpointy PRVNÍ!
         const videoFallbacks = [
-          `https://89.24.76.191:10443/video?t=${timestamp}&fallback=img`,
-          `https://89.24.76.191:10443/stream.mjpg?t=${timestamp}&fallback=img`,
-          `https://89.24.76.191:10443/video.mjpg?t=${timestamp}&fallback=img`
+          `http://89.24.76.191:10180/video?t=${timestamp}&working=true`,  // ✅ FUNGUJE
+          `/api/camera-proxy/video?t=${timestamp}&proxy=vercel`,          // Proxy fallback
+          `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&working=true` // Photo fallback
         ];
-        const photoFallbackUrl = `https://89.24.76.191:10443/photo.jpg?t=${timestamp}&fallback=img`;
+        const photoFallbackUrl = `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&direct=true`;
         
         let fallbackIndex = 0;
         
