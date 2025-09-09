@@ -96,18 +96,12 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     const timestamp = Date.now();
     const isHttps = window.location.protocol === 'https:';
     
-    // 🌐 Multiple camera endpoints pro různé sítě - MJPEG video priorita
+    // 🌐 Multiple camera endpoints pro různé sítě - MJPEG video priorita  
     const cameraEndpoints = isHttps ? [
-      // HTTPS produkce: API proxy pro video stream (preferovaný)
+      // HTTPS produkce: POUZE API proxy (bez mixed content chyb!)
       `/api/camera-proxy/video?t=${timestamp}&cache=${Math.random()}`,
-      // HTTPS produkce: API proxy pro static image (fallback)
       `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`,
-      // Fallback: Přímé HTTPS video endpointy (self-signed cert - může selhat)
-      `https://89.24.76.191:10180/video?t=${timestamp}&cache=${Math.random()}`,
-      `https://89.24.76.191:10180/stream.mjpg?t=${timestamp}&cache=${Math.random()}`,
-      `https://89.24.76.191:10180/video.mjpg?t=${timestamp}&cache=${Math.random()}`,
-      // Fallback: Přímý HTTPS photo endpoint (self-signed cert - může selhat)
-      `https://89.24.76.191:10180/photo.jpg?t=${timestamp}&cache=${Math.random()}`,
+      // POZNÁMKA: Přímé HTTP endpointy ODSTRANĚNY kvůli Mixed Content chybám!
     ] : [
       // HTTP development: Dev proxy server endpointy (preferované - řeší CORS)
       `http://localhost:3003/api/camera-proxy/video?t=${timestamp}&cache=${Math.random()}`,
@@ -239,13 +233,13 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
       // Poslední fallback - IMG element s přímým HTTP video stream
       console.log('Using IMG fallback with video stream...');
       if (imgRef.current) {
-        // Zkus video streamy v pořadí, pak photo.jpg
+        // Zkus video streamy v pořadí, pak photo.jpg (jen HTTPS - Mixed Content fix)
         const videoFallbacks = [
-          `http://89.24.76.191:10180/video?t=${timestamp}&fallback=img`,
-          `http://89.24.76.191:10180/stream.mjpg?t=${timestamp}&fallback=img`,
-          `http://89.24.76.191:10180/video.mjpg?t=${timestamp}&fallback=img`
+          `https://89.24.76.191:10443/video?t=${timestamp}&fallback=img`,
+          `https://89.24.76.191:10443/stream.mjpg?t=${timestamp}&fallback=img`,
+          `https://89.24.76.191:10443/video.mjpg?t=${timestamp}&fallback=img`
         ];
-        const photoFallbackUrl = `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&fallback=img`;
+        const photoFallbackUrl = `https://89.24.76.191:10443/photo.jpg?t=${timestamp}&fallback=img`;
         
         let fallbackIndex = 0;
         
