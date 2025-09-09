@@ -24,19 +24,12 @@ export default async function handler(req, res) {
     
     console.log('Camera Index Proxy: Requesting:', photoUrl);
 
-    // KRITICKÁ OPRAVA: Kratší timeout + AbortController
-    let abortController;
-    let timeoutId;
-    
-    if (typeof AbortSignal?.timeout === 'function') {
-      abortController = { signal: AbortSignal.timeout(3000) }; // 3s pro photo
-    } else {
-      abortController = new AbortController();
-      timeoutId = setTimeout(() => {
-        abortController.abort();
-        console.log('Camera Index Proxy: Request aborted due to timeout');
-      }, 3000);
-    }
+    // KRITICKÁ OPRAVA: AbortController s timeout (Vercel compatible)
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      abortController.abort();
+      console.log('Camera Index Proxy: Request aborted due to timeout');
+    }, 5000); // 5s timeout pro photo
 
     // Fetch the photo from the camera
     const response = await fetch(photoUrl, {
@@ -49,9 +42,7 @@ export default async function handler(req, res) {
     });
 
     // Clear timeout if successful
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       console.error('Camera Index Proxy: Camera request failed:', response.status, response.statusText);

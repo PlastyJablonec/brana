@@ -24,21 +24,12 @@ export default async function handler(req, res) {
     
     console.log('Camera Video Proxy: Requesting:', cameraUrl);
 
-    // KRITICKÁ OPRAVA: Kratší timeout + AbortController fallback
-    let abortController;
-    let timeoutId;
-    
-    if (typeof AbortSignal?.timeout === 'function') {
-      // Moderní prohlížeče - delší timeout pro video stream
-      abortController = { signal: AbortSignal.timeout(10000) }; // 10s pro video
-    } else {
-      // Fallback pro starší prostředí
-      abortController = new AbortController();
-      timeoutId = setTimeout(() => {
-        abortController.abort();
-        console.log('Camera Video Proxy: Request aborted due to timeout');
-      }, 10000);
-    }
+    // KRITICKÁ OPRAVA: AbortController s timeout (Vercel compatible)
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      abortController.abort();
+      console.log('Camera Video Proxy: Request aborted due to timeout');
+    }, 8000); // 8s timeout pro video stream
 
     // Fetch the video stream from the camera
     const response = await fetch(cameraUrl, {
@@ -51,9 +42,7 @@ export default async function handler(req, res) {
     });
 
     // Clear timeout if successful
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       console.error('Camera Video Proxy: Camera request failed:', response.status, response.statusText);
