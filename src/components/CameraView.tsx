@@ -96,14 +96,11 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     const timestamp = Date.now();
     const isHttps = window.location.protocol === 'https:';
     
-    // 🌐 Multiple camera endpoints pro různé sítě - PHOTO priorita pro kvalitu!  
+    // 🌐 Multiple camera endpoints - priorita PHOTO pro kvalitu!  
     const cameraEndpoints = isHttps ? [
-      // 🚨 OPRAVA: Vercel cloud NEMÁ přístup k interní IP! Používáme přímé HTTP endpointy
-      // Uživatel musí povolit Mixed Content v prohlížeči (bezpečné pro interní síť)
-      `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&https=bypass`,    // Přímý HTTP photo - FUNGUJE!
-      `http://89.24.76.191:10180/video?t=${timestamp}&https=bypass`,        // Přímý HTTP video - FUNGUJE!
-      `http://89.24.76.191:10180/stream.mjpg?t=${timestamp}&https=bypass`,   // MJPEG stream - FUNGUJE!
-      // POZNÁMKA: API proxy ODSTRANĚNY - Vercel cloud nemá přístup k interní IP!
+      // ✅ PŘÍMÝ HTTP endpoint - uživatel povolí Mixed Content
+      `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&cache=${Math.random()}`,
+      `http://89.24.76.191:10180/video?t=${timestamp}&cache=${Math.random()}`,
     ] : [
       // HTTP development: Dev proxy server VIDEO endpointy (preferované - řeší CORS)
       `http://localhost:3003/api/camera-proxy/video?t=${timestamp}&cache=${Math.random()}`,
@@ -226,7 +223,7 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
       const totalTime = performance.now() - loadStartTime;
       console.error(`All camera endpoints failed: ${totalTime.toFixed(0)}ms`);
       const errorMsg = isHttps ? 
-        'Kamera blokována - klikni na "🔒" v adresním řádku a povol "Nezabezpečený obsah"' : 
+        'Kamera blokována - klikni na "🔒" v adresní řádce a povol "Nezabezpečený obsah"' : 
         'Kamera nedostupná (síť)';
       setOverlayText(errorMsg);
       setIsRealCamera(false);
@@ -235,11 +232,10 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
       // 📸 KVALITNÍ PHOTO FALLBACK - lepší kvalita než video!
       console.log('📷 Using QUALITY PHOTO fallback for better image...');
       if (imgRef.current) {
-        // 🚨 OPRAVA: Používáme pouze fungující HTTP endpointy (i v HTTPS)
+        // ✅ JEDNODUCHÉ HTTP ENDPOINTY (fungují když povolí Mixed Content)
         const photoFallbacks = [
-          `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&quality=direct`, // Přímý HTTP photo - FUNGUJE!
-          `http://89.24.76.191:10180/video?t=${timestamp}&fallback=video`,     // Video fallback - FUNGUJE!
-          `http://89.24.76.191:10180/stream.mjpg?t=${timestamp}&stream=final`  // MJPEG stream - FUNGUJE!
+          `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&quality=direct`,
+          `http://89.24.76.191:10180/video?t=${timestamp}&fallback=video`
         ];
         const photoFallbackUrl = `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&final=true`;
         
