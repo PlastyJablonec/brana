@@ -77,35 +77,11 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event handler with CRITICAL FIX for camera endpoint loops
 self.addEventListener('fetch', (event) => {
-  // 🚨 KRITICKÁ OPRAVA: Camera endpoint loop prevention
-  if (event.request.url.includes('/api/camera-proxy')) {
-    event.respondWith(
-      caches.match(event.request)
-        .then((response) => {
-          if (response) {
-            return response;
-          }
-          
-          // Fetch with timeout and error handling to prevent loops
-          return fetch(event.request, { 
-            cache: 'no-cache',
-            timeout: 5000 // 5s max
-          })
-          .catch((error) => {
-            console.warn('🚨 SW: Camera fetch failed, preventing retry loop:', error);
-            // Return placeholder response instead of failing/retrying
-            return new Response(JSON.stringify({ 
-              error: 'Camera temporarily unavailable',
-              timestamp: Date.now() 
-            }), {
-              status: 503,
-              statusText: 'Service Unavailable',
-              headers: { 'Content-Type': 'application/json' }
-            });
-          });
-        })
-    );
-    return;
+  // 🚨 KRITICKÁ OPRAVA: ÚPLNĚ VYPNOUT camera proxy caching!
+  if (event.request.url.includes('/api/camera-proxy') || 
+      event.request.url.includes('89.24.76.191')) {
+    // ŽÁDNÉ CACHING! Jen skip Service Worker pro camera endpointy
+    return; // Nech browser udělat normální fetch bez SW
   }
   
   // Speciální handling pro build-info.json - vždy fresh
