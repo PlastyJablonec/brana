@@ -96,12 +96,9 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     const timestamp = Date.now();
     const isHttps = window.location.protocol === 'https:';
     
-    // 🚨 NOUZOVÁ OCHRANA: Zabránit spamování Mixed Content chyb
-    if (isHttps && lastSuccessfulLoad === 0) {
-      console.log('🚫 HTTPS detected - skipping camera load to prevent Mixed Content spam');
-      setOverlayText('Kamera dostupná jen na HTTP (localhost:3001)');
-      setShowOverlay(true);
-      onCameraStatusChange?.('error', 'Kamera blokována HTTPS - použij localhost:3001');
+    // 🚨 OCHRANA: Pokud už jsme se jednou pokusili a selhalo to, nezkoušej znovu
+    if (isHttps && showOverlay && overlayText.includes('Mixed Content')) {
+      console.log('🚫 Mixed Content už jednou selhal - nezkoušíme znovu');
       return;
     }
     
@@ -232,7 +229,7 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
       const totalTime = performance.now() - loadStartTime;
       console.error(`All camera endpoints failed: ${totalTime.toFixed(0)}ms`);
       const errorMsg = isHttps ? 
-        'Kamera blokována - klikni na "🔒" v adresní řádce a povol "Nezabezpečený obsah"' : 
+        'Mixed Content blokován - v Nastavení prohlížeče povol "Nezabezpečený obsah" pro tuto stránku' : 
         'Kamera nedostupná (síť)';
       setOverlayText(errorMsg);
       setIsRealCamera(false);
