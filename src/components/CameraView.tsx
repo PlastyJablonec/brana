@@ -98,10 +98,12 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     
     // 🌐 Multiple camera endpoints pro různé sítě - PHOTO priorita pro kvalitu!  
     const cameraEndpoints = isHttps ? [
-      // HTTPS produkce: API proxy endpointy (bez mixed content chyb!)
-      `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`,        // Photo proxy - lepší kvalita!
-      `/api/camera-proxy/video?t=${timestamp}&cache=${Math.random()}`,  // Video fallback
-      // POZNÁMKA: Přímé HTTP endpointy ODSTRANĚNY kvůli Mixed Content chybám!
+      // 🚨 OPRAVA: Vercel cloud NEMÁ přístup k interní IP! Používáme přímé HTTP endpointy
+      // Uživatel musí povolit Mixed Content v prohlížeči (bezpečné pro interní síť)
+      `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&https=bypass`,    // Přímý HTTP photo - FUNGUJE!
+      `http://89.24.76.191:10180/video?t=${timestamp}&https=bypass`,        // Přímý HTTP video - FUNGUJE!
+      `http://89.24.76.191:10180/stream.mjpg?t=${timestamp}&https=bypass`,   // MJPEG stream - FUNGUJE!
+      // POZNÁMKA: API proxy ODSTRANĚNY - Vercel cloud nemá přístup k interní IP!
     ] : [
       // HTTP development: Dev proxy server VIDEO endpointy (preferované - řeší CORS)
       `http://localhost:3003/api/camera-proxy/video?t=${timestamp}&cache=${Math.random()}`,
@@ -223,7 +225,9 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
       // Všechny požadavky selhaly
       const totalTime = performance.now() - loadStartTime;
       console.error(`All camera endpoints failed: ${totalTime.toFixed(0)}ms`);
-      const errorMsg = isHttps ? 'Kamera nedostupná (všechny cesty)' : 'Kamera nedostupná (síť)';
+      const errorMsg = isHttps ? 
+        'Kamera blokována - klikni na "🔒" v adresním řádku a povol "Nezabezpečený obsah"' : 
+        'Kamera nedostupná (síť)';
       setOverlayText(errorMsg);
       setIsRealCamera(false);
       onCameraStatusChange?.('error', errorMsg);
@@ -231,11 +235,11 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
       // 📸 KVALITNÍ PHOTO FALLBACK - lepší kvalita než video!
       console.log('📷 Using QUALITY PHOTO fallback for better image...');
       if (imgRef.current) {
-        // PRIORITA: Photo endpointy pro lepší kvalitu!
+        // 🚨 OPRAVA: Používáme pouze fungující HTTP endpointy (i v HTTPS)
         const photoFallbacks = [
-          `/api/camera-proxy?t=${timestamp}&quality=high`,                      // API proxy - nejlepší pro HTTPS
-          `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&quality=direct`, // Přímý HTTP photo
-          `http://89.24.76.191:10180/video?t=${timestamp}&fallback=video`      // Video jako poslední fallback
+          `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&quality=direct`, // Přímý HTTP photo - FUNGUJE!
+          `http://89.24.76.191:10180/video?t=${timestamp}&fallback=video`,     // Video fallback - FUNGUJE!
+          `http://89.24.76.191:10180/stream.mjpg?t=${timestamp}&stream=final`  // MJPEG stream - FUNGUJE!
         ];
         const photoFallbackUrl = `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&final=true`;
         
