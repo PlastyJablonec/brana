@@ -98,20 +98,18 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     
     // 🌐 Multiple camera endpoints pro různé sítě - MJPEG video priorita  
     const cameraEndpoints = isHttps ? [
-      // HTTPS produkce: POUZE API proxy (bez mixed content chyb!)
+      // HTTPS produkce: POUZE VIDEO STREAM API proxy (bez mixed content chyb!)
       `/api/camera-proxy/video?t=${timestamp}&cache=${Math.random()}`,
-      `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`,
+      // POZNÁMKA: Photo endpoint odstraněn - video stream má prioritu!
       // POZNÁMKA: Přímé HTTP endpointy ODSTRANĚNY kvůli Mixed Content chybám!
     ] : [
-      // HTTP development: Dev proxy server endpointy (preferované - řeší CORS)
+      // HTTP development: Dev proxy server VIDEO endpointy (preferované - řeší CORS)
       `http://localhost:3003/api/camera-proxy/video?t=${timestamp}&cache=${Math.random()}`,
-      `http://localhost:3003/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`,
-      // HTTP development: Přímé video endpointy (fallback - můžou mít CORS problémy)
+      // HTTP development: Přímé video endpointy (WORKING - dle diagnostic scriptu!)
       `http://89.24.76.191:10180/video?t=${timestamp}&cache=${Math.random()}`,
       `http://89.24.76.191:10180/stream.mjpg?t=${timestamp}&cache=${Math.random()}`,
       `http://89.24.76.191:10180/video.mjpg?t=${timestamp}&cache=${Math.random()}`,
-      // HTTP development: Přímý photo endpoint (fallback)
-      `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&cache=${Math.random()}`,
+      // POZNÁMKA: Photo endpointy odstraněny - video stream má prioritu!
     ];
     
     console.log(`🌐 ${isHttps ? 'HTTPS' : 'HTTP'} detected - trying ${cameraEndpoints.length} camera endpoints`);
