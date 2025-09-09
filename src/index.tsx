@@ -5,6 +5,26 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { updateService } from './services/updateService';
 
+// 🔇 RYCHLÁ OPRAVA KONZOLE - vypnutí debug logů v produkci
+if (process.env.NODE_ENV === 'production' || window.location.href.includes('vercel.app')) {
+  const originalConsoleLog = console.log;
+  console.log = (...args: any[]) => {
+    // Zachovat důležité logy (začínají emoji nebo obsahují ERROR/WARN)
+    const message = args[0];
+    if (typeof message === 'string' && (
+      message.includes('ERROR') || 
+      message.includes('WARN') || 
+      message.includes('❌') || 
+      message.includes('⚠️') ||
+      message.includes('🔥') ||
+      message.startsWith('Firebase Auth:')
+    )) {
+      originalConsoleLog(...args);
+    }
+    // Ostatní debug logy potlačit
+  };
+}
+
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );

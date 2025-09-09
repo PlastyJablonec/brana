@@ -203,7 +203,7 @@ export class UserService {
         // Grant default permissions: jen brána + lokační oprávnění (vše ostatní vypnuto)
         'permissions.gate': true,
         'permissions.garage': false,
-        'permissions.camera': false,
+        'permissions.camera': true,
         'permissions.stopMode': false,
         'permissions.viewLogs': false,
         'permissions.manageUsers': false,
