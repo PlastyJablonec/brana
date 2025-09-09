@@ -6,6 +6,9 @@
     "api/camera-proxy.js": {
       "maxDuration": 30
     },
+    "api/camera-proxy/index.js": {
+      "maxDuration": 30
+    },
     "api/camera-proxy/video.js": {
       "maxDuration": 30
     }

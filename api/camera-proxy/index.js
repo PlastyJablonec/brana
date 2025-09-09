@@ -26,9 +26,9 @@ export default async function handler(req, res) {
     
     console.log('🎯 Camera Index Proxy: Fetching photo from:', photoUrl);
 
-    // Fetch photo a proxy data (NEredirect!)
+    // Fetch photo a proxy data (NEredirect!) - rychlejší timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout - rychlejší response
     
     const response = await fetch(photoUrl, {
       method: 'GET',
