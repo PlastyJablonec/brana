@@ -96,11 +96,11 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
     const timestamp = Date.now();
     const isHttps = window.location.protocol === 'https:';
     
-    // 🌐 Multiple camera endpoints pro různé sítě - MJPEG video priorita  
+    // 🌐 Multiple camera endpoints pro různé sítě - PHOTO priorita pro kvalitu!  
     const cameraEndpoints = isHttps ? [
-      // HTTPS produkce: POUZE VIDEO STREAM API proxy (bez mixed content chyb!)
-      `/api/camera-proxy/video?t=${timestamp}&cache=${Math.random()}`,
-      // POZNÁMKA: Photo endpoint odstraněn - video stream má prioritu!
+      // HTTPS produkce: API proxy endpointy (bez mixed content chyb!)
+      `/api/camera-proxy?t=${timestamp}&cache=${Math.random()}`,        // Photo proxy - lepší kvalita!
+      `/api/camera-proxy/video?t=${timestamp}&cache=${Math.random()}`,  // Video fallback
       // POZNÁMKA: Přímé HTTP endpointy ODSTRANĚNY kvůli Mixed Content chybám!
     ] : [
       // HTTP development: Dev proxy server VIDEO endpointy (preferované - řeší CORS)
@@ -228,26 +228,26 @@ const CameraView: React.FC<CameraViewProps> = ({ onCameraStatusChange }) => {
       setIsRealCamera(false);
       onCameraStatusChange?.('error', errorMsg);
       
-      // 🎯 PŘÍMÝ FUNGUJÍCÍ VIDEO STREAM - HTTP endpointy!
-      console.log('🎥 Using WORKING HTTP video stream fallback...');
+      // 📸 KVALITNÍ PHOTO FALLBACK - lepší kvalita než video!
+      console.log('📷 Using QUALITY PHOTO fallback for better image...');
       if (imgRef.current) {
-        // PRIORITA: Fungující HTTP endpointy PRVNÍ!
-        const videoFallbacks = [
-          `http://89.24.76.191:10180/video?t=${timestamp}&working=true`,  // ✅ FUNGUJE
-          `/api/camera-proxy/video?t=${timestamp}&proxy=vercel`,          // Proxy fallback
-          `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&working=true` // Photo fallback
+        // PRIORITA: Photo endpointy pro lepší kvalitu!
+        const photoFallbacks = [
+          `/api/camera-proxy?t=${timestamp}&quality=high`,                      // API proxy - nejlepší pro HTTPS
+          `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&quality=direct`, // Přímý HTTP photo
+          `http://89.24.76.191:10180/video?t=${timestamp}&fallback=video`      // Video jako poslední fallback
         ];
-        const photoFallbackUrl = `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&direct=true`;
+        const photoFallbackUrl = `http://89.24.76.191:10180/photo.jpg?t=${timestamp}&final=true`;
         
         let fallbackIndex = 0;
         
         const tryNextFallback = () => {
-          if (fallbackIndex < videoFallbacks.length) {
-            console.log(`Trying video fallback ${fallbackIndex + 1}:`, videoFallbacks[fallbackIndex]);
-            imgRef.current!.src = videoFallbacks[fallbackIndex];
+          if (fallbackIndex < photoFallbacks.length) {
+            console.log(`📷 Trying photo fallback ${fallbackIndex + 1}:`, photoFallbacks[fallbackIndex]);
+            imgRef.current!.src = photoFallbacks[fallbackIndex];
             fallbackIndex++;
           } else {
-            console.log('All video fallbacks failed, trying photo.jpg...');
+            console.log('📸 All photo fallbacks failed, trying final photo URL...');
             imgRef.current!.src = photoFallbackUrl;
           }
         };
