@@ -24,12 +24,13 @@ export default async function handler(req, res) {
     
     console.log('Camera Video Proxy: Requesting:', cameraUrl);
 
-    // KRITICKÁ OPRAVA: AbortController s timeout (Vercel compatible)
+    // VERCEL SERVERLESS FIX: Jednodušší implementace bez streaming
+    // Pro Vercel Edge Functions je lepší načíst data a vrátit je jako buffer
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => {
       abortController.abort();
       console.log('Camera Video Proxy: Request aborted due to timeout');
-    }, 8000); // 8s timeout pro video stream
+    }, 5000); // Kratší timeout pro serverless
 
     // Fetch the video stream from the camera
     const response = await fetch(cameraUrl, {
@@ -54,45 +55,29 @@ export default async function handler(req, res) {
       return;
     }
 
-    // Check content type
+    // Get content type
     const contentType = response.headers.get('content-type');
     console.log('Camera Video Proxy: Content-Type:', contentType);
 
-    // Pokud je to MJPEG stream, forward přímo
-    if (contentType && (contentType.includes('multipart/x-mixed-replace') || contentType.includes('video/'))) {
-      console.log('Camera Video Proxy: Forwarding MJPEG stream');
-      
-      // Set appropriate headers for MJPEG stream
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
+    // VERCEL FIX: Místo pipe() použij arrayBuffer pro větší kompatibilitu
+    const streamBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(streamBuffer);
+    
+    console.log('Camera Video Proxy: Stream buffer fetched, size:', buffer.length, 'bytes');
 
-      // Forward the stream
-      response.body.pipe(res);
-      return;
-    }
-
-    // Jinak zpracuj jako statický obrázek
-    const imageBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(imageBuffer);
-
-    console.log('Camera Video Proxy: Static image fetched, size:', buffer.length, 'bytes');
-
-    // Set appropriate headers for image response
-    res.setHeader('Content-Type', contentType || 'image/jpeg');
-    res.setHeader('Content-Length', buffer.length);
+    // Set appropriate headers for MJPEG stream
+    res.setHeader('Content-Type', contentType || 'multipart/x-mixed-replace; boundary=Ba4oTvQMY8ew04N8dcnM');
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
 
-    // Send the image
+    // Send the stream data
     res.status(200).send(buffer);
 
   } catch (error) {
     console.error('Camera Video Proxy: Error fetching video stream:', error);
     
-    if (error.name === 'TimeoutError') {
+    if (error.name === 'AbortError') {
       res.status(408).json({ error: 'Camera video timeout' });
     } else {
       res.status(500).json({ error: 'Camera video proxy error', details: error.message });
