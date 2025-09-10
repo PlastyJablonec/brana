@@ -19,7 +19,14 @@ export default async function handler(req, res) {
     return;
   }
   
-  const CAMERA_URL = 'http://89.24.76.191:10180/photo.jpg';
+  // Preserve query parameters for cache busting (t, cache)
+  const url = new URL('http://89.24.76.191:10180/photo.jpg');
+  
+  // Forward timestamp and cache parameters from client
+  if (req.query.t) url.searchParams.set('t', req.query.t);
+  if (req.query.cache) url.searchParams.set('cache', req.query.cache);
+  
+  const CAMERA_URL = url.toString();
   
   try {
     console.log('📹 Camera Proxy: Fetching image from', CAMERA_URL);
