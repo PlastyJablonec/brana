@@ -22,7 +22,8 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timestampIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const CAMERA_URL = 'http://89.24.76.191:10180/photo.jpg';
+  // Use HTTPS API proxy to avoid Mixed Content issues
+  const CAMERA_URL = '/api/camera-proxy';
 
   const updateTimestampDisplay = () => {
     if (lastSuccessfulLoad === 0) {
