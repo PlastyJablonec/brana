@@ -31,15 +31,16 @@ export default async function handler(req, res) {
   try {
     console.log('📹 Camera Proxy: Fetching image from', CAMERA_URL);
     
-    // Fetch image from HTTP camera with timeout
+    // Fetch image from HTTP camera with shorter timeout for faster response
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout instead of 10s
     
     const response = await fetch(CAMERA_URL, {
       method: 'GET',
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Vercel-Camera-Proxy/1.0'
+        'User-Agent': 'Vercel-Camera-Proxy/1.0',
+        'Connection': 'close' // Avoid connection pooling issues
       }
     });
     
@@ -60,12 +61,13 @@ export default async function handler(req, res) {
     
     console.log('✅ Camera Proxy: Image fetched successfully,', imageBytes.length, 'bytes');
     
-    // Set appropriate headers
+    // Set appropriate headers for fast response
     res.setHeader('Content-Type', 'image/jpeg');
     res.setHeader('Content-Length', imageBytes.length);
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
+    res.setHeader('X-Served-By', 'vercel-proxy'); // Debug header
     
     // Send image data
     res.status(200).send(imageBytes);
@@ -74,7 +76,7 @@ export default async function handler(req, res) {
     console.error('❌ Camera Proxy: Error fetching image:', error.message);
     
     if (error.name === 'AbortError') {
-      res.status(504).json({ error: 'Camera timeout' });
+      res.status(504).json({ error: 'Camera timeout (3s)' });
     } else {
       res.status(500).json({ 
         error: 'Camera proxy error',
