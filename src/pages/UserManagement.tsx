@@ -15,6 +15,7 @@ import Dialog from '../components/Dialog';
 const permissionDescriptions = {
   gate: 'Umožňuje otevírat a zavírat bránu prostřednictvím aplikace',
   garage: 'Umožňuje ovládat garáž a garážová vrata',
+  camera: 'Zobrazuje webkameru v dashboard aplikaci',
   stopMode: 'Kritické oprávnění - povoluje aktivovat STOP režim (zastaví všechny operace)',
   viewLogs: 'Umožňuje prohlížet logy a historii aktivit v systému',
   manageUsers: 'Administrátorské oprávnění - správa uživatelů, schvalování přístupů',
@@ -57,6 +58,7 @@ const UserManagement: React.FC = () => {
     permissions: {
       gate: false,
       garage: false,
+      camera: false,
       stopMode: false,
       viewLogs: true,
       manageUsers: false,
@@ -202,7 +204,8 @@ const UserManagement: React.FC = () => {
         permissions: {
           gate: false,
           garage: false,
-              stopMode: false,
+          camera: false,
+          stopMode: false,
           viewLogs: true,
           manageUsers: false,
           viewGateActivity: false,
@@ -1122,7 +1125,8 @@ const UserManagement: React.FC = () => {
                       permissions: {
                         gate: false,
                         garage: false,
-                                          stopMode: false,
+                        camera: false,
+                        stopMode: false,
                         viewLogs: true,
                         manageUsers: false,
                         viewGateActivity: false,

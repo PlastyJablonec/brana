@@ -21,6 +21,7 @@ export class UserService {
       permissions: {
         gate: false,
         garage: false,
+        camera: false,
         stopMode: false,
         viewLogs: false,
         manageUsers: false,
@@ -202,6 +203,7 @@ export class UserService {
         // Grant default permissions: jen brána + lokační oprávnění (vše ostatní vypnuto)
         'permissions.gate': true,
         'permissions.garage': false,
+        'permissions.camera': isAdminUser, // JEN admin uživatelé vidí kameru
         'permissions.stopMode': false,
         'permissions.viewLogs': false,
         'permissions.manageUsers': false,
@@ -353,6 +355,7 @@ export class UserService {
           permissions: data.permissions || {
             gate: false,
             garage: false,
+            camera: data.role === 'admin', // Only admins can see camera
             stopMode: false,
             viewLogs: true,
             manageUsers: false,
@@ -421,6 +424,7 @@ export class UserService {
             permissions: data.permissions || {
               gate: false,
               garage: false,
+              camera: data.role === 'admin', // Only admins can see camera
               stopMode: false,
               viewLogs: true,
               manageUsers: false,

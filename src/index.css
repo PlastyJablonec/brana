@@ -914,6 +914,53 @@ body {
   z-index: 2;
 }
 
+/* CameraWidget Component Styles */
+.camera-widget {
+  background-color: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  border: 1px solid var(--border-primary);
+}
+
+.camera-widget .camera-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.camera-widget .camera-header h3 {
+  margin: 0;
+  font-size: var(--text-base);
+  color: var(--text-primary);
+}
+
+.camera-widget .camera-gear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.camera-widget .camera-gear:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.camera-widget .camera-gear svg {
+  fill: currentColor;
+}
+
+.camera-widget .camera-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 0.3s ease;
+}
+
 /* Responsive Tables */
 .table-container {
   overflow-x: auto;

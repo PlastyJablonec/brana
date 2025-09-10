@@ -29,6 +29,7 @@ export interface User {
   permissions: {
     gate: boolean;
     garage: boolean;
+    camera: boolean; // Zobrazení webkamery
     stopMode: boolean;
     viewLogs: boolean;
     manageUsers: boolean;

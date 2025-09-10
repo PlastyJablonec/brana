@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import ThemeToggle from '../components/ThemeToggle';
 import ConnectionLoader from '../components/ConnectionLoader';
 import MqttDebug from '../components/MqttDebug';
+import CameraWidget from '../components/CameraWidget';
 import { mqttService } from '../services/mqttService';
 import { activityService } from '../services/activityService';
 import { useGateTimer } from '../hooks/useGateTimer';
@@ -2032,6 +2033,24 @@ const Dashboard: React.FC = () => {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Camera Widget - pouze pro uživatele s permissions.camera */}
+        {currentUser?.permissions.camera && (
+          <div style={{
+            background: 'var(--md-surface-container)',
+            borderRadius: '16px',
+            padding: '20px',
+            boxShadow: 'var(--md-elevation-1-shadow)',
+            border: '1px solid var(--md-outline-variant)'
+          }}>
+            <CameraWidget 
+              refreshInterval={1000}
+              showTimestamp={true}
+              showSettings={true}
+              className=""
+            />
           </div>
         )}
 
