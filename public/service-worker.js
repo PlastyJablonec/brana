@@ -75,14 +75,8 @@ self.addEventListener('activate', (event) => {
   return self.clients.claim();
 });
 
-// Fetch event handler with CRITICAL FIX for camera endpoint loops
+// Fetch event handler
 self.addEventListener('fetch', (event) => {
-  // 🚨 KRITICKÁ OPRAVA: ÚPLNĚ VYPNOUT camera proxy caching!
-  if (event.request.url.includes('/api/camera-proxy') || 
-      event.request.url.includes('89.24.76.191')) {
-    // ŽÁDNÉ CACHING! Jen skip Service Worker pro camera endpointy
-    return; // Nech browser udělat normální fetch bez SW
-  }
   
   // Speciální handling pro build-info.json - vždy fresh
   if (event.request.url.includes('build-info.json')) {

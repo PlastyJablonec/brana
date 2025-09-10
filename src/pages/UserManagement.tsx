@@ -15,7 +15,6 @@ import Dialog from '../components/Dialog';
 const permissionDescriptions = {
   gate: 'Umožňuje otevírat a zavírat bránu prostřednictvím aplikace',
   garage: 'Umožňuje ovládat garáž a garážová vrata',
-  camera: 'Povoluje přístup k webkameře a prohlížení živého přenosu',
   stopMode: 'Kritické oprávnění - povoluje aktivovat STOP režim (zastaví všechny operace)',
   viewLogs: 'Umožňuje prohlížet logy a historii aktivit v systému',
   manageUsers: 'Administrátorské oprávnění - správa uživatelů, schvalování přístupů',
@@ -58,7 +57,6 @@ const UserManagement: React.FC = () => {
     permissions: {
       gate: false,
       garage: false,
-      camera: false,
       stopMode: false,
       viewLogs: true,
       manageUsers: false,
@@ -204,8 +202,7 @@ const UserManagement: React.FC = () => {
         permissions: {
           gate: false,
           garage: false,
-          camera: false,
-          stopMode: false,
+              stopMode: false,
           viewLogs: true,
           manageUsers: false,
           viewGateActivity: false,
@@ -710,7 +707,7 @@ const UserManagement: React.FC = () => {
                         color: 'white'
                       }}>Garáž</span>
                     )}
-                    {user.permissions.camera && (
+                    {false && (
                       <span style={{ 
                         padding: '4px 8px', 
                         borderRadius: '8px', 
@@ -1061,7 +1058,6 @@ const UserManagement: React.FC = () => {
                   {Object.entries({
                     gate: 'Ovládání brány',
                     garage: 'Ovládání garáže',
-                    camera: 'Webkamera',
                     stopMode: 'STOP režim',
                     viewLogs: 'Zobrazení logů',
                     manageUsers: 'Správa uživatelů',
@@ -1126,8 +1122,7 @@ const UserManagement: React.FC = () => {
                       permissions: {
                         gate: false,
                         garage: false,
-                        camera: false,
-                        stopMode: false,
+                                          stopMode: false,
                         viewLogs: true,
                         manageUsers: false,
                         viewGateActivity: false,
@@ -1281,7 +1276,6 @@ const UserManagement: React.FC = () => {
                   {Object.entries({
                     gate: 'Ovládání brány',
                     garage: 'Ovládání garáže',
-                    camera: 'Webkamera',
                     stopMode: 'STOP režim',
                     viewLogs: 'Zobrazení logů',
                     manageUsers: 'Správa uživatelů',

@@ -29,7 +29,6 @@ export interface User {
   permissions: {
     gate: boolean;
     garage: boolean;
-    camera: boolean;
     stopMode: boolean;
     viewLogs: boolean;
     manageUsers: boolean;

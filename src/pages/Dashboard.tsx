@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import CameraView from '../components/CameraView';
 import ThemeToggle from '../components/ThemeToggle';
 import ConnectionLoader from '../components/ConnectionLoader';
 import MqttDebug from '../components/MqttDebug';
@@ -215,11 +214,6 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Camera status callback (jen pro console, ne pro connection steps)
-  const handleCameraStatusChange = useCallback((status: 'loading' | 'success' | 'error', message?: string) => {
-    console.log('📸 Camera status changed:', status, message);
-    // Kamera se už nesleduje v connection loaderu
-  }, []);
 
   // Helper function to play sound feedback
   const playSound = (type: 'click' | 'success' | 'error') => {
@@ -1528,17 +1522,6 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Camera Section */}
-      {currentUser?.permissions.camera && (
-        <div className="md-card" style={{ marginBottom: '16px' }}>
-          <div className="md-card-header">
-            <h2 className="md-card-title" style={{ fontSize: '1.125rem' }}>Webkamera</h2>
-          </div>
-          <div className="md-card-content">
-            <CameraView onCameraStatusChange={handleCameraStatusChange} />
-          </div>
-        </div>
-      )}
 
       {/* Control Area with Material Design */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px', marginTop: '24px' }}>

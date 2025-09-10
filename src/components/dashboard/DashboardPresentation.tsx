@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import CameraView from '../CameraView';
 import ThemeToggle from '../ThemeToggle';
 import { User, ICoordinates } from '../../types';
 
@@ -373,26 +372,6 @@ export const DashboardPresentation: React.FC<IDashboardPresentationProps> = ({
           </button>
         </div>
 
-        {/* Camera View */}
-        <div style={{
-          background: 'var(--md-surface)',
-          padding: '20px',
-          borderRadius: '12px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          gridColumn: 'span 2'
-        }}>
-          <h2 style={{
-            margin: '0 0 16px 0',
-            fontSize: '18px',
-            color: 'var(--md-on-surface)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            📹 Kamera
-          </h2>
-          <CameraView />
-        </div>
       </div>
 
       <style>{`

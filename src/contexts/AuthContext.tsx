@@ -215,7 +215,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         permissions: {
           gate: false,
           garage: false,
-          camera: false,
           stopMode: false,
           viewLogs: true,
           manageUsers: false,
@@ -276,7 +275,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             permissions: {
               gate: false,
               garage: false,
-              camera: false,
               stopMode: false,
               viewLogs: true,
               manageUsers: false,
