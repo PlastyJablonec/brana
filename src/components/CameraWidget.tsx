@@ -17,15 +17,31 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [timestampText, setTimestampText] = useState<string>('--');
-  const [useDirectAccess, setUseDirectAccess] = useState<boolean>(false);
+  const [cameraUrl, setCameraUrl] = useState<string>('');
   
   const imgRef = useRef<HTMLImageElement>(null);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timestampIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Hybrid approach: direct HTTP when possible, API proxy as fallback
-  const DIRECT_CAMERA_URL = 'http://89.24.76.191:10180/photo.jpg';
-  const PROXY_CAMERA_URL = '/api/camera-proxy';
+  // Simple approach: detect environment and use appropriate URL
+  const getBaseUrl = (): string => {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const isHTTP = window.location.protocol === 'http:';
+    
+    // Use direct access on HTTP or localhost, proxy on HTTPS production
+    if (isHTTP || isLocalhost) {
+      console.log('🔄 Camera: Using direct HTTP access for fast performance');
+      return 'http://89.24.76.191:10180/photo.jpg';
+    } else {
+      console.log('🔒 Camera: Using HTTPS API proxy for security');
+      return '/api/camera-proxy';
+    }
+  };
+
+  const getFreshCameraUrl = (): string => {
+    const baseUrl = getBaseUrl();
+    return `${baseUrl}?t=${Date.now()}&cache=${Math.random()}`;
+  };
 
   const updateTimestampDisplay = () => {
     if (lastSuccessfulLoad === 0) {
@@ -44,100 +60,27 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
     }
   };
 
-  // Detekce prostředí při prvním načtení
-  const detectEnvironment = async () => {
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const isHTTP = window.location.protocol === 'http:';
-    
-    // Pokud jsme na HTTP nebo localhost, zkusíme přímý přístup
-    if (isHTTP || isLocalhost) {
-      console.log('🔄 Camera: Testing direct HTTP access...');
-      try {
-        // Rychlý test přímého přístupu (1s timeout)
-        const testImg = new Image();
-        const testPromise = new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('timeout')), 1000);
-          testImg.onload = () => {
-            clearTimeout(timeout);
-            resolve(true);
-          };
-          testImg.onerror = () => {
-            clearTimeout(timeout);
-            reject(new Error('failed'));
-          };
-        });
-        
-        testImg.src = `${DIRECT_CAMERA_URL}?t=${Date.now()}`;
-        await testPromise;
-        
-        console.log('✅ Camera: Direct HTTP access works, using fast mode');
-        setUseDirectAccess(true);
-        return;
-      } catch (e) {
-        console.log('⚠️ Camera: Direct access failed, fallback to proxy');
-      }
-    }
-    
-    console.log('🔒 Camera: Using HTTPS API proxy');
-    setUseDirectAccess(false);
-  };
-
+  // Simple camera refresh using React state pattern (like original brana.html)
   const refreshCamera = () => {
-    const timestamp = Date.now();
-    const baseUrl = useDirectAccess ? DIRECT_CAMERA_URL : PROXY_CAMERA_URL;
-    const url = `${baseUrl}?t=${timestamp}&cache=${Math.random()}`;
+    const newUrl = getFreshCameraUrl();
     
+    // Preload image to check if it loads successfully
     const newImg = new Image();
+    newImg.onload = () => {
+      setIsLoading(false);
+      setError(null);
+      setLastSuccessfulLoad(Date.now());
+      updateTimestampDisplay();
+    };
+    newImg.onerror = () => {
+      setIsLoading(false);
+      setError('Chyba načítání kamery');
+      setTimestampText('Offline');
+    };
     
-    // Kratší timeout pro přímý přístup (rychlejší detekce chyb)
-    if (useDirectAccess) {
-      const timeout = setTimeout(() => {
-        console.log('⚠️ Camera: Direct access timeout, switching to proxy');
-        setUseDirectAccess(false);
-        setError('Přepínám na proxy...');
-        // Okamžitě zkusíme proxy
-        setTimeout(() => refreshCamera(), 100);
-      }, 2000);
-      
-      newImg.onload = () => {
-        clearTimeout(timeout);
-        if (imgRef.current) {
-          imgRef.current.src = newImg.src;
-          setIsLoading(false);
-          setError(null);
-          setLastSuccessfulLoad(Date.now());
-          updateTimestampDisplay();
-        }
-      };
-      
-      newImg.onerror = () => {
-        clearTimeout(timeout);
-        console.log('❌ Camera: Direct access failed, switching to proxy');
-        setUseDirectAccess(false);
-        setError('Přepínám na proxy...');
-        // Okamžitě zkusíme proxy
-        setTimeout(() => refreshCamera(), 100);
-      };
-    } else {
-      // Standardní proxy handling
-      newImg.onload = () => {
-        if (imgRef.current) {
-          imgRef.current.src = newImg.src;
-          setIsLoading(false);
-          setError(null);
-          setLastSuccessfulLoad(Date.now());
-          updateTimestampDisplay();
-        }
-      };
-      
-      newImg.onerror = () => {
-        setIsLoading(false);
-        setError('Chyba načítání kamery');
-        setTimestampText('Offline');
-      };
-    }
-    
-    newImg.src = url;
+    // Update state with new URL - this triggers img re-render
+    setCameraUrl(newUrl);
+    newImg.src = newUrl;
   };
 
   const openCameraControl = () => {
@@ -145,30 +88,18 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
   };
 
   useEffect(() => {
-    let mounted = true;
+    // Initialize with first camera URL
+    setCameraUrl(getFreshCameraUrl());
     
-    // Detekce prostředí a první načtení
-    const initCamera = async () => {
-      if (!mounted) return;
-      
-      await detectEnvironment();
-      
-      if (!mounted) return;
-      
-      // První načtení
-      refreshCamera();
-      
-      // Pravidelné obnovovení kamery
-      refreshIntervalRef.current = setInterval(refreshCamera, refreshInterval);
-      
-      // Pravidelné aktualizování časového razítka
-      timestampIntervalRef.current = setInterval(updateTimestampDisplay, 1000);
-    };
+    // Initial load
+    refreshCamera();
     
-    initCamera();
+    // Set up intervals for refreshing camera and timestamp
+    refreshIntervalRef.current = setInterval(refreshCamera, refreshInterval);
+    timestampIntervalRef.current = setInterval(updateTimestampDisplay, 1000);
     
+    // Cleanup function to prevent memory leaks
     return () => {
-      mounted = false;
       if (refreshIntervalRef.current) {
         clearInterval(refreshIntervalRef.current);
       }
@@ -198,7 +129,7 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
       <div className="camera-container">
         <img 
           ref={imgRef}
-          src={CAMERA_URL} 
+          src={cameraUrl} 
           alt="Webkamera"
           className="camera-image"
         />
