@@ -60,26 +60,39 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
     }
   };
 
-  // Simple camera refresh using React state pattern (like original brana.html)
+  // Simple camera refresh with proper error handling
   const refreshCamera = () => {
     const newUrl = getFreshCameraUrl();
     
-    // Preload image to check if it loads successfully
+    // Always update URL state first (for immediate visual feedback)
+    setCameraUrl(newUrl);
+    
+    // Preload image to check if it loads successfully with timeout
     const newImg = new Image();
+    const timeout = setTimeout(() => {
+      setIsLoading(false);
+      setError('Kamera nedostupná (timeout)');
+      setTimestampText('Offline');
+      console.log('⚠️ Camera: Load timeout after 10s');
+    }, 10000); // 10s timeout for image load
+    
     newImg.onload = () => {
+      clearTimeout(timeout);
       setIsLoading(false);
       setError(null);
       setLastSuccessfulLoad(Date.now());
       updateTimestampDisplay();
-    };
-    newImg.onerror = () => {
-      setIsLoading(false);
-      setError('Chyba načítání kamery');
-      setTimestampText('Offline');
+      console.log('✅ Camera: Image loaded successfully');
     };
     
-    // Update state with new URL - this triggers img re-render
-    setCameraUrl(newUrl);
+    newImg.onerror = () => {
+      clearTimeout(timeout);
+      setIsLoading(false);
+      setError('Kamera nedostupná');
+      setTimestampText('Offline');
+      console.log('❌ Camera: Image load failed');
+    };
+    
     newImg.src = newUrl;
   };
 

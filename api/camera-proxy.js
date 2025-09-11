@@ -31,9 +31,9 @@ export default async function handler(req, res) {
   try {
     console.log('📹 Camera Proxy: Fetching image from', CAMERA_URL);
     
-    // Fetch image from HTTP camera with shorter timeout for faster response
+    // Fetch image from HTTP camera with very short timeout since camera seems offline
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout instead of 10s
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout for fast failure
     
     const response = await fetch(CAMERA_URL, {
       method: 'GET',
@@ -76,7 +76,7 @@ export default async function handler(req, res) {
     console.error('❌ Camera Proxy: Error fetching image:', error.message);
     
     if (error.name === 'AbortError') {
-      res.status(504).json({ error: 'Camera timeout (3s)' });
+      res.status(504).json({ error: 'Camera timeout (2s)' });
     } else {
       res.status(500).json({ 
         error: 'Camera proxy error',
