@@ -2,6 +2,9 @@
   "functions": {
     "api/mqtt-proxy.js": {
       "maxDuration": 30
+    },
+    "api/camera-proxy.js": {
+      "maxDuration": 30
     }
   },
   "headers": [

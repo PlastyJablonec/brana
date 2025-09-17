@@ -22,9 +22,36 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
   const imgRef = useRef<HTMLImageElement>(null);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timestampIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const inFlightRef = useRef<boolean>(false);
+  // Optional direct camera URL (prefer HTTPS)
+  const directCameraUrl = (process.env.REACT_APP_CAMERA_URL || '').trim();
 
-  // Simple approach: detect environment and use appropriate URL
+  // Resolve base URL for camera image
   const getBaseUrl = (): string => {
+    // Highest priority: query override (?camera=https://...)
+    const params = new URLSearchParams(window.location.search);
+    try {
+      const cameraParam = params.get('camera');
+      if (cameraParam) {
+        const trimmed = cameraParam.trim();
+        if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+          console.log('📹 Camera: Using camera URL from query param');
+          return trimmed;
+        }
+      }
+    } catch {}
+
+    // Check for direct camera bypass (for testing when camera is online)
+    const bypassProxy = params.get('bypass') === 'true';
+    if (bypassProxy) {
+      console.log('🔓 Camera: BYPASS MODE - using direct HTTP (Mixed Content warning expected)');
+      return 'http://89.24.76.191:10180/photo.jpg';
+    }
+
+    if (directCameraUrl) {
+      console.log('📹 Camera: Using REACT_APP_CAMERA_URL');
+      return directCameraUrl;
+    }
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const isHTTP = window.location.protocol === 'http:';
     
@@ -62,6 +89,11 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
 
   // Simple camera refresh with proper error handling
   const refreshCamera = () => {
+    if (inFlightRef.current) {
+      // Prevent overlapping fetches (slow camera/network)
+      return;
+    }
+    inFlightRef.current = true;
     const newUrl = getFreshCameraUrl();
     
     // Always update URL state first (for immediate visual feedback)
@@ -74,6 +106,7 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
       setError('Kamera nedostupná (timeout)');
       setTimestampText('Offline');
       console.log('⚠️ Camera: Load timeout after 10s');
+      inFlightRef.current = false;
     }, 10000); // 10s timeout for image load
     
     newImg.onload = () => {
@@ -83,6 +116,7 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
       setLastSuccessfulLoad(Date.now());
       updateTimestampDisplay();
       console.log('✅ Camera: Image loaded successfully');
+      inFlightRef.current = false;
     };
     
     newImg.onerror = () => {
@@ -91,6 +125,7 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
       setError('Kamera nedostupná');
       setTimestampText('Offline');
       console.log('❌ Camera: Image load failed');
+      inFlightRef.current = false;
     };
     
     newImg.src = newUrl;

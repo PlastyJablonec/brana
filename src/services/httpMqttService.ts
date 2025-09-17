@@ -338,6 +338,17 @@ export class HttpMqttService {
     if (upperStatus === 'P1') {
       return 'Garáž zavřena';
     }
+
+    // Common P-codes used by the controller, analogous to gate states
+    if (upperStatus === 'P2') {
+      return 'Garáž otevřena';
+    }
+    if (upperStatus === 'P3') {
+      return 'Garáž - otevírá se...';
+    }
+    if (upperStatus === 'P4') {
+      return 'Garáž - zavírá se...';
+    }
     
     // Movement message = hardware is moving (but we ignore this, timer controls state)
     if (upperStatus.includes('POHYB') || upperStatus.includes('POHYBU')) {
@@ -345,7 +356,7 @@ export class HttpMqttService {
       return 'Neznámý stav'; // Don't override timer state
     }
     
-    console.warn(`HTTP MQTT: Unknown garage status received: ${status} - expected P1 or pohyb message`);
+    console.warn(`HTTP MQTT: Unknown garage status received: ${status} - expected P1–P4 or pohyb message`);
     return 'Neznámý stav';
   }
 
