@@ -41,6 +41,13 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
       }
     } catch {}
 
+    // Check for enterprise backend mode
+    const useBackend = params.get('backend') === 'true';
+    if (useBackend) {
+      console.log('🏢 Camera: Using Enterprise Backend mode');
+      return 'http://localhost:3001/api/camera/main-camera/snapshot';
+    }
+
     // Check for direct camera bypass (for testing when camera is online)
     const bypassProxy = params.get('bypass') === 'true';
     if (bypassProxy) {
