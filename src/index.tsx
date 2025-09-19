@@ -6,9 +6,9 @@ import reportWebVitals from './reportWebVitals';
 import { updateService } from './services/updateService';
 
 // 🔇 NOUZOVÁ OPRAVA KONZOLE - VYPNUTÍ VŠECH DEBUG LOGŮ!
-const originalConsoleLog = console.log;
-const originalConsoleDebug = console.debug;
-const originalConsoleInfo = console.info;
+// const originalConsoleLog = console.log;
+// const originalConsoleDebug = console.debug;
+// const originalConsoleInfo = console.info;
 
 // TOTÁLNÍ VYPNUTÍ VŠECH LOGŮ - jen kritické chyby!
 console.log = () => {}; // Úplně vypnout

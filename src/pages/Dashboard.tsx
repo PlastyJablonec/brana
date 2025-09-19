@@ -14,7 +14,7 @@ import { distanceService } from '../services/distanceService';
 import { settingsService } from '../services/settingsService';
 import { garageTimerService, GarageTimerStatus } from '../services/garageTimerService';
 import { wakeLockService } from '../services/wakeLockService';
-import { updateService } from '../services/updateService';
+// import { updateService } from '../services/updateService';
 import LastGateActivity from '../components/LastGateActivity';
 import { useGateCoordination } from '../hooks/useGateCoordination';
 import { ReservationQueue } from '../components/GateCoordination/ReservationQueue';
@@ -34,8 +34,8 @@ const Dashboard: React.FC = () => {
     joinQueue,
     leaveQueue,
     updateGateState,
-    cleanupSessions,
-    clearError: clearCoordinationError
+    cleanupSessions
+    // clearError: clearCoordinationError
   } = useGateCoordination();
   const [gateStatus, setGateStatus] = useState('Neznámý stav');
   const [garageStatus, setGarageStatus] = useState('Neznámý stav');
@@ -107,7 +107,7 @@ const Dashboard: React.FC = () => {
     if (position > 90) {
       handleConfirmClose();
     }
-  }, [isSliderDragging]);
+  }, [isSliderDragging, setCloseSliderPosition]);
 
   const handleSliderEnd = useCallback(() => {
     setIsSliderDragging(false);
@@ -506,7 +506,7 @@ const Dashboard: React.FC = () => {
       unsubscribe();
       // Connection is managed globally in App.tsx - don't disconnect here!
     };
-  }, []);
+  }, [currentUser, gateCoordinationStatus, releaseControl, stopTimer, updateConnectionStep]);
 
   // NOVÉ: Handler pro automatické otevření brány z koordinační služby
   useEffect(() => {
@@ -627,7 +627,7 @@ const Dashboard: React.FC = () => {
     return () => {
       locationService.stopWatching();
     };
-  }, []);
+  }, [currentUser, updateDistanceFromGate]);
 
   // Check permissions and finalize connection steps
   useEffect(() => {
@@ -639,7 +639,7 @@ const Dashboard: React.FC = () => {
   // Monitor connection completion
   useEffect(() => {
     checkConnectionComplete();
-  }, [connectionSteps]);
+  }, [connectionSteps, checkConnectionComplete]);
 
   // Periodically update distance from gate for location-restricted users
   useEffect(() => {
@@ -656,7 +656,7 @@ const Dashboard: React.FC = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [currentUser?.permissions?.requireLocationProximity, currentLocation]);
+  }, [currentUser?.permissions?.requireLocationProximity, currentLocation, updateDistanceFromGate]);
 
   // Backup check for MQTT status every 5 seconds
   useEffect(() => {
@@ -1431,12 +1431,12 @@ const Dashboard: React.FC = () => {
     setLoading(false);
   };
 
-  const getStatusVariant = (status: string) => {
-    if (status.includes('otevřen') || status.includes('Otevřena')) return 'success';
-    if (status.includes('zavřen') || status.includes('Zavřena')) return 'error';
-    if (status.includes('pohyb') || status.includes('...')) return 'warning';
-    return 'error';
-  };
+  // const getStatusVariant = (status: string) => {
+  //   if (status.includes('otevřen') || status.includes('Otevřena')) return 'success';
+  //   if (status.includes('zavřen') || status.includes('Zavřena')) return 'error';
+  //   if (status.includes('pohyb') || status.includes('...')) return 'warning';
+  //   return 'error';
+  // };
 
   // Duplicitní mapGateStatusToCoordination odstraněna - používám verzi nahoře
 

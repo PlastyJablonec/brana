@@ -95,7 +95,7 @@ const UserApprovalPanel: React.FC<UserApprovalPanelProps> = ({ onUserActionCompl
     if (currentUser?.role === 'admin') {
       loadPendingUsers();
     }
-  }, [currentUser]);
+  }, [currentUser, loadPendingUsers]);
 
   const handleApprove = async (userId: string) => {
     try {

@@ -26,14 +26,14 @@ const permissionDescriptions = {
 };
 
 const UserManagement: React.FC = () => {
-  const { currentUser, refreshUser, logout, getPendingUsers } = useAuth();
+  const { currentUser, getPendingUsers, refreshUser } = useAuth();
   const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  // const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showPassword, setShowPassword] = useState(false);
   const [dialogState, setDialogState] = useState<{
     isOpen: boolean;
@@ -74,13 +74,13 @@ const UserManagement: React.FC = () => {
     loadPendingCount();
     
     // Handle window resize for responsive design
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
+    // const handleResize = () => {
+    //   setIsMobile(window.innerWidth < 768);
+    // };
     
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+    // window.addEventListener('resize', handleResize);
+    // return () => window.removeEventListener('resize', handleResize);
+  }, []); // Initial load only
 
   const loadPendingCount = async () => {
     try {

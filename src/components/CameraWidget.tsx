@@ -162,7 +162,7 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
         clearInterval(timestampIntervalRef.current);
       }
     };
-  }, [refreshInterval]);
+  }, [refreshInterval, getFreshCameraUrl, refreshCamera, updateTimestampDisplay]);
 
   return (
     <div className={`camera-widget ${className}`}>

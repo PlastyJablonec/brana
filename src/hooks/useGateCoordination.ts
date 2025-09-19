@@ -81,7 +81,7 @@ export function useGateCoordination() {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('pagehide', handleBeforeUnload);
     };
-  }, [currentUser?.id]);
+  }, [currentUser]);
 
   // Registrace callbacků pro real-time změny
   useEffect(() => {
@@ -144,7 +144,7 @@ export function useGateCoordination() {
       }
     });
 
-  }, [isLoading, currentUser]);
+  }, [isLoading, currentUser, coordinationState]);
 
   // Vyčíslení statusu pro aktuálního uživatele
   const getCoordinationStatus = useCallback((): GateCoordinationStatus => {
@@ -179,11 +179,11 @@ export function useGateCoordination() {
     
     // NOVÉ WORKFLOW LOGIKY
     const canCloseNormally = gateCoordinationService.canUserCloseGateNormally(userId, coordinationState);
-    const rawMustUseSlider = gateCoordinationService.mustUseSliderToClose(userId, coordinationState);
+    // const rawMustUseSlider = gateCoordinationService.mustUseSliderToClose(userId, coordinationState);
     const shouldShowQueueWarning = gateCoordinationService.shouldShowQueueWarning(userId, coordinationState);
     
     // STABILIZACE: Použij stabilní mustUseSlider stav (bez setState v render!)
-    const isCurrentlyActive = position === 0;
+    // const isCurrentlyActive = position === 0;
     const mustUseSlider = stableMustUseSlider;
     
     // Comprehensive debug info

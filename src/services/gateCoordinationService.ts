@@ -224,6 +224,7 @@ class GateCoordinationService {
       
       while (retryCount < MAX_RETRY_ATTEMPTS) {
         try {
+          // eslint-disable-next-line no-await-in-loop
           const transactionResult = await db.runTransaction(async (transaction: any) => {
             const freshDoc = await transaction.get(this.coordinationDoc);
             const freshState = freshDoc.exists ? freshDoc.data() as GateCoordination : null;
@@ -283,6 +284,7 @@ class GateCoordinationService {
           }
           
           // Krátká pauza před retry
+          // eslint-disable-next-line no-await-in-loop
           await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
         }
       }

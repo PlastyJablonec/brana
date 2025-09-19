@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { updateService, UpdateCheckResult } from '../services/updateService';
+import React from 'react';
 
 const UpdateNotification: React.FC = () => {
   // KOMPONENTA ZJEDNODUŠENA - updateService je nyní bezpečný

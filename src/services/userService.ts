@@ -1,5 +1,5 @@
 import { db } from '../firebase/config';
-import { User, UserStatus, AuthProvider } from '../types';
+import { User, UserStatus } from '../types';
 import { Timestamp } from 'firebase/firestore';
 
 export class UserService {

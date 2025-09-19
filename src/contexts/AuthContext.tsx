@@ -18,16 +18,16 @@ interface IUserPermissions {
   requireLocationProximity: boolean;
 }
 
-interface IAppUser {
-  id: string;
-  email: string;
-  displayName: string;
-  role: 'admin' | 'user' | 'viewer';
-  permissions: IUserPermissions;
-  gpsEnabled: boolean;
-  createdAt: Date;
-  lastLogin: Date;
-}
+// interface IAppUser {
+//   id: string;
+//   email: string;
+//   displayName: string;
+//   role: 'admin' | 'user' | 'viewer';
+//   permissions: IUserPermissions;
+//   gpsEnabled: boolean;
+//   createdAt: Date;
+//   lastLogin: Date;
+// }
 
 const AuthContext = createContext<IAuthContext | null>(null);
 
@@ -303,7 +303,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('🔧 AuthContext: Cleaning up auth state listener');
       unsubscribe();
     };
-  }, []);
+  }, [fetchUserData]);
 
   const value: IAuthContext = {
     currentUser,
