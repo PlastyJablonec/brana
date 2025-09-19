@@ -1,0 +1,11 @@
+{
+  "deploy": {
+    "build": {
+      "builder": "herokuish",
+      "buildpacks": [
+        "heroku/nodejs"
+      ]
+    },
+    "restart_policy": "on-failure"
+  }
+}
