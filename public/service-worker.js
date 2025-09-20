@@ -3,9 +3,8 @@
 const CACHE_NAME = 'gate-control-v1';
 const urlsToCache = [
   '/',
-  '/static/js/bundle.js',
-  '/static/css/main.css',
   '/build-info.json'
+  // Statické soubory se načtou dynamicky když existují
 ];
 
 // Instalace service workeru s error handling
@@ -100,13 +99,22 @@ self.addEventListener('fetch', (event) => {
         if (response) {
           return response;
         }
+
+        // OPRAVA: Pro unknown routes (ty s ?t=timestamp), zkus fetch s graceful fallback
         return fetch(event.request).catch((error) => {
-          console.warn('🚨 SW: Fetch failed for:', event.request.url, error);
-          // Graceful fallback instead of throwing
-          return new Response('Service temporarily unavailable', {
-            status: 503,
-            statusText: 'Service Unavailable'
-          });
+          console.log('⚠️ SW: Fetch failed for:', event.request.url);
+
+          // Pro query stringy s cache busting (?t=timestamp), ignoruj chybu
+          if (event.request.url.includes('?t=') || event.request.url.includes('cache=')) {
+            console.log('🔄 SW: Cache busting request failed, ignoring');
+            return new Response('{}', {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+
+          // Pro ostatní routes, vyhoď error místo 503
+          throw error;
         });
       })
   );

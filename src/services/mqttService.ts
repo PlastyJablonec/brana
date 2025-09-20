@@ -155,25 +155,33 @@ export class MqttService {
         if (typeof window !== 'undefined') {
           // Silná ochrana - pokud už existují připojení, vyčistit je
           if (window.__MQTT_CLIENT_COUNT__ > 0) {
-            console.warn(`🚨 MQTT Service: Already have ${window.__MQTT_CLIENT_COUNT__} active connections, forcing cleanup...`);
-            
-            // Force cleanup všech existujících připojení
-            if (window.__MQTT_SERVICE_INSTANCES__) {
-              window.__MQTT_SERVICE_INSTANCES__.forEach((oldInstance, index) => {
-                console.log(`🧹 Force cleanup of MQTT instance ${index + 1}`);
-                try {
-                  oldInstance.disconnect();
-                } catch (error) {
-                  console.warn(`⚠️ Error in force cleanup ${index + 1}:`, error);
-                }
+            console.log(`🔄 MQTT Service: Already have ${window.__MQTT_CLIENT_COUNT__} active connections, reusing existing connection...`);
+
+            // Místo force cleanup, zkus reuse existující připojení
+            // Jen log pro debugging, ale nepřerušuj existing connection
+            console.log(`📊 MQTT Connect: Reusing connection (counter: ${window.__MQTT_CLIENT_COUNT__})`);
+
+            // Pokud už máme fungující připojení přes HTTP proxy, použij ho
+            if (httpMqttService.isConnected()) {
+              console.log('✅ HTTP MQTT Service is already connected, reusing...');
+              this.currentStatus.isConnected = true;
+              this.notifyStatusChange();
+
+              // Forward existing callbacks
+              httpMqttService.onStatusChange((status) => {
+                this.currentStatus = { ...status };
+                this.notifyStatusChange();
               });
+
+              httpMqttService.onGateLogChange((logEntry) => {
+                this.notifyGateLogChange(logEntry);
+              });
+
+              resolve();
+              return;
             }
-            
-            // Reset counter
-            window.__MQTT_CLIENT_COUNT__ = 0;
-            console.log('🔄 Reset MQTT client counter to 0');
           }
-          
+
           window.__MQTT_CLIENT_COUNT__++;
           console.log(`📊 MQTT Connect: Setting counter to ${window.__MQTT_CLIENT_COUNT__}`);
         }
