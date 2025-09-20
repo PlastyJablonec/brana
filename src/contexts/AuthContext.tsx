@@ -143,14 +143,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (user) {
         console.log('✅ User found via userService:', user.email, 'Status:', user.status);
-        
+
+        // TEMPORARY FIX: Auto-approve Ivan if pending
+        if (user.status === 'pending' && user.email === 'vondracek.ivan@gmail.com') {
+          console.log('🔧 AUTO-APPROVING Ivan as admin...');
+          try {
+            await db.collection('users').doc(user.id).update({
+              status: 'approved',
+              role: 'admin',
+              approvedAt: new Date(),
+              approvedBy: 'auto-system',
+              'permissions.gate': true,
+              'permissions.garage': true,
+              'permissions.camera': true,
+              'permissions.stopMode': true,
+              'permissions.viewLogs': true,
+              'permissions.manageUsers': true,
+              'permissions.viewGateActivity': true,
+              'permissions.requireLocation': false,
+              'permissions.allowGPS': true,
+              'permissions.requireLocationProximity': false,
+            });
+
+            // Refresh user data
+            user = await userService.getUserByEmail(firebaseUser.email || '');
+            console.log('✅ Ivan auto-approved successfully');
+          } catch (error) {
+            console.error('❌ Failed to auto-approve Ivan:', error);
+          }
+        }
+
         // Update last login if this is initial login
         if (isInitialLogin) {
           console.log('🔧 AuthContext: Updating lastLogin for initial login');
           await userService.updateLastLogin(user.id);
           setIsInitialLogin(false);
         }
-        
+
         setCurrentUser(user);
         return;
       }
