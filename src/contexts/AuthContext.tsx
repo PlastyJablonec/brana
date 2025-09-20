@@ -174,7 +174,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // Update last login if this is initial login
-        if (isInitialLogin) {
+        if (isInitialLogin && user) {
           console.log('🔧 AuthContext: Updating lastLogin for initial login');
           await userService.updateLastLogin(user.id);
           setIsInitialLogin(false);
