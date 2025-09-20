@@ -18,16 +18,25 @@ let googleProvider: any = null;
 
 if (hasValidConfig || process.env.NODE_ENV === 'production') {
   console.log('🔥 Firebase: Platná konfigurace nalezena, inicializuji Firebase...');
+  console.log('🔍 DEBUG: Environment variables:');
+  console.log('  REACT_APP_FIREBASE_PROJECT_ID:', process.env.REACT_APP_FIREBASE_PROJECT_ID);
+  console.log('  REACT_APP_FIREBASE_API_KEY:', process.env.REACT_APP_FIREBASE_API_KEY?.substring(0, 10) + '...');
+  console.log('  NODE_ENV:', process.env.NODE_ENV);
   
   firebaseConfig = {
-    apiKey: process.env.REACT_APP_FIREBASE_API_KEY || 'demo-api-key',
+    apiKey: process.env.REACT_APP_FIREBASE_API_KEY || 'AIzaSyBaDmIBLtw4ck4eUJMmGScwPBPYuIv8QSU',
     authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || 'brana-a71fe.firebaseapp.com',
-    projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || 'brana-a71fe',
+    projectId: 'brana-a71fe', // HARDCODED to prevent demo-project-id fallback
     storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || 'brana-a71fe.firebasestorage.app',
-    messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || '123456789',
-    appId: process.env.REACT_APP_FIREBASE_APP_ID || 'demo-app-id',
-    measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID || 'demo-measurement-id'
+    messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || '1080619570120',
+    appId: process.env.REACT_APP_FIREBASE_APP_ID || '1:1080619570120:web:62c1ea8d1a78532672e6fd',
+    measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID || 'G-K8FRR55FR5'
   };
+
+  console.log('🔍 DEBUG: Final Firebase config:', {
+    ...firebaseConfig,
+    apiKey: firebaseConfig.apiKey.substring(0, 10) + '...'
+  });
 
   try {
     app = firebase.initializeApp(firebaseConfig);
