@@ -15,17 +15,17 @@ let auth: any = null;
 let db: any = null;
 let googleProvider: any = null;
 
-if (hasValidConfig) {
+if (hasValidConfig || process.env.NODE_ENV === 'production') {
   console.log('🔥 Firebase: Platná konfigurace nalezena, inicializuji Firebase...');
   
   firebaseConfig = {
-    apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-    authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.REACT_APP_FIREBASE_APP_ID,
-    measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
+    apiKey: process.env.REACT_APP_FIREBASE_API_KEY || 'demo-api-key',
+    authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || 'brana-a71fe.firebaseapp.com',
+    projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || 'brana-a71fe',
+    storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || 'brana-a71fe.firebasestorage.app',
+    messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || '123456789',
+    appId: process.env.REACT_APP_FIREBASE_APP_ID || 'demo-app-id',
+    measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID || 'demo-measurement-id'
   };
 
   try {
