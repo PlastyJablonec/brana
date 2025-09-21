@@ -332,7 +332,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('🔧 AuthContext: Cleaning up auth state listener');
       unsubscribe();
     };
-  }, [fetchUserData]);
+  }, []); // Empty dependency - auth listener should setup only once
 
   const value: IAuthContext = {
     currentUser,
