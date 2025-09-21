@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useReducer } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import ThemeToggle from '../components/ThemeToggle';
@@ -21,12 +21,147 @@ import { ReservationQueue } from '../components/GateCoordination/ReservationQueu
 import { gateCoordinationService } from '../services/gateCoordinationService';
 import GateCoordinationDebug from '../components/debug/GateCoordinationDebug';
 
+// 🔧 DASHBOARD STATE MANAGEMENT: useReducer pattern místo 18 useState hooks
+interface DashboardState {
+  // MQTT & Connection
+  gateStatus: string;
+  garageStatus: string;
+  garageTimerStatus: GarageTimerStatus | null;
+  garageSettings: { movementTime: number; enabled: boolean };
+  mqttConnected: boolean;
+
+  // UI Loading & Modals
+  loading: boolean;
+  showAdminPanel: boolean;
+  showMqttDebug: boolean;
+  showConnectionLoader: boolean;
+  connectionSteps: Array<{
+    label: string;
+    status: 'pending' | 'loading' | 'success' | 'error';
+    description: string;
+  }>;
+
+  // Location & GPS
+  locationPermission: boolean | null;
+  locationError: string;
+  currentLocation: any;
+  distanceFromGate: number | null;
+  isLocationProximityAllowed: boolean;
+
+  // Close Confirmation Slider
+  showCloseConfirmSlider: boolean;
+  closeSliderPosition: number;
+  isSliderDragging: boolean;
+}
+
+type DashboardAction =
+  | { type: 'SET_GATE_STATUS'; payload: string }
+  | { type: 'SET_GARAGE_STATUS'; payload: string }
+  | { type: 'SET_GARAGE_TIMER_STATUS'; payload: GarageTimerStatus | null }
+  | { type: 'SET_GARAGE_SETTINGS'; payload: { movementTime: number; enabled: boolean } }
+  | { type: 'SET_MQTT_CONNECTED'; payload: boolean }
+  | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_SHOW_ADMIN_PANEL'; payload: boolean }
+  | { type: 'SET_SHOW_MQTT_DEBUG'; payload: boolean }
+  | { type: 'SET_SHOW_CONNECTION_LOADER'; payload: boolean }
+  | { type: 'UPDATE_CONNECTION_STEP'; payload: { index: number; status: 'pending' | 'loading' | 'success' | 'error'; description?: string } }
+  | { type: 'SET_LOCATION_PERMISSION'; payload: boolean | null }
+  | { type: 'SET_LOCATION_ERROR'; payload: string }
+  | { type: 'SET_CURRENT_LOCATION'; payload: any }
+  | { type: 'SET_DISTANCE_FROM_GATE'; payload: number | null }
+  | { type: 'SET_IS_LOCATION_PROXIMITY_ALLOWED'; payload: boolean }
+  | { type: 'SET_SHOW_CLOSE_CONFIRM_SLIDER'; payload: boolean }
+  | { type: 'SET_CLOSE_SLIDER_POSITION'; payload: number }
+  | { type: 'SET_IS_SLIDER_DRAGGING'; payload: boolean };
+
+const initialDashboardState: DashboardState = {
+  // MQTT & Connection
+  gateStatus: 'Neznámý stav',
+  garageStatus: 'Neznámý stav',
+  garageTimerStatus: null,
+  garageSettings: { movementTime: 15, enabled: true },
+  mqttConnected: false,
+
+  // UI Loading & Modals
+  loading: false,
+  showAdminPanel: false,
+  showMqttDebug: false,
+  showConnectionLoader: true,
+  connectionSteps: [
+    { label: 'Autentifikace', status: 'success', description: 'Přihlášení ověřeno' },
+    { label: 'MQTT protokol', status: 'loading', description: 'Připojuji se...' },
+    { label: 'Kontrola aktualizací', status: 'pending', description: 'Ověřuji verzi...' }
+  ],
+
+  // Location & GPS
+  locationPermission: null,
+  locationError: '',
+  currentLocation: null,
+  distanceFromGate: null,
+  isLocationProximityAllowed: true,
+
+  // Close Confirmation Slider
+  showCloseConfirmSlider: false,
+  closeSliderPosition: 0,
+  isSliderDragging: false
+};
+
+function dashboardReducer(state: DashboardState, action: DashboardAction): DashboardState {
+  switch (action.type) {
+    case 'SET_GATE_STATUS':
+      return { ...state, gateStatus: action.payload };
+    case 'SET_GARAGE_STATUS':
+      return { ...state, garageStatus: action.payload };
+    case 'SET_GARAGE_TIMER_STATUS':
+      return { ...state, garageTimerStatus: action.payload };
+    case 'SET_GARAGE_SETTINGS':
+      return { ...state, garageSettings: action.payload };
+    case 'SET_MQTT_CONNECTED':
+      return { ...state, mqttConnected: action.payload };
+    case 'SET_LOADING':
+      return { ...state, loading: action.payload };
+    case 'SET_SHOW_ADMIN_PANEL':
+      return { ...state, showAdminPanel: action.payload };
+    case 'SET_SHOW_MQTT_DEBUG':
+      return { ...state, showMqttDebug: action.payload };
+    case 'SET_SHOW_CONNECTION_LOADER':
+      return { ...state, showConnectionLoader: action.payload };
+    case 'UPDATE_CONNECTION_STEP':
+      return {
+        ...state,
+        connectionSteps: state.connectionSteps.map((step, index) =>
+          index === action.payload.index
+            ? { ...step, status: action.payload.status, ...(action.payload.description && { description: action.payload.description }) }
+            : step
+        )
+      };
+    case 'SET_LOCATION_PERMISSION':
+      return { ...state, locationPermission: action.payload };
+    case 'SET_LOCATION_ERROR':
+      return { ...state, locationError: action.payload };
+    case 'SET_CURRENT_LOCATION':
+      return { ...state, currentLocation: action.payload };
+    case 'SET_DISTANCE_FROM_GATE':
+      return { ...state, distanceFromGate: action.payload };
+    case 'SET_IS_LOCATION_PROXIMITY_ALLOWED':
+      return { ...state, isLocationProximityAllowed: action.payload };
+    case 'SET_SHOW_CLOSE_CONFIRM_SLIDER':
+      return { ...state, showCloseConfirmSlider: action.payload };
+    case 'SET_CLOSE_SLIDER_POSITION':
+      return { ...state, closeSliderPosition: action.payload };
+    case 'SET_IS_SLIDER_DRAGGING':
+      return { ...state, isSliderDragging: action.payload };
+    default:
+      return state;
+  }
+}
+
 const Dashboard: React.FC = () => {
   const { currentUser, logout } = useAuth();
   const { timerState, startTravelTimer, startAutoCloseTimer, startOpenElapsedTimer, stopTimer } = useGateTimer();
-  const { 
-    coordinationState, 
-    status: gateCoordinationStatus, 
+  const {
+    coordinationState,
+    status: gateCoordinationStatus,
     isLoading: coordinationLoading,
     error: coordinationError,
     requestControl,
@@ -37,46 +172,25 @@ const Dashboard: React.FC = () => {
     cleanupSessions
     // clearError: clearCoordinationError
   } = useGateCoordination();
-  const [gateStatus, setGateStatus] = useState('Neznámý stav');
-  const [garageStatus, setGarageStatus] = useState('Neznámý stav');
-  const [garageTimerStatus, setGarageTimerStatus] = useState<GarageTimerStatus | null>(null);
-  const [garageSettings, setGarageSettings] = useState({ movementTime: 15, enabled: true });
-  const [mqttConnected, setMqttConnected] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [showAdminPanel, setShowAdminPanel] = useState(false);
-  const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
-  const [locationError, setLocationError] = useState<string>('');
-  const [currentLocation, setCurrentLocation] = useState<any>(null);
-  const [distanceFromGate, setDistanceFromGate] = useState<number | null>(null);
-  const [isLocationProximityAllowed, setIsLocationProximityAllowed] = useState<boolean>(true);
-  const [showMqttDebug, setShowMqttDebug] = useState(false);
-  
-  // NOVÉ: Stav pro potvrzovací slider zavírání brány
-  const [showCloseConfirmSlider, setShowCloseConfirmSlider] = useState(false);
-  const [closeSliderPosition, setCloseSliderPosition] = useState(0);
-  const [isSliderDragging, setIsSliderDragging] = useState(false);
 
-  // Connection loading states
-  const [showConnectionLoader, setShowConnectionLoader] = useState(true);
-  const [connectionSteps, setConnectionSteps] = useState<Array<{
-    label: string;
-    status: 'pending' | 'loading' | 'success' | 'error';
-    description: string;
-  }>>([
-    { label: 'Autentifikace', status: 'success', description: 'Přihlášení ověřeno' },
-    { label: 'MQTT protokol', status: 'loading', description: 'Připojuji se...' },
-    { label: 'Kontrola aktualizací', status: 'pending', description: 'Ověřuji verzi...' }
-  ]);
+  // 🔧 REFAKTOR: useReducer místo 18 useState hooks pro eliminaci re-rendering
+  const [state, dispatch] = useReducer(dashboardReducer, initialDashboardState);
+
+  // Destructure state pro snadnější přístup
+  const {
+    gateStatus, garageStatus, garageTimerStatus, garageSettings, mqttConnected,
+    loading, showAdminPanel, showMqttDebug, showConnectionLoader, connectionSteps,
+    locationPermission, locationError, currentLocation, distanceFromGate, isLocationProximityAllowed,
+    showCloseConfirmSlider, closeSliderPosition, isSliderDragging
+  } = state;
 
   // Helper function to update connection step status
-  const updateConnectionStep = (stepIndex: number, status: 'pending' | 'loading' | 'success' | 'error', description?: string) => {
-    setConnectionSteps(prev => prev.map((step, index) => {
-      if (index === stepIndex) {
-        return { ...step, status, ...(description && { description }) };
-      }
-      return step;
-    }));
-  };
+  const updateConnectionStep = useCallback((stepIndex: number, status: 'pending' | 'loading' | 'success' | 'error', description?: string) => {
+    dispatch({
+      type: 'UPDATE_CONNECTION_STEP',
+      payload: { index: stepIndex, status, description }
+    });
+  }, []);
 
   // NOVÉ: Mapování MQTT stavů brány na koordinační stavy
   const mapGateStatusToCoordination = useCallback((mqttStatus: string): 'CLOSED' | 'OPENING' | 'OPEN' | 'CLOSING' | 'STOPPED' | null => {
@@ -91,7 +205,7 @@ const Dashboard: React.FC = () => {
   // NOVÉ: Funkce pro ovládání close confirmation slideru
   const handleSliderStart = useCallback((e: React.TouchEvent | React.MouseEvent) => {
     e.preventDefault();
-    setIsSliderDragging(true);
+    dispatch({ type: 'SET_IS_SLIDER_DRAGGING', payload: true });
   }, []);
 
   const handleSliderMove = useCallback((e: React.TouchEvent | React.MouseEvent) => {
@@ -101,19 +215,19 @@ const Dashboard: React.FC = () => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const position = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
-    setCloseSliderPosition(position);
-    
+    dispatch({ type: 'SET_CLOSE_SLIDER_POSITION', payload: position });
+
     // Pokud uživatel dotáhne slider na konec (>90%), potvrď zavření
     if (position > 90) {
       handleConfirmClose();
     }
-  }, [isSliderDragging, setCloseSliderPosition]);
+  }, [isSliderDragging]);
 
   const handleSliderEnd = useCallback(() => {
-    setIsSliderDragging(false);
+    dispatch({ type: 'SET_IS_SLIDER_DRAGGING', payload: false });
     // Pokud slider není na konci, vrať ho na začátek
     if (closeSliderPosition < 90) {
-      setCloseSliderPosition(0);
+      dispatch({ type: 'SET_CLOSE_SLIDER_POSITION', payload: 0 });
     }
   }, [closeSliderPosition]);
 
@@ -123,16 +237,16 @@ const Dashboard: React.FC = () => {
     console.log('🚪 SLIDER: Spouštím zavření brány přes slider...');
     
     // NOVÉ: Okamžitě skryj slider a aktualizuj stav brány pro všechny
-    setShowCloseConfirmSlider(false);
-    setCloseSliderPosition(0);
-    setIsSliderDragging(false);
+    dispatch({ type: 'SET_SHOW_CLOSE_CONFIRM_SLIDER', payload: false });
+    dispatch({ type: 'SET_CLOSE_SLIDER_POSITION', payload: 0 });
+    dispatch({ type: 'SET_IS_SLIDER_DRAGGING', payload: false });
     
     // NOVÉ: Aktualizuj stav brány lokálně pro okamžité UI feedback
     updateGateState('CLOSING');
     
     // Proveď zavření brány
     try {
-      setLoading(true);
+      dispatch({ type: 'SET_LOADING', payload: true });
       playSound('click');
       
       console.log('🚪 SLIDER: Odesílám MQTT příkaz pro zavření brány...');
@@ -154,14 +268,14 @@ const Dashboard: React.FC = () => {
       console.error('❌ Chyba při zavírání brány přes slider:', error);
       playSound('error');
     } finally {
-      setLoading(false);
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
   }, [currentUser]);
 
   const handleCancelCloseSlider = useCallback(() => {
-    setShowCloseConfirmSlider(false);
-    setCloseSliderPosition(0);
-    setIsSliderDragging(false);
+    dispatch({ type: 'SET_SHOW_CLOSE_CONFIRM_SLIDER', payload: false });
+    dispatch({ type: 'SET_CLOSE_SLIDER_POSITION', payload: 0 });
+    dispatch({ type: 'SET_IS_SLIDER_DRAGGING', payload: false });
     playSound('click');
   }, []);
 
@@ -191,7 +305,7 @@ const Dashboard: React.FC = () => {
           
           // Update notification se triggernuje automaticky přes Service Worker
           setTimeout(() => {
-            setShowConnectionLoader(false);
+            dispatch({ type: 'SET_SHOW_CONNECTION_LOADER', payload: false });
           }, 1000);
           return;
         } else {
@@ -211,7 +325,7 @@ const Dashboard: React.FC = () => {
     
     if (allStepsComplete && hasRealGateStatus && showConnectionLoader) {
       console.log('🎯 All steps completed, hiding loader...');
-      setTimeout(() => setShowConnectionLoader(false), 500);
+      setTimeout(() => dispatch({ type: 'SET_SHOW_CONNECTION_LOADER', payload: false }), 500);
     }
   };
 
@@ -272,8 +386,8 @@ const Dashboard: React.FC = () => {
   const updateDistanceFromGate = async () => {
     // If user doesn't have location proximity requirement, always allow
     if (!currentUser?.permissions?.requireLocationProximity) {
-      setIsLocationProximityAllowed(true);
-      setDistanceFromGate(null);
+      dispatch({ type: 'SET_IS_LOCATION_PROXIMITY_ALLOWED', payload: true });
+      dispatch({ type: 'SET_DISTANCE_FROM_GATE', payload: null });
       return;
     }
 
@@ -293,19 +407,19 @@ const Dashboard: React.FC = () => {
         userLocation, gateLocation
       );
 
-      setDistanceFromGate(Math.round(distance));
+      dispatch({ type: 'SET_DISTANCE_FROM_GATE', payload: Math.round(distance) });
       
       // Check if within allowed distance
       const maxDistance = settings.location.maxDistanceMeters;
       const allowed = distance <= maxDistance;
-      setIsLocationProximityAllowed(allowed);
+      dispatch({ type: 'SET_IS_LOCATION_PROXIMITY_ALLOWED', payload: allowed });
 
       console.log(`📍 Distance from gate: ${Math.round(distance)}m, allowed: ${allowed} (max: ${maxDistance}m)`);
       
     } catch (error) {
       console.error('Error checking location proximity:', error);
-      setDistanceFromGate(null);
-      setIsLocationProximityAllowed(false);
+      dispatch({ type: 'SET_DISTANCE_FROM_GATE', payload: null });
+      dispatch({ type: 'SET_IS_LOCATION_PROXIMITY_ALLOWED', payload: false });
     }
   };
 
@@ -388,9 +502,9 @@ const Dashboard: React.FC = () => {
     // Get initial status immediately
     const initialStatus = mqttService.getStatus();
     console.log('🔧 Dashboard: Initial MQTT status:', initialStatus);
-    setGateStatus(initialStatus.gateStatus);
-    setGarageStatus(initialStatus.garageStatus);
-    setMqttConnected(initialStatus.isConnected);
+    dispatch({ type: 'SET_GATE_STATUS', payload: initialStatus.gateStatus });
+    dispatch({ type: 'SET_GARAGE_STATUS', payload: initialStatus.garageStatus });
+    dispatch({ type: 'SET_MQTT_CONNECTED', payload: initialStatus.isConnected });
 
     // Update connection steps based on initial status
     if (initialStatus.isConnected) {
@@ -406,9 +520,9 @@ const Dashboard: React.FC = () => {
       console.log('🔧 Dashboard: Updating React state...');
       
       const prevGateStatus = gateStatus;
-      setGateStatus(status.gateStatus);
-      setGarageStatus(status.garageStatus); 
-      setMqttConnected(status.isConnected);
+      dispatch({ type: 'SET_GATE_STATUS', payload: status.gateStatus });
+      dispatch({ type: 'SET_GARAGE_STATUS', payload: status.garageStatus });
+      dispatch({ type: 'SET_MQTT_CONNECTED', payload: status.isConnected });
 
       // NOVÉ: Aktualizuj stav brány v koordinační službě pro automatické otevření
       if (status.gateStatus !== prevGateStatus) {
@@ -553,8 +667,8 @@ const Dashboard: React.FC = () => {
       // Skip GPS if not required for this user
       if (!currentUser?.permissions?.requireLocation) {
         console.log('📍 Dashboard: GPS not required for this user, skipping');
-        setLocationPermission(true); // Set as "allowed" so UI doesn't show error
-        setLocationError('');
+        dispatch({ type: 'SET_LOCATION_PERMISSION', payload: true }); // Set as "allowed" so UI doesn't show error
+        dispatch({ type: 'SET_LOCATION_ERROR', payload: '' });
         // GPS na pozadí - nesleduje se v connection loaderu
         return;
       }
@@ -563,8 +677,8 @@ const Dashboard: React.FC = () => {
 
       if (!locationService.isLocationSupported() || !locationService.isSecureContext()) {
         const reason = locationService.getLocationUnavailableReason();
-        setLocationError(reason);
-        setLocationPermission(false);
+        dispatch({ type: 'SET_LOCATION_ERROR', payload: reason });
+        dispatch({ type: 'SET_LOCATION_PERMISSION', payload: false });
         // GPS error - na pozadí
         console.log('📍 Dashboard: GPS unavailable:', reason);
         return;
@@ -572,7 +686,7 @@ const Dashboard: React.FC = () => {
 
       try {
         const hasPermission = await locationService.requestPermission();
-        setLocationPermission(hasPermission);
+        dispatch({ type: 'SET_LOCATION_PERMISSION', payload: hasPermission });
         
         if (hasPermission) {
           console.log('📍 Dashboard: GPS permission granted, starting location tracking');
@@ -582,13 +696,13 @@ const Dashboard: React.FC = () => {
           // Získáme aktuální lokaci hned
           try {
             const currentLoc = await locationService.getCurrentLocation();
-            setCurrentLocation(currentLoc);
+            dispatch({ type: 'SET_CURRENT_LOCATION', payload: currentLoc });
             
             if (currentLoc.accuracy > 50000) {
-              setLocationError('Fallback lokace (Praha centrum)');
+              dispatch({ type: 'SET_LOCATION_ERROR', payload: 'Fallback lokace (Praha centrum)' });
               // GPS fallback - na pozadí
             } else {
-              setLocationError('');
+              dispatch({ type: 'SET_LOCATION_ERROR', payload: '' });
               // GPS success - na pozadí
             }
             
@@ -596,17 +710,17 @@ const Dashboard: React.FC = () => {
             await updateDistanceFromGate();
           } catch (error: any) {
             console.warn('📍 Dashboard: Could not get initial location:', error);
-            setLocationError('GPS nedostupné');
+            dispatch({ type: 'SET_LOCATION_ERROR', payload: 'GPS nedostupné' });
             // GPS error - na pozadí
           }
         } else {
           console.log('📍 Dashboard: GPS permission denied');
-          setLocationError('Oprávnění k lokaci bylo odepřeno');
+          dispatch({ type: 'SET_LOCATION_ERROR', payload: 'Oprávnění k lokaci bylo odepřeno' });
           // GPS permission denied - na pozadí
         }
       } catch (error: any) {
         console.warn('📍 Dashboard: GPS permission error:', error);
-        setLocationPermission(false);
+        dispatch({ type: 'SET_LOCATION_PERMISSION', payload: false });
         
         let errorMsg = 'Chyba při získávání GPS';
         if (error.message && error.message.includes('429')) {
@@ -617,7 +731,7 @@ const Dashboard: React.FC = () => {
           errorMsg = errorMsg + ': ' + (error.message || 'Neznámá chyba');
         }
         
-        setLocationError(errorMsg);
+        dispatch({ type: 'SET_LOCATION_ERROR', payload: errorMsg });
         // GPS general error - na pozadí
       }
     };
@@ -664,9 +778,9 @@ const Dashboard: React.FC = () => {
       const currentStatus = mqttService.getStatus();
       if (currentStatus.isConnected !== mqttConnected) {
         console.log('🔧 Dashboard: Status sync fix - updating from', mqttConnected, 'to', currentStatus.isConnected);
-        setMqttConnected(currentStatus.isConnected);
-        setGateStatus(currentStatus.gateStatus);
-        setGarageStatus(currentStatus.garageStatus);
+        dispatch({ type: 'SET_MQTT_CONNECTED', payload: currentStatus.isConnected });
+        dispatch({ type: 'SET_GATE_STATUS', payload: currentStatus.gateStatus });
+        dispatch({ type: 'SET_GARAGE_STATUS', payload: currentStatus.garageStatus });
       }
     }, 5000);
 
@@ -802,15 +916,15 @@ const Dashboard: React.FC = () => {
       if (locationPermission === true) {
         const cachedLocation = locationService.getCachedLocation();
         if (cachedLocation) {
-          setCurrentLocation(cachedLocation);
+          dispatch({ type: 'SET_CURRENT_LOCATION', payload: cachedLocation });
           
           if (cachedLocation.accuracy > 50000) {
-            setLocationError('Fallback lokace (Praha centrum)');
+            dispatch({ type: 'SET_LOCATION_ERROR', payload: 'Fallback lokace (Praha centrum)' });
           } else {
-            setLocationError('');
+            dispatch({ type: 'SET_LOCATION_ERROR', payload: '' });
           }
         } else {
-          setLocationError('GPS nedostupné');
+          dispatch({ type: 'SET_LOCATION_ERROR', payload: 'GPS nedostupné' });
         }
       }
     }, 30000);
@@ -837,7 +951,7 @@ const Dashboard: React.FC = () => {
     const loadSettings = async () => {
       try {
         const appSettings = await settingsService.getAppSettings();
-        setGarageSettings(appSettings.garage);
+        dispatch({ type: 'SET_GARAGE_SETTINGS', payload: appSettings.garage });
         console.log('🏠 Dashboard: Garage settings loaded:', appSettings.garage);
       } catch (error) {
         console.error('🏠 Dashboard: Failed to load garage settings:', error);
@@ -849,7 +963,7 @@ const Dashboard: React.FC = () => {
     // Setup garage timer service listener
     const unsubscribe = garageTimerService.onStatusChange((status) => {
       console.log(`🏠 Dashboard: Timer update: ${status.state} (${status.timeRemaining}s)`);
-      setGarageTimerStatus(status);
+      dispatch({ type: 'SET_GARAGE_TIMER_STATUS', payload: status });
     });
 
     return unsubscribe;
@@ -1052,14 +1166,14 @@ const Dashboard: React.FC = () => {
     }
 
     // OKAMŽITÉ UI FEEDBACK: Nastav loading state hned na začátku
-    setLoading(true);
+    dispatch({ type: 'SET_LOADING', payload: true });
 
     // KRITICKÉ: Blokovat normální ovládání pokud uživatel musí použít slider
     if (gateCoordinationStatus.mustUseSlider) {
       playSound('error');
       console.log('🚫 Normální ovládání zablokováno - použijte slider pro zavření brány');
       alert('⚠️ Při čekající frontě použijte slider pro zavření brány');
-      setLoading(false); // Reset loading state
+      dispatch({ type: 'SET_LOADING', payload: false }); // Reset loading state
       return;
     }
 
@@ -1084,7 +1198,7 @@ const Dashboard: React.FC = () => {
         console.log('🚨 DEBUG: Opouštím frontu...');
         await leaveQueue();
         playSound('success');
-        setLoading(false); // Reset loading state
+        dispatch({ type: 'SET_LOADING', payload: false }); // Reset loading state
         return;
       }
     }
@@ -1101,7 +1215,7 @@ const Dashboard: React.FC = () => {
         playSound('error');
         console.log('❌ Nepodařilo se zařadit do fronty');
       }
-      setLoading(false); // Reset loading state
+      dispatch({ type: 'SET_LOADING', payload: false }); // Reset loading state
       return;
     }
 
@@ -1116,7 +1230,7 @@ const Dashboard: React.FC = () => {
       const controlGranted = await requestControl();
       if (!controlGranted) {
         playSound('error');
-        setLoading(false);
+        dispatch({ type: 'SET_LOADING', payload: false });
         // Pokud se nepodařilo získat kontrolu, možná mezitím někdo jiný začal
         return;
       }
@@ -1148,7 +1262,7 @@ const Dashboard: React.FC = () => {
           if (currentCoordState.activeUser && currentCoordState.activeUser.userId !== userId) {
             console.log('❌ DEBUG: Firebase callback - někdo mě předběhl, končím');
             playSound('error');
-            setLoading(false);
+            dispatch({ type: 'SET_LOADING', payload: false });
             return;
           }
         }
@@ -1161,7 +1275,7 @@ const Dashboard: React.FC = () => {
       if (!finalCoordState?.activeUser || finalCoordState.activeUser.userId !== currentUser?.id) {
         console.log('❌ DEBUG: Timeout na Firebase callback - nejsem aktivní uživatel, končím');
         playSound('error');
-        setLoading(false);
+        dispatch({ type: 'SET_LOADING', payload: false });
         return;
       }
     }
@@ -1175,7 +1289,7 @@ const Dashboard: React.FC = () => {
       console.log('🚨 WORKFLOW DEBUG: mustUseSlider=true - zobrazuji slider pro potvrzení zavření');
       console.log('🚨 WORKFLOW DEBUG: Queue length:', gateCoordinationStatus.queueLength, 'Next user:', gateCoordinationStatus.activeUser);
       playSound('click');
-      setShowCloseConfirmSlider(true);
+      dispatch({ type: 'SET_SHOW_CLOSE_CONFIRM_SLIDER', payload: true });
       return;
     }
 
@@ -1188,7 +1302,7 @@ const Dashboard: React.FC = () => {
       console.log('🚫 MQTT BLOCK: Brána se už pohybuje, blokuji další příkaz:', gateStatus);
       playSound('error');
       alert(`⚠️ Brána se právě ${gateStatus.includes('Otevírá') ? 'otevírá' : 'zavírá'}. Počkejte až dokončí pohyb.`);
-      setLoading(false);
+      dispatch({ type: 'SET_LOADING', payload: false });
       return;
     }
 
@@ -1210,7 +1324,7 @@ const Dashboard: React.FC = () => {
       console.log('✅ Dashboard: MQTT commands sent successfully');
       
       // NOVÉ: Okamžitě vypni loading po úspěšném MQTT - UI feedback
-      setLoading(false);
+      dispatch({ type: 'SET_LOADING', payload: false });
       
     } catch (mqttError) {
       console.error('❌ Dashboard: MQTT command failed:', mqttError);
@@ -1231,7 +1345,7 @@ const Dashboard: React.FC = () => {
       
       playSound('error');
       alert('Chyba při odesílání příkazu');
-      setLoading(false);
+      dispatch({ type: 'SET_LOADING', payload: false });
       return;
     }
     
@@ -1298,7 +1412,7 @@ const Dashboard: React.FC = () => {
       return;
     }
 
-    setLoading(true);
+    dispatch({ type: 'SET_LOADING', payload: true });
     
     // Step 1: Send MQTT command
     try {
@@ -1317,7 +1431,7 @@ const Dashboard: React.FC = () => {
       console.error('❌ Dashboard: Garage MQTT command failed:', mqttError);
       playSound('error');
       alert('Chyba při odesílání příkazu');
-      setLoading(false);
+      dispatch({ type: 'SET_LOADING', payload: false });
       return;
     }
 
@@ -1367,7 +1481,7 @@ const Dashboard: React.FC = () => {
     
     console.log('🎉 Dashboard: Garage command completed successfully');
     playSound('success');
-    setLoading(false);
+    dispatch({ type: 'SET_LOADING', payload: false });
   };
 
   const handleStopMode = async () => {
@@ -1381,7 +1495,7 @@ const Dashboard: React.FC = () => {
       return;
     }
 
-    setLoading(true);
+    dispatch({ type: 'SET_LOADING', payload: true });
     
     // CRITICAL: Stop all timers immediately when STOP is activated
     console.log('🛑 Dashboard: STOP activated - stopping all timers');
@@ -1404,7 +1518,7 @@ const Dashboard: React.FC = () => {
     } catch (mqttError) {
       console.error('❌ Dashboard: STOP MQTT command failed:', mqttError);
       alert('Chyba při odesílání STOP příkazu');
-      setLoading(false);
+      dispatch({ type: 'SET_LOADING', payload: false });
       return;
     }
     
@@ -1428,7 +1542,7 @@ const Dashboard: React.FC = () => {
       console.log('🎉 Dashboard: STOP command completed successfully');
     }
     
-    setLoading(false);
+    dispatch({ type: 'SET_LOADING', payload: false });
   };
 
   // const getStatusVariant = (status: string) => {
@@ -1451,11 +1565,11 @@ const Dashboard: React.FC = () => {
       <ConnectionLoader 
         steps={connectionSteps} 
         isVisible={showConnectionLoader} 
-        onShowDebug={() => setShowMqttDebug(true)}
+        onShowDebug={() => dispatch({ type: 'SET_SHOW_MQTT_DEBUG', payload: true })}
       />
       
       {/* MQTT Debug Modal */}
-      <MqttDebug isVisible={showMqttDebug} onClose={() => setShowMqttDebug(false)} />
+      <MqttDebug isVisible={showMqttDebug} onClose={() => dispatch({ type: 'SET_SHOW_MQTT_DEBUG', payload: false })} />
       <style>
         {`
           @keyframes pulse {
@@ -1505,7 +1619,7 @@ const Dashboard: React.FC = () => {
             
             {/* Admin Toggle - Navigation Menu */}
             <button 
-              onClick={() => setShowAdminPanel(!showAdminPanel)}
+              onClick={() => dispatch({ type: 'SET_SHOW_ADMIN_PANEL', payload: !showAdminPanel })}
               className="btn-icon md-ripple"
               style={{ 
                 background: 'var(--md-surface-variant)', 
@@ -2135,7 +2249,7 @@ const Dashboard: React.FC = () => {
       {showAdminPanel && (
         <div 
           className="overlay show" 
-          onClick={() => setShowAdminPanel(false)}
+          onClick={() => dispatch({ type: 'SET_SHOW_ADMIN_PANEL', payload: false })}
           style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 999, display: 'block', opacity: 1, transition: 'opacity 0.3s ease-in-out' }}
         />
       )}
@@ -2175,7 +2289,7 @@ const Dashboard: React.FC = () => {
             {currentUser?.permissions.manageUsers && (
               <Link 
                 to="/users" 
-                onClick={() => setShowAdminPanel(false)}
+                onClick={() => dispatch({ type: 'SET_SHOW_ADMIN_PANEL', payload: false })}
                 className="md-ripple"
                 style={{ 
                   display: 'flex',
@@ -2202,7 +2316,7 @@ const Dashboard: React.FC = () => {
             {currentUser?.permissions.viewLogs && (
               <Link 
                 to="/logs" 
-                onClick={() => setShowAdminPanel(false)}
+                onClick={() => dispatch({ type: 'SET_SHOW_ADMIN_PANEL', payload: false })}
                 className="md-ripple"
                 style={{ 
                   display: 'flex',
@@ -2229,7 +2343,7 @@ const Dashboard: React.FC = () => {
             {currentUser?.permissions.manageUsers && (
               <Link 
                 to="/settings" 
-                onClick={() => setShowAdminPanel(false)}
+                onClick={() => dispatch({ type: 'SET_SHOW_ADMIN_PANEL', payload: false })}
                 className="md-ripple"
                 style={{ 
                   display: 'flex',
