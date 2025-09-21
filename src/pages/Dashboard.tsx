@@ -588,7 +588,7 @@ const Dashboard: React.FC = () => {
       unsubscribe();
       // Connection is managed globally in App.tsx - don't disconnect here!
     };
-  }, [currentUser, gateCoordinationStatus, releaseControl, stopTimer, updateConnectionStep, gateStatus, mapGateStatusToCoordination, timerState, startTravelTimer, startAutoCloseTimer, updateGateState]);
+  }, []); // MQTT subscription should be set only once
 
   // NOVÉ: Handler pro automatické otevření brány z koordinační služby
   useEffect(() => {
@@ -623,11 +623,11 @@ const Dashboard: React.FC = () => {
     };
 
     window.addEventListener('gate-auto-open', handleAutoOpen);
-    
+
     return () => {
       window.removeEventListener('gate-auto-open', handleAutoOpen);
     };
-  }, [currentUser, mqttConnected, getUserIdentifier]);
+  }, []); // Event listener should be set only once
 
   // GPS permission request - only if required by user permissions
   useEffect(() => {
@@ -721,7 +721,7 @@ const Dashboard: React.FC = () => {
   // Monitor connection completion
   useEffect(() => {
     checkConnectionComplete();
-  }, [connectionSteps, checkConnectionComplete]);
+  }, [connectionSteps]); // Remove function from dependencies
 
   // Periodically update distance from gate for location-restricted users
   useEffect(() => {
@@ -738,7 +738,7 @@ const Dashboard: React.FC = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [currentUser?.permissions?.requireLocationProximity, currentLocation, updateDistanceFromGate]);
+  }, [currentUser?.permissions?.requireLocationProximity, currentLocation]); // Remove function from dependencies
 
   // Backup check for MQTT status every 5 seconds
   useEffect(() => {
