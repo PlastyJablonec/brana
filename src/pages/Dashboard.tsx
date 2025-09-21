@@ -464,41 +464,10 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // MQTT Status Subscription (connection managed globally in App.tsx)
+  // MQTT Status Subscription ONLY (connection managed globally in App.tsx)
   useEffect(() => {
     console.log('🔧 Dashboard: Subscribing to MQTT status changes...');
-    console.log('🔧 Dashboard: currentUser:', currentUser);
-    console.log('🔧 Dashboard: Force triggering MQTT connection...');
-    
-    // FORCE MQTT connection if it hasn't started + DETAILED DEBUG
-    if (currentUser) {
-      console.log('🚀 Dashboard: Force connecting MQTT...');
-      console.log('🔍 Dashboard: MQTT Service broker URL check...');
-      
-      // Log the exact URL that will be used
-      const isHttps = window.location.protocol === 'https:';
-      const hostname = window.location.hostname;
-      console.log('🌐 Dashboard: Protocol:', window.location.protocol);
-      console.log('🌐 Dashboard: Hostname:', hostname);
-      console.log('🌐 Dashboard: isHttps:', isHttps);
-      
-      if (isHttps) {
-        console.log('🔄 Dashboard: Will use HTTP MQTT proxy service');
-      } else {
-        if (hostname === 'localhost') {
-          console.log('🏠 Dashboard: Will use LOCAL MQTT broker: ws://172.19.3.200:9001');
-        } else {
-          console.log('🌍 Dashboard: Will use EXTERNAL MQTT broker: ws://89.24.76.191:9001');
-        }
-      }
-      
-      mqttService.connect().then(() => {
-        console.log('✅ Dashboard: MQTT connected successfully');
-      }).catch((error) => {
-        console.error('❌ Dashboard: MQTT connection failed:', error);
-      });
-    }
-    
+
     // Get initial status immediately
     const initialStatus = mqttService.getStatus();
     console.log('🔧 Dashboard: Initial MQTT status:', initialStatus);
@@ -509,7 +478,6 @@ const Dashboard: React.FC = () => {
     // Update connection steps based on initial status
     if (initialStatus.isConnected) {
       updateConnectionStep(1, 'success', 'Připojeno');
-      // Stav brány krok odstraněn - není potřebný pro connection loading
     } else {
       updateConnectionStep(1, 'loading', 'Připojuji se...');
     }
@@ -518,7 +486,7 @@ const Dashboard: React.FC = () => {
     const unsubscribe = mqttService.onStatusChange((status) => {
       console.log('🔧 Dashboard: MQTT status changed:', status);
       console.log('🔧 Dashboard: Updating React state...');
-      
+
       const prevGateStatus = gateStatus;
       dispatch({ type: 'SET_GATE_STATUS', payload: status.gateStatus });
       dispatch({ type: 'SET_GARAGE_STATUS', payload: status.garageStatus });
@@ -620,7 +588,7 @@ const Dashboard: React.FC = () => {
       unsubscribe();
       // Connection is managed globally in App.tsx - don't disconnect here!
     };
-  }, [currentUser, gateCoordinationStatus, releaseControl, stopTimer, updateConnectionStep]);
+  }, [currentUser, gateCoordinationStatus, releaseControl, stopTimer, updateConnectionStep, gateStatus, mapGateStatusToCoordination, timerState, startTravelTimer, startAutoCloseTimer, resetCoordinationOnGateClosed, updateGateState]);
 
   // NOVÉ: Handler pro automatické otevření brány z koordinační služby
   useEffect(() => {
@@ -659,7 +627,7 @@ const Dashboard: React.FC = () => {
     return () => {
       window.removeEventListener('gate-auto-open', handleAutoOpen);
     };
-  }, [currentUser, mqttConnected, mqttService]);
+  }, [currentUser, mqttConnected, getUserIdentifier]);
 
   // GPS permission request - only if required by user permissions
   useEffect(() => {
