@@ -110,7 +110,7 @@ const UserManagement: React.FC = () => {
 
     // window.addEventListener('resize', handleResize);
     // return () => window.removeEventListener('resize', handleResize);
-  }, [loadUsers, loadPendingCount]); // Use memoized functions
+  }, []); // Empty dependency array - run only on mount
 
   const handleRefreshGPS = async (userId: string) => {
     try {
