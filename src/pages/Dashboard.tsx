@@ -1567,7 +1567,7 @@ const Dashboard: React.FC = () => {
           }
         `}
       </style>
-      <div className="dashboard" style={{ padding: '16px', maxWidth: '800px', margin: '0 auto', minHeight: '100vh' }}>
+      <div className="dashboard" style={{ padding: '16px', maxWidth: '800px', margin: '0 auto' }}>
       
       {/* Top Header with Material Design */}
       <div className="md-card md-card-elevated" style={{ marginBottom: '16px' }}>
