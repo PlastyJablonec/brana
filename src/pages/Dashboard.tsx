@@ -588,7 +588,7 @@ const Dashboard: React.FC = () => {
       unsubscribe();
       // Connection is managed globally in App.tsx - don't disconnect here!
     };
-  }, [currentUser, gateCoordinationStatus, releaseControl, stopTimer, updateConnectionStep, gateStatus, mapGateStatusToCoordination, timerState, startTravelTimer, startAutoCloseTimer, resetCoordinationOnGateClosed, updateGateState]);
+  }, [currentUser, gateCoordinationStatus, releaseControl, stopTimer, updateConnectionStep, gateStatus, mapGateStatusToCoordination, timerState, startTravelTimer, startAutoCloseTimer, updateGateState]);
 
   // NOVÉ: Handler pro automatické otevření brány z koordinační služby
   useEffect(() => {
