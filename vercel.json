@@ -7,6 +7,12 @@
       "maxDuration": 30
     }
   },
+  "rewrites": [
+    {
+      "source": "/((?!api|_next|static|favicon.ico).*)",
+      "destination": "/index.html"
+    }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",
