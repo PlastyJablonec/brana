@@ -1,4 +1,6 @@
 {
+  "buildCommand": "npm run build",
+  "outputDirectory": "build",
   "functions": {
     "api/mqtt-proxy.js": {
       "maxDuration": 30
