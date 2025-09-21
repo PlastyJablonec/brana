@@ -46,19 +46,13 @@ type StatusCallback = (status: IMqttStatus) => void;
 type GateLogCallback = (logEntry: IGateLogEntry) => void;
 type UnsubscribeFunction = () => void;
 
-// 🔐 Globální singleton ochrana proti hot reloading
-declare global {
-  interface Window {
-    __MQTT_SERVICE_INSTANCES__: MqttService[];
-    __MQTT_CLIENT_COUNT__: number;
-    __GLOBAL_MQTT_CLIENT__: MqttClient | null;
-  }
-}
 
 export class MqttService {
   private client: MqttClient | null = null;
   private statusCallbacks: StatusCallback[] = [];
-  
+  private connectionState: 'disconnected' | 'connecting' | 'connected' | 'reconnecting' = 'disconnected';
+  private reconnectTimer: NodeJS.Timeout | null = null;
+
   // Detekce zda jsme na lokální síti a výběr optimální MQTT URL
   private static getOptimalMqttUrl(): string {
     if (typeof window === 'undefined') {
@@ -102,17 +96,17 @@ export class MqttService {
   };
 
   constructor(
-    private readonly brokerUrl: string = typeof window !== 'undefined' && window.location.protocol === 'https:' 
+    private readonly brokerUrl: string = typeof window !== 'undefined' && window.location.protocol === 'https:'
       ? (process.env.REACT_APP_MQTT_WSS_URL || 'wss://89.24.76.191:9002')
       : (process.env.REACT_APP_MQTT_URL || MqttService.getOptimalMqttUrl()),
     private readonly options: IMqttConnectionOptions = {
       clientId: `gate-control-${Math.random().toString(16).substring(2, 8)}`,
-      clean: true,  // ⚡ TRUE pro okamžité retained messages
-      reconnectPeriod: 5000,  // ⚡ Sladěno s MQTT proxy (5s místo 3s)
-      connectTimeout: 15000,  // ⚡ Delší timeout pro stabilitu
-      keepalive: 60,          // ⚡ Sladěno s MQTT proxy (60s místo 30s)
+      clean: true,
+      reconnectPeriod: 5000,
+      connectTimeout: 15000,
+      keepalive: 60,
       resubscribe: true,
-      queueQoSZero: true,     // ⚡ Optimalizace pro rychlé zprávy
+      queueQoSZero: true,
       will: {
         topic: 'Log/Brana/Disconnect',
         payload: 'Client disconnected',
@@ -121,229 +115,125 @@ export class MqttService {
       }
     }
   ) {
-    // 🔐 Globální tracking pro zabránění vícenásobných připojení
-    if (typeof window !== 'undefined') {
-      if (!window.__MQTT_SERVICE_INSTANCES__) {
-        window.__MQTT_SERVICE_INSTANCES__ = [];
-        window.__MQTT_CLIENT_COUNT__ = 0;
-      }
-      
-      // Odpojit a vyčistit všechny staré instance při hot reload
-      if (window.__MQTT_SERVICE_INSTANCES__.length > 0) {
-        console.log(`🧹 Hot reload detected - cleaning up ${window.__MQTT_SERVICE_INSTANCES__.length} old MQTT instances`);
-        window.__MQTT_SERVICE_INSTANCES__.forEach((oldInstance, index) => {
-          console.log(`🔌 Disconnecting old instance ${index + 1}`);
-          try {
-            oldInstance.disconnect();
-          } catch (error) {
-            console.warn(`⚠️ Error disconnecting old instance ${index + 1}:`, error);
-          }
-        });
-        window.__MQTT_SERVICE_INSTANCES__ = [];
-        window.__MQTT_CLIENT_COUNT__ = 0;
-      }
-      
-      window.__MQTT_SERVICE_INSTANCES__.push(this);
-      console.log(`📊 MQTT Service constructor: Registered instance ${window.__MQTT_SERVICE_INSTANCES__.length}`);
-    }
+    console.log('🔧 MQTT Service: Constructor initialized with connection state:', this.connectionState);
   }
 
   public async connect(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       try {
-        // 🔐 Globální ochrana proti vícenásobným připojením
-        if (typeof window !== 'undefined') {
-          // Silná ochrana - pokud už existují připojení, vyčistit je
-          if (window.__MQTT_CLIENT_COUNT__ > 0) {
-            console.log(`🔄 MQTT Service: Already have ${window.__MQTT_CLIENT_COUNT__} active connections, reusing existing connection...`);
+        // 🔐 SINGLETON PATTERN: Prevence duplicitních připojení
+        if (this.connectionState === 'connected') {
+          console.log('✅ MQTT already connected, reusing existing connection');
+          resolve();
+          return;
+        }
 
-            // Místo force cleanup, zkus reuse existující připojení
-            // Jen log pro debugging, ale nepřerušuj existing connection
-            console.log(`📊 MQTT Connect: Reusing connection (counter: ${window.__MQTT_CLIENT_COUNT__})`);
-
-            // Pokud už máme fungující připojení přes HTTP proxy, použij ho
-            if (httpMqttService.isConnected()) {
-              console.log('✅ HTTP MQTT Service is already connected, reusing...');
-              this.currentStatus.isConnected = true;
-              this.notifyStatusChange();
-
-              // Forward existing callbacks
-              httpMqttService.onStatusChange((status) => {
-                this.currentStatus = { ...status };
-                this.notifyStatusChange();
-              });
-
-              httpMqttService.onGateLogChange((logEntry) => {
-                this.notifyGateLogChange(logEntry);
-              });
-
-              resolve();
-              return;
+        if (this.connectionState === 'connecting') {
+          console.log('⏳ MQTT connection already in progress, waiting...');
+          // Počkaj max 10 sekund na dokončení existujícího připojení
+          const connectionTimeout = setTimeout(() => {
+            if (this.connectionState !== 'connected') {
+              console.warn('⚠️ MQTT connection timeout, forcing retry...');
+              this.connectionState = 'disconnected';
+              this.connect().then(resolve).catch(reject);
             }
-          }
+          }, 10000);
 
-          window.__MQTT_CLIENT_COUNT__++;
-          console.log(`📊 MQTT Connect: Setting counter to ${window.__MQTT_CLIENT_COUNT__}`);
+          // Monitoruj state změny
+          const checkConnection = () => {
+            if (this.connectionState === 'connected') {
+              clearTimeout(connectionTimeout);
+              resolve();
+            } else if (this.connectionState === 'disconnected') {
+              clearTimeout(connectionTimeout);
+              reject(new Error('Connection failed during wait'));
+            } else {
+              // Pokračuj v čekání
+              setTimeout(checkConnection, 100);
+            }
+          };
+          checkConnection();
+          return;
         }
-        
-        // Disconnect any existing connection first to prevent multiple connections
+
+        // Nastav state jako "connecting"
+        this.connectionState = 'connecting';
+        console.log(`🔌 MQTT Service: Starting connection to ${this.brokerUrl}`);
+
+        // Disconnect any existing connection first
         if (this.client) {
-          console.log('🔄 MQTT Service: Cleaning up existing connection before reconnect');
-          this.disconnect();
-        }
-        
-        console.log(`🔌 Connecting to MQTT broker: ${this.brokerUrl}`);
-        console.log('⚙️ MQTT options:', this.options);
-        
-        // 🌍 OPRAVA: VŽDY používej HTTP proxy - broker odmítá vícenásobná WebSocket připojení
-        // Původní problém: broker na 89.24.76.191:9001 odmítá nová připojení s "connack timeout"
-        const forceHttpProxy = true; // Vynutit HTTP proxy kvůli connection limit na brokeru
-        
-        if (forceHttpProxy) {
-          console.log('🌐 MQTT Service: Using HTTP proxy (broker connection limit protection)...');
-          // Try HTTP proxy service on HTTPS
-          httpMqttService.connect()
-            .then(() => {
-              console.log('✅ MQTT connected via HTTP proxy');
-              this.currentStatus.isConnected = true;
-              this.notifyStatusChange();
-              
-              // Forward HTTP MQTT status changes to this service
-              httpMqttService.onStatusChange((status) => {
-                console.log('🔄 MQTT Service: Received status from HTTP MQTT:', status);
-                this.currentStatus = { ...status };
-                console.log('🔄 MQTT Service: Forwarding to Dashboard callbacks...');
-                this.notifyStatusChange();
-              });
-              
-              // Forward HTTP MQTT gate log changes to this service
-              httpMqttService.onGateLogChange((logEntry) => {
-                console.log('🔄 MQTT Service: Forwarding gate log from HTTP proxy:', logEntry);
-                this.notifyGateLogChange(logEntry);
-              });
-              
-              // CRITICAL: Get initial status immediately after registering callbacks
-              console.log('🚀 MQTT Service: Getting initial status from HTTP MQTT...');
-              const initialStatus = httpMqttService.getStatus();
-              console.log('🚀 MQTT Service: Initial status:', initialStatus);
-              if (initialStatus.gateStatus !== 'Neznámý stav') {
-                console.log('🚀 MQTT Service: Force updating with initial status');
-                this.currentStatus = { ...initialStatus };
-                this.notifyStatusChange();
-              }
-              
-              resolve();
-            })
-            .catch((error) => {
-              console.error('❌ HTTP MQTT proxy connection failed:', error);
-              console.warn('🔄 MQTT Service: HTTP proxy failed, trying direct WSS connection as fallback...');
-              
-              // Fallback to direct WSS connection even on HTTPS
-              try {
-                this.connectDirectWebSocket('wss://89.24.76.191:9002', resolve, reject);
-              } catch (directError) {
-                console.error('❌ Direct WSS fallback also failed:', directError);
-                this.currentStatus.isConnected = false;
-                this.notifyStatusChange();
-                reject(new Error(`Both HTTP proxy and direct WSS failed: ${error}, ${directError}`));
-              }
-            });
-          return;
-        }
-        
-        if (!mqtt || typeof mqtt.connect !== 'function') {
-          const error = new Error('MQTT library not available - mqtt.connect is not a function');
-          console.error('❌ MQTT library error:', error);
-          reject(error);
-          return;
-        }
-        
-        // On HTTP, use direct WebSocket connection
-        let brokerUrl = this.brokerUrl.replace('wss://', 'ws://');
-        console.log('🔧 MqttService: HTTP detected, using WS:', brokerUrl);
-        
-        this.client = mqtt.connect(brokerUrl, this.options);
-        console.log('🔗 MQTT client created:', !!this.client);
-        
-        // 🌍 Uložit do globálního objektu pro sdílení mezi instancemi
-        if (typeof window !== 'undefined') {
-          window.__GLOBAL_MQTT_CLIENT__ = this.client;
-          console.log('🌍 Global MQTT client stored');
+          console.log('🔄 MQTT Service: Cleaning up existing connection');
+          this.client.removeAllListeners();
+          this.client.end(true);
+          this.client = null;
         }
 
-        this.client.on('connect', (connack: IConnackPacket) => {
-          const timestamp = new Date().toISOString();
-          console.log(`✅ [${timestamp}] MQTT Connected successfully`, connack);
-          console.log(`🔍 [${timestamp}] Session present: ${connack.sessionPresent}`);
-          console.log(`🔍 [${timestamp}] Return code: ${connack.returnCode}`);
-          this.currentStatus.isConnected = true;
-          console.log('🔄 MQTT status updated:', this.currentStatus);
-          this.notifyStatusChange();
-          
-          // Subscribe to status topics with proper error handling
-          console.log('🔧 MQTT Service: Starting subscription process...');
-          this.subscribeToTopics()
-            .then(() => {
-              console.log('✅ MQTT Service: All subscriptions completed successfully');
-              resolve();
-            })
-            .catch(error => {
-              console.error('❌ MQTT Service: Failed to subscribe to topics:', error);
-              reject(error);
-            });
-        });
+        // 🌍 SMART CONNECTION STRATEGY: HTTP proxy first, direct WebSocket as fallback
+        const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
 
-        this.client.on('message', (topic: string, message: Buffer, packet: any) => {
-          const messageStr = message.toString();
-          const isRetained = packet?.retain || false;
-          console.log(`📨 MQTT Message: ${topic} = ${messageStr} ${isRetained ? '(RETAINED)' : '(LIVE)'}`);
-          this.handleMessage(topic, messageStr);
-        });
-
-        this.client.on('error', (error: Error) => {
-          console.error('❌ MQTT Connection Error:', error);
-          this.currentStatus.isConnected = false;
-          this.notifyStatusChange();
-          
-          // Check if it's a mixed content error on HTTPS
-          const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-          if (isHttps && error.message.includes('insecure WebSocket')) {
-            console.error('💡 Mixed content blocked - MQTT requires HTTP or manual browser permission');
-            const mixedContentError = new Error('MQTT blokované kvôli mixed content policy - povoľte v prehliadači alebo použite HTTP verziu');
-            reject(mixedContentError);
-          } else {
-            reject(error);
-          }
-        });
-
-        this.client.on('close', () => {
-          console.log('🔌 MQTT Disconnected - will try to reconnect...');
-          this.currentStatus.isConnected = false;
-          this.notifyStatusChange();
-        });
-
-        this.client.on('reconnect', () => {
-          console.log('🔄 MQTT Reconnecting...');
-        });
-        
-        this.client.on('offline', () => {
-          console.log('📴 MQTT Client offline');
-          this.currentStatus.isConnected = false;
-          this.notifyStatusChange();
-        });
-        
-        this.client.on('end', () => {
-          console.log('🛑 MQTT Connection ended');
-          this.currentStatus.isConnected = false;
-          this.notifyStatusChange();
-        });
+        if (isHttps) {
+          console.log('🌐 HTTPS detected: Using HTTP MQTT proxy...');
+          this.connectViaHttpProxy(resolve, reject);
+        } else {
+          console.log('🔧 HTTP detected: Using direct WebSocket connection...');
+          this.connectDirectWebSocket(this.brokerUrl.replace('wss://', 'ws://'), resolve, reject);
+        }
 
       } catch (error) {
+        this.connectionState = 'disconnected';
         const mqttError = error instanceof Error ? error : new Error('Unknown MQTT setup error');
         console.error('❌ MQTT Setup Error:', mqttError);
         reject(mqttError);
       }
     });
+  }
+
+  private async connectViaHttpProxy(resolve: () => void, reject: (error: any) => void): Promise<void> {
+    try {
+      console.log('🌐 Connecting via HTTP MQTT proxy...');
+
+      await httpMqttService.connect();
+
+      console.log('✅ HTTP MQTT proxy connected successfully');
+      this.connectionState = 'connected';
+      this.currentStatus.isConnected = true;
+      this.notifyStatusChange();
+
+      // Forward HTTP MQTT callbacks
+      httpMqttService.onStatusChange((status) => {
+        console.log('🔄 MQTT Service: Status from HTTP proxy:', status);
+        this.currentStatus = { ...status };
+        this.notifyStatusChange();
+      });
+
+      httpMqttService.onGateLogChange((logEntry) => {
+        console.log('🔄 MQTT Service: Gate log from HTTP proxy:', logEntry);
+        this.notifyGateLogChange(logEntry);
+      });
+
+      // Get initial status
+      const initialStatus = httpMqttService.getStatus();
+      if (initialStatus.gateStatus !== 'Neznámý stav') {
+        this.currentStatus = { ...initialStatus };
+        this.notifyStatusChange();
+      }
+
+      resolve();
+
+    } catch (error) {
+      console.error('❌ HTTP MQTT proxy failed:', error);
+      console.log('🔄 Fallback: Trying direct WSS connection...');
+
+      try {
+        this.connectDirectWebSocket('wss://89.24.76.191:9002', resolve, reject);
+      } catch (fallbackError) {
+        console.error('❌ Direct WSS fallback also failed:', fallbackError);
+        this.connectionState = 'disconnected';
+        this.currentStatus.isConnected = false;
+        this.notifyStatusChange();
+        reject(new Error(`Both HTTP proxy and WSS failed: ${error}, ${fallbackError}`));
+      }
+    }
   }
 
   private async subscribeToTopics(): Promise<void> {
@@ -393,31 +283,38 @@ export class MqttService {
   }
 
   public disconnect(): void {
+    console.log('🔌 MQTT Service: Starting disconnect process...');
+
+    // Clear reconnect timer if exists
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    // Reset connection state immediately
+    this.connectionState = 'disconnected';
+    this.currentStatus.isConnected = false;
+
     const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-    
+
     if (isHttps) {
       console.log('🔌 Disconnecting HTTP MQTT proxy...');
       httpMqttService.disconnect();
-    } else if (this.client) {
-      console.log('🔌 Disconnecting MQTT client...');
-      
+    }
+
+    if (this.client) {
+      console.log('🔌 Disconnecting direct MQTT client...');
+
       // Remove all event listeners to prevent memory leaks
       this.client.removeAllListeners();
-      
+
       // Force close the connection immediately
       this.client.end(true);
       this.client = null;
     }
-    
-    // 🔐 Dekrementovat globální počítač připojení
-    if (typeof window !== 'undefined' && window.__MQTT_CLIENT_COUNT__ > 0) {
-      window.__MQTT_CLIENT_COUNT__--;
-      console.log(`📊 MQTT Disconnect: Decrementing counter to ${window.__MQTT_CLIENT_COUNT__}`);
-    }
-    
-    this.currentStatus.isConnected = false;
+
     this.notifyStatusChange();
-    console.log('✅ MQTT client disconnected');
+    console.log('✅ MQTT Service: Disconnect completed');
   }
 
   private handleMessage(topic: string, message: string): void {
@@ -691,11 +588,12 @@ export class MqttService {
     return this.currentStatus.isConnected;
   }
 
-  // Fallback method for direct WebSocket connection
+  // Direct WebSocket connection with proper state management
   private connectDirectWebSocket(url: string, resolve: () => void, reject: (error: any) => void): void {
     console.log(`🔄 MQTT Service: Direct WebSocket connection to ${url}`);
-    
+
     if (!mqtt || typeof mqtt.connect !== 'function') {
+      this.connectionState = 'disconnected';
       reject(new Error('MQTT library not available for direct connection'));
       return;
     }
@@ -706,20 +604,35 @@ export class MqttService {
         clientId: `gate-control-direct-${Math.random().toString(16).substring(2, 8)}`
       });
 
-      this.client.on('connect', async () => {
-        console.log('✅ Direct WebSocket MQTT connection established');
+      this.client.on('connect', async (connack: IConnackPacket) => {
+        console.log('✅ Direct WebSocket MQTT connection established', connack);
+        this.connectionState = 'connected';
         this.currentStatus.isConnected = true;
-        await this.subscribeToTopics();
         this.notifyStatusChange();
-        resolve();
+
+        try {
+          await this.subscribeToTopics();
+          console.log('✅ Direct WebSocket: All subscriptions completed');
+          resolve();
+        } catch (subscribeError) {
+          console.error('❌ Direct WebSocket: Subscription failed:', subscribeError);
+          this.connectionState = 'disconnected';
+          this.currentStatus.isConnected = false;
+          this.notifyStatusChange();
+          reject(subscribeError);
+        }
       });
 
-      this.client.on('message', (topic, message) => {
-        this.handleMessage(topic, message.toString());
+      this.client.on('message', (topic: string, message: Buffer, packet: any) => {
+        const messageStr = message.toString();
+        const isRetained = packet?.retain || false;
+        console.log(`📨 Direct WS MQTT: ${topic} = ${messageStr} ${isRetained ? '(RETAINED)' : '(LIVE)'}`);
+        this.handleMessage(topic, messageStr);
       });
 
-      this.client.on('error', (error) => {
+      this.client.on('error', (error: Error) => {
         console.error('❌ Direct WebSocket MQTT error:', error);
+        this.connectionState = 'disconnected';
         this.currentStatus.isConnected = false;
         this.notifyStatusChange();
         reject(error);
@@ -727,12 +640,33 @@ export class MqttService {
 
       this.client.on('close', () => {
         console.log('🔌 Direct WebSocket MQTT connection closed');
+        this.connectionState = 'disconnected';
+        this.currentStatus.isConnected = false;
+        this.notifyStatusChange();
+      });
+
+      this.client.on('reconnect', () => {
+        console.log('🔄 Direct WebSocket MQTT reconnecting...');
+        this.connectionState = 'reconnecting';
+      });
+
+      this.client.on('offline', () => {
+        console.log('📴 Direct WebSocket MQTT client offline');
+        this.connectionState = 'disconnected';
+        this.currentStatus.isConnected = false;
+        this.notifyStatusChange();
+      });
+
+      this.client.on('end', () => {
+        console.log('🛑 Direct WebSocket MQTT connection ended');
+        this.connectionState = 'disconnected';
         this.currentStatus.isConnected = false;
         this.notifyStatusChange();
       });
 
     } catch (error) {
       console.error('❌ Direct WebSocket connection setup failed:', error);
+      this.connectionState = 'disconnected';
       reject(error);
     }
   }
