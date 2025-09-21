@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
@@ -69,20 +69,7 @@ const UserManagement: React.FC = () => {
     }
   });
 
-  useEffect(() => {
-    loadUsers();
-    loadPendingCount();
-    
-    // Handle window resize for responsive design
-    // const handleResize = () => {
-    //   setIsMobile(window.innerWidth < 768);
-    // };
-    
-    // window.addEventListener('resize', handleResize);
-    // return () => window.removeEventListener('resize', handleResize);
-  }, []); // Initial load only
-
-  const loadPendingCount = async () => {
+  const loadPendingCount = useCallback(async () => {
     try {
       if (currentUser?.role === 'admin') {
         const pendingUsers = await getPendingUsers();
@@ -91,18 +78,18 @@ const UserManagement: React.FC = () => {
     } catch (error) {
       console.error('Error loading pending count:', error);
     }
-  };
+  }, [currentUser, getPendingUsers]);
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
       setLoading(true);
-      
+
       // OPRAVA: Používat getApprovedUsers() místo filtrování getAllUsers()
       // Tím se zajistí, že main seznam obsahuje jen schválené uživatele
       // Pending uživatelé se zobrazují pouze v UserApprovalPanel
       const approvedUsers = await userService.getApprovedUsers();
       setUsers(approvedUsers);
-      
+
       // Refresh pending count when users list is loaded
       await loadPendingCount();
     } catch (error) {
@@ -110,7 +97,20 @@ const UserManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadPendingCount]);
+
+  useEffect(() => {
+    loadUsers();
+    loadPendingCount();
+
+    // Handle window resize for responsive design
+    // const handleResize = () => {
+    //   setIsMobile(window.innerWidth < 768);
+    // };
+
+    // window.addEventListener('resize', handleResize);
+    // return () => window.removeEventListener('resize', handleResize);
+  }, [loadUsers, loadPendingCount]); // Use memoized functions
 
   const handleRefreshGPS = async (userId: string) => {
     try {
