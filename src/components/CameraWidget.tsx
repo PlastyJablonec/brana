@@ -28,19 +28,23 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
 
   // Resolve base URL for camera image (STRICT: no runtime overrides)
   const getBaseUrl = (): string => {
-    // Prefer explicit env
+    const isHTTPS = window.location.protocol === 'https:';
+    const isVercel = window.location.hostname.includes('vercel.app');
+
+    // Force proxy for HTTPS (especially Vercel) - ignore direct camera URL env
+    if (isHTTPS || isVercel) {
+      console.log('🔒 Camera: Using HTTPS API proxy for security (base=/api/camera-proxy)');
+      return '/api/camera-proxy';
+    }
+
+    // HTTP localhost: prefer env, fallback to direct
     if (directCameraUrl) {
       console.log('📹 Camera: Using REACT_APP_CAMERA_URL =', directCameraUrl);
       return directCameraUrl;
     }
-    // HTTPS → proxy endpoint; HTTP → require explicit env
-    const isHTTPS = window.location.protocol === 'https:';
-    if (isHTTPS) {
-      console.log('🔒 Camera: Using HTTPS API proxy for security (base=/api/camera-proxy)');
-      return '/api/camera-proxy';
-    }
-    console.error('❌ Camera: Není nastavena REACT_APP_CAMERA_URL pro HTTP prostředí');
-    return '';
+
+    console.warn('❌ Camera: Není nastavena REACT_APP_CAMERA_URL pro HTTP prostředí, použiji fallback');
+    return 'http://89.24.76.191:10180/photo.jpg';
   };
 
   const getFreshCameraUrl = (): string => {
