@@ -26,50 +26,21 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
   // Optional direct camera URL (prefer HTTPS)
   const directCameraUrl = (process.env.REACT_APP_CAMERA_URL || '').trim();
 
-  // Resolve base URL for camera image
+  // Resolve base URL for camera image (STRICT: no runtime overrides)
   const getBaseUrl = (): string => {
-    // Highest priority: query override (?camera=https://...)
-    const params = new URLSearchParams(window.location.search);
-    try {
-      const cameraParam = params.get('camera');
-      if (cameraParam) {
-        const trimmed = cameraParam.trim();
-        if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-          console.log('📹 Camera: Using camera URL from query param');
-          return trimmed;
-        }
-      }
-    } catch {}
-
-    // Check for enterprise backend mode
-    const useBackend = params.get('backend') === 'true';
-    if (useBackend) {
-      console.log('🏢 Camera: Using Enterprise Backend mode');
-      return 'http://localhost:3001/api/camera/main-camera/snapshot';
-    }
-
-    // Check for direct camera bypass (for testing when camera is online)
-    const bypassProxy = params.get('bypass') === 'true';
-    if (bypassProxy) {
-      console.log('🔓 Camera: BYPASS MODE - using direct HTTP (Mixed Content warning expected)');
-      return 'http://89.24.76.191:10180/photo.jpg';
-    }
-
+    // Prefer explicit env
     if (directCameraUrl) {
-      console.log('📹 Camera: Using REACT_APP_CAMERA_URL');
+      console.log('📹 Camera: Using REACT_APP_CAMERA_URL =', directCameraUrl);
       return directCameraUrl;
     }
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const isHTTP = window.location.protocol === 'http:';
-    
-    // Use direct access on HTTP or localhost, proxy on HTTPS production
-    if (isHTTP || isLocalhost) {
-      console.log('🔄 Camera: Using direct HTTP access for fast performance');
-      return 'http://89.24.76.191:10180/photo.jpg';
-    } else {
-      console.log('🔒 Camera: Using HTTPS API proxy for security');
+    // HTTPS → proxy endpoint; HTTP → require explicit env
+    const isHTTPS = window.location.protocol === 'https:';
+    if (isHTTPS) {
+      console.log('🔒 Camera: Using HTTPS API proxy for security (base=/api/camera-proxy)');
       return '/api/camera-proxy';
     }
+    console.error('❌ Camera: Není nastavena REACT_APP_CAMERA_URL pro HTTP prostředí');
+    return '';
   };
 
   const getFreshCameraUrl = (): string => {
@@ -144,7 +115,9 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
 
   useEffect(() => {
     // Initialize with first camera URL
-    setCameraUrl(getFreshCameraUrl());
+    const initial = getFreshCameraUrl();
+    console.log('📹 Camera: Initial resolved URL =', initial);
+    setCameraUrl(initial);
     
     // Initial load
     refreshCamera();
@@ -162,7 +135,7 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
         clearInterval(timestampIntervalRef.current);
       }
     };
-  }, [refreshInterval, getFreshCameraUrl, refreshCamera, updateTimestampDisplay]);
+  }, [refreshInterval]);
 
   return (
     <div className={`camera-widget ${className}`}>
@@ -182,12 +155,16 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
       </div>
       
       <div className="camera-container">
-        <img 
-          ref={imgRef}
-          src={cameraUrl} 
-          alt="Webkamera"
-          className="camera-image"
-        />
+        {cameraUrl ? (
+          <img 
+            ref={imgRef}
+            src={cameraUrl}
+            alt="Webkamera"
+            className="camera-image"
+          />
+        ) : (
+          <div className="camera-overlay">Kamera není nakonfigurovaná</div>
+        )}
         
         {(isLoading || error) && (
           <div className="camera-overlay">

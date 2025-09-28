@@ -197,7 +197,8 @@ const AppRoutes: React.FC = () => {
           </ProtectedRoute>
         }
       />
-      <Route path="/" element={currentUser ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} />
+      {/* Fallback route: redirect unknown paths based on auth state */}
+      <Route path="*" element={currentUser ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} />
     </Routes>
   );
 };

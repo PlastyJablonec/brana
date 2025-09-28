@@ -56,7 +56,7 @@ export class MqttService {
   // Detekce zda jsme na lokální síti a výběr optimální MQTT URL
   private static getOptimalMqttUrl(): string {
     if (typeof window === 'undefined') {
-      return 'ws://89.24.76.191:9001'; // Fallback pro SSR
+      return 'ws://89.24.76.191:9001/mqtt'; // Fallback pro SSR
     }
     
     const hostname = window.location.hostname;
@@ -69,7 +69,7 @@ export class MqttService {
       hostname === '127.0.0.1'
     ) {
       console.log('🏠 MQTT Service: Localhost detected, using EXTERNAL MQTT broker (local broker not available)');
-      return 'ws://89.24.76.191:9001';
+      return 'ws://89.24.76.191:9001/mqtt';
     }
     
     // Pro skutečně lokální síť (192.168.x.x, 10.x.x.x)
@@ -81,12 +81,12 @@ export class MqttService {
       console.log('🏠 MQTT Service: Local network detected, checking if local broker exists...');
       // TODO: V budoucnu ověřit dostupnost lokálního brokeru
       console.log('🌐 MQTT Service: Using external broker as fallback');
-      return 'ws://89.24.76.191:9001';
+      return 'ws://89.24.76.191:9001/mqtt';
     }
     
     // Jinak externí IP
     console.log('🌐 MQTT Service: External network, using external MQTT broker');
-    return 'ws://89.24.76.191:9001';
+    return 'ws://89.24.76.191:9001/mqtt';
   }
   private gateLogCallbacks: GateLogCallback[] = [];
   private currentStatus: IMqttStatus = {
@@ -95,10 +95,48 @@ export class MqttService {
     isConnected: false
   };
 
+  private static getMqttOverrideFromQuery(): string | null {
+    try {
+      if (typeof window === 'undefined') return null;
+      const params = new URLSearchParams(window.location.search);
+      const url = params.get('mqtt');
+      if (url && (url.startsWith('ws://') || url.startsWith('wss://'))) return url;
+    } catch {}
+    return null;
+  }
+
+  private static getMqttOverrideFromStorage(): string | null {
+    try {
+      if (typeof window === 'undefined') return null;
+      const url = localStorage.getItem('MQTT_URL') || localStorage.getItem('mqtt_url');
+      if (url && (url.startsWith('ws://') || url.startsWith('wss://'))) return url;
+    } catch {}
+    return null;
+  }
+
   constructor(
-    private readonly brokerUrl: string = typeof window !== 'undefined' && window.location.protocol === 'https:'
-      ? (process.env.REACT_APP_MQTT_WSS_URL || 'wss://89.24.76.191:9002')
-      : (process.env.REACT_APP_MQTT_URL || MqttService.getOptimalMqttUrl()),
+    private readonly brokerUrl: string = (() => {
+      // STRICT env-based configuration without any runtime overrides
+      const isHttps = (typeof window !== 'undefined' && window.location.protocol === 'https:');
+      const wssUrl = process.env.REACT_APP_MQTT_WSS_URL;
+      const wsUrl = process.env.REACT_APP_MQTT_URL;
+      
+      if (isHttps) {
+        if (!wssUrl) {
+          console.error('❌ MQTT konfigurace chybí: REACT_APP_MQTT_WSS_URL musí být nastaveno pro HTTPS.');
+          throw new Error('MQTT WSS URL není nastaveno (REACT_APP_MQTT_WSS_URL)');
+        }
+        console.log('🔧 MQTT CONFIG (HTTPS): REACT_APP_MQTT_WSS_URL =', wssUrl);
+        return wssUrl;
+      } else {
+        if (!wsUrl) {
+          console.error('❌ MQTT konfigurace chybí: REACT_APP_MQTT_URL musí být nastaveno.');
+          throw new Error('MQTT WS URL není nastaveno (REACT_APP_MQTT_URL)');
+        }
+        console.log('🔧 MQTT CONFIG (HTTP): REACT_APP_MQTT_URL =', wsUrl);
+        return wsUrl;
+      }
+    })(),
     private readonly options: IMqttConnectionOptions = {
       clientId: `gate-control-${Math.random().toString(16).substring(2, 8)}`,
       clean: true,
@@ -222,10 +260,14 @@ export class MqttService {
 
     } catch (error) {
       console.error('❌ HTTP MQTT proxy failed:', error);
-      console.log('🔄 Fallback: Trying direct WSS connection...');
+      console.log('🔄 Fallback: Trying direct WSS connection using configured REACT_APP_MQTT_WSS_URL...');
 
       try {
-        this.connectDirectWebSocket('wss://89.24.76.191:9002', resolve, reject);
+        const wssUrl = process.env.REACT_APP_MQTT_WSS_URL;
+        if (!wssUrl) {
+          throw new Error('REACT_APP_MQTT_WSS_URL is not configured');
+        }
+        this.connectDirectWebSocket(wssUrl, resolve, reject);
       } catch (fallbackError) {
         console.error('❌ Direct WSS fallback also failed:', fallbackError);
         this.connectionState = 'disconnected';
@@ -599,8 +641,22 @@ export class MqttService {
     }
 
     try {
-      this.client = mqtt.connect(url, {
+      // Ensure URL contains /mqtt path (common for WS brokers)
+      let wsUrl = url;
+      try {
+        const u = new URL(url, typeof window !== 'undefined' ? window.location.href : undefined);
+        if (!u.pathname || u.pathname === '/') {
+          u.pathname = '/mqtt';
+        }
+        wsUrl = u.toString();
+      } catch {
+        // keep original if URL parsing fails
+      }
+
+      // Force protocolVersion 4 (MQTT 3.1.1) for broader broker compatibility
+      this.client = mqtt.connect(wsUrl, {
         ...this.options,
+        protocolVersion: 4,
         clientId: `gate-control-direct-${Math.random().toString(16).substring(2, 8)}`
       });
 

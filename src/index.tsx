@@ -29,14 +29,10 @@ root.render(
 // Přímá registrace Service Worker bez externího modulu
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    const swUrl = `${process.env.PUBLIC_URL}/service-worker.js`;
-    
-    navigator.serviceWorker
-      .register(swUrl)
-      .then((registration) => {
+    if (process.env.NODE_ENV == 'production') {
+      const swUrl = `${process.env.PUBLIC_URL}/service-worker.js`;
+      navigator.serviceWorker.register(swUrl).then((registration)=>{
         console.log('📱 Service Worker successfully registered');
-        // updateService callback dočasně vypnut
-        
         registration.onupdatefound = () => {
           const installingWorker = registration.installing;
           if (installingWorker) {
@@ -44,20 +40,23 @@ if ('serviceWorker' in navigator) {
               if (installingWorker.state === 'installed') {
                 if (navigator.serviceWorker.controller) {
                   console.log('🆕 New version detected by Service Worker');
-                  // Update detection bez updateService
                 }
               }
             };
           }
         };
-      })
-      .catch((error) => {
+      }).catch((error)=>{
         console.error('❌ Service Worker registration failed:', error);
       });
+    } else {
+      navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister())).catch(()=>{});
+    }
   });
 }
 
-updateService.init(); // Nyní bezpečně - jen log, žádné chunky
+if (process.env.NODE_ENV == 'production') {
+  updateService.init();
+}
 
 // If you want to start measuring performance in your app, pass a function
 // to log results (for example: reportWebVitals(console.log))
