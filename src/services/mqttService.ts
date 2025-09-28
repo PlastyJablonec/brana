@@ -123,15 +123,19 @@ export class MqttService {
       
       if (isHttps) {
         if (!wssUrl) {
-          console.error('❌ MQTT konfigurace chybí: REACT_APP_MQTT_WSS_URL musí být nastaveno pro HTTPS.');
-          throw new Error('MQTT WSS URL není nastaveno (REACT_APP_MQTT_WSS_URL)');
+          console.warn('⚠️ REACT_APP_MQTT_WSS_URL není nastaveno, používám výchozí WSS URL');
+          const fallbackWssUrl = 'wss://89.24.76.191:9002/mqtt';
+          console.log('🔧 MQTT CONFIG (HTTPS fallback):', fallbackWssUrl);
+          return fallbackWssUrl;
         }
         console.log('🔧 MQTT CONFIG (HTTPS): REACT_APP_MQTT_WSS_URL =', wssUrl);
         return wssUrl;
       } else {
         if (!wsUrl) {
-          console.error('❌ MQTT konfigurace chybí: REACT_APP_MQTT_URL musí být nastaveno.');
-          throw new Error('MQTT WS URL není nastaveno (REACT_APP_MQTT_URL)');
+          console.warn('⚠️ REACT_APP_MQTT_URL není nastaveno, používám výchozí WS URL');
+          const fallbackWsUrl = 'ws://89.24.76.191:9001/mqtt';
+          console.log('🔧 MQTT CONFIG (HTTP fallback):', fallbackWsUrl);
+          return fallbackWsUrl;
         }
         console.log('🔧 MQTT CONFIG (HTTP): REACT_APP_MQTT_URL =', wsUrl);
         return wsUrl;
