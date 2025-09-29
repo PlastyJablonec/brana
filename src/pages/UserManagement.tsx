@@ -77,6 +77,8 @@ const UserManagement: React.FC = () => {
       }
     } catch (error) {
       console.error('Error loading pending count:', error);
+      // Fallback - set 0 if error
+      setPendingCount(0);
     }
   }, [currentUser, getPendingUsers]);
 
@@ -100,8 +102,8 @@ const UserManagement: React.FC = () => {
   }, [loadPendingCount]);
 
   useEffect(() => {
+    // Volat jen loadUsers() - ta uz vola loadPendingCount() uvnitr
     loadUsers();
-    loadPendingCount();
 
     // Handle window resize for responsive design
     // const handleResize = () => {
@@ -110,7 +112,7 @@ const UserManagement: React.FC = () => {
 
     // window.addEventListener('resize', handleResize);
     // return () => window.removeEventListener('resize', handleResize);
-  }, []); // Empty dependency array - run only on mount
+  }, [loadUsers]); // Přidat loadUsers do dependencies
 
   const handleRefreshGPS = async (userId: string) => {
     try {

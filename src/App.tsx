@@ -1,13 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { QueryProvider } from './providers/QueryProvider';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
-import UserManagement from './pages/UserManagement';
-import ActivityLogs from './pages/ActivityLogs';
-import Settings from './pages/Settings';
 import LoadingSpinner from './components/LoadingSpinner';
 import ErrorBoundary from './components/ErrorBoundary';
 import MqttErrorBoundary from './components/MqttErrorBoundary';
@@ -19,6 +16,11 @@ import { db } from './firebase/config';
 import AppFooter from './components/AppFooter';
 import UpdateNotification from './components/UpdateNotification';
 import { IProtectedRouteProps } from './types';
+
+// Lazy load components pro lepsi performance
+const UserManagement = lazy(() => import('./pages/UserManagement'));
+const ActivityLogs = lazy(() => import('./pages/ActivityLogs'));
+const Settings = lazy(() => import('./pages/Settings'));
 
 const ProtectedRoute: React.FC<IProtectedRouteProps> = ({ children }) => {
   const { currentUser, loading } = useAuth();
@@ -177,7 +179,9 @@ const AppRoutes: React.FC = () => {
         path="/users"
         element={
           <ProtectedRoute>
-            <UserManagement />
+            <Suspense fallback={<LoadingSpinner message="Načítám správu uživatelů..." />}>
+              <UserManagement />
+            </Suspense>
           </ProtectedRoute>
         }
       />
@@ -185,7 +189,9 @@ const AppRoutes: React.FC = () => {
         path="/logs"
         element={
           <ProtectedRoute>
-            <ActivityLogs />
+            <Suspense fallback={<LoadingSpinner message="Načítám logy..." />}>
+              <ActivityLogs />
+            </Suspense>
           </ProtectedRoute>
         }
       />
@@ -193,7 +199,9 @@ const AppRoutes: React.FC = () => {
         path="/settings"
         element={
           <ProtectedRoute>
-            <Settings />
+            <Suspense fallback={<LoadingSpinner message="Načítám nastavení..." />}>
+              <Settings />
+            </Suspense>
           </ProtectedRoute>
         }
       />
