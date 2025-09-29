@@ -325,6 +325,7 @@ class LocationService {
 
   /**
    * Požádá o oprávnění k lokaci
+   * OPRAVA: Nepoužívá getCurrentLocation() aby se zabránilo nekonečné smyčce
    */
   async requestPermission(): Promise<boolean> {
     if (!this.isLocationSupported() || !this.isSecureContext()) {
@@ -332,15 +333,26 @@ class LocationService {
       return false;
     }
 
-    try {
+    return new Promise((resolve) => {
       console.log('📍 LocationService: Requesting GPS permission...');
-      await this.getCurrentLocation();
-      console.log('📍 LocationService: GPS permission granted');
-      return true;
-    } catch (error) {
-      console.error('📍 LocationService: GPS permission denied:', error);
-      return false;
-    }
+
+      // Jednoduchý test oprávnění bez fallback logiky
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          console.log('📍 LocationService: GPS permission granted');
+          resolve(true);
+        },
+        (error) => {
+          console.error('📍 LocationService: GPS permission denied:', error);
+          resolve(false);
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 5000,
+          maximumAge: 60000 // 1 minuta cache
+        }
+      );
+    });
   }
 
   /**
