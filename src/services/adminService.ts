@@ -5,6 +5,10 @@ import { User } from '../types';
  * Admin Service - řešení problémů s admin autentifikací a oprávněními
  */
 export class AdminService {
+  private tokenCache: { token: string; expiry: number } | null = null;
+  private lastVerifyCall: number = 0;
+  private readonly RATE_LIMIT_MS = 5000; // 5 sekund mezi voláními
+  private readonly TOKEN_CACHE_MS = 30000; // 30 sekund cache pro token
   
   /**
    * Ověří, že aktuální uživatel je skutečně admin s potřebnými oprávněními
@@ -22,11 +26,39 @@ export class AdminService {
       
       console.log('✅ AdminService: Firebase user found:', firebaseUser.email);
       
-      // 2. Zkontroluj auth token
-      const token = await firebaseUser.getIdToken(true); // Force refresh
-      console.log('✅ AdminService: Auth token refreshed:', token ? 'EXISTS' : 'MISSING');
+      // 2. Rate limiting check
+      const now = Date.now();
+      if (this.lastVerifyCall && (now - this.lastVerifyCall) < this.RATE_LIMIT_MS) {
+        console.log('⚠️ AdminService: Rate limited, using cached result');
+        return { isAdmin: false, user: null, error: 'rate-limited' };
+      }
+      this.lastVerifyCall = now;
+
+      // 3. Zkontroluj auth token s cachováním
+      let token: string;
+      if (this.tokenCache && now < this.tokenCache.expiry) {
+        token = this.tokenCache.token;
+        console.log('✅ AdminService: Using cached token');
+      } else {
+        try {
+          token = await firebaseUser.getIdToken(true); // Force refresh
+          this.tokenCache = {
+            token,
+            expiry: now + this.TOKEN_CACHE_MS
+          };
+          console.log('✅ AdminService: Auth token refreshed:', token ? 'EXISTS' : 'MISSING');
+        } catch (tokenError: any) {
+          if (tokenError.code === 'auth/quota-exceeded') {
+            console.error('🚨 AdminService: Firebase quota exceeded - používám fallback');
+            // Fallback: pokračuj bez token refresh
+            token = await firebaseUser.getIdToken(false); // Use cached token
+          } else {
+            throw tokenError;
+          }
+        }
+      }
       
-      // 3. Zkusí načíst user data z Firestore
+      // 4. Zkusí načíst user data z Firestore
       const userDoc = await db.collection('users').doc(firebaseUser.uid).get();
       
       if (!userDoc.exists) {
@@ -63,7 +95,7 @@ export class AdminService {
         manageUsers: user.permissions?.manageUsers
       });
       
-      // 4. Ověř admin oprávnění (včetně legacy uživatelů s undefined status)
+      // 5. Ověř admin oprávnění (včetně legacy uživatelů s undefined status)
       const isAdmin = user.role === 'admin' && 
                       (user.status === 'approved' || user.status === undefined) && 
                       user.permissions?.manageUsers === true;
@@ -82,10 +114,55 @@ export class AdminService {
       
     } catch (error: any) {
       console.error('❌ AdminService: Error verifying admin:', error);
-      return { 
-        isAdmin: false, 
-        user: null, 
-        error: `Firebase error: ${error.code || error.message}` 
+
+      // Speciální handling pro quota exceeded
+      if (error.code === 'auth/quota-exceeded') {
+        console.error('🚨 AdminService: Firebase quota exceeded - zkusím přímo Firestore');
+        try {
+          // Fallback: pokušíme se načíst user data přímo z Firestore bez auth check
+          const firebaseUser = auth.currentUser;
+          if (firebaseUser) {
+            const userDoc = await db.collection('users').doc(firebaseUser.uid).get();
+            if (userDoc.exists) {
+              const userData = userDoc.data()!;
+              const user: User = {
+                id: userDoc.id,
+                email: userData.email,
+                displayName: userData.displayName,
+                photoURL: userData.photoURL,
+                nick: userData.nick,
+                role: userData.role,
+                status: userData.status,
+                authProvider: userData.authProvider || 'email',
+                permissions: userData.permissions || {},
+                gpsEnabled: userData.gpsEnabled || false,
+                createdAt: userData.createdAt?.toDate() || new Date(),
+                lastLogin: userData.lastLogin?.toDate() || new Date(),
+                requestedAt: userData.requestedAt?.toDate(),
+                approvedAt: userData.approvedAt?.toDate(),
+                approvedBy: userData.approvedBy,
+                rejectedAt: userData.rejectedAt?.toDate(),
+                rejectedBy: userData.rejectedBy,
+                rejectedReason: userData.rejectedReason,
+              };
+
+              const isAdmin = user.role === 'admin' &&
+                              (user.status === 'approved' || user.status === undefined) &&
+                              user.permissions?.manageUsers === true;
+
+              console.log('✅ AdminService: Quota exceeded fallback successful');
+              return { isAdmin, user };
+            }
+          }
+        } catch (fallbackError) {
+          console.error('❌ AdminService: Fallback also failed:', fallbackError);
+        }
+      }
+
+      return {
+        isAdmin: false,
+        user: null,
+        error: `Firebase error: ${error.code || error.message}`
       };
     }
   }
@@ -172,6 +249,15 @@ export class AdminService {
     }
   }
   
+  /**
+   * Vynuluje rate limiting cache (pro manuální reset)
+   */
+  resetRateLimit(): void {
+    this.lastVerifyCall = 0;
+    this.tokenCache = null;
+    console.log('🗚️ AdminService: Rate limit reset');
+  }
+
   /**
    * Vytvoří emergency admin účet
    */

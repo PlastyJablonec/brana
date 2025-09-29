@@ -17,6 +17,7 @@ const UserApprovalPanel: React.FC<UserApprovalPanelProps> = ({ onUserActionCompl
   const [showRejectDialog, setShowRejectDialog] = useState<string | null>(null);
   const [loadMethod, setLoadMethod] = useState<string>('');
   const [adminVerified, setAdminVerified] = useState<boolean>(false);
+  const [adminCheckDone, setAdminCheckDone] = useState<boolean>(false);
   const [dialogState, setDialogState] = useState<{
     isOpen: boolean;
     type: 'success' | 'error';
@@ -29,39 +30,55 @@ const UserApprovalPanel: React.FC<UserApprovalPanelProps> = ({ onUserActionCompl
     message: ''
   });
 
-  const loadPendingUsers = async () => {
+  const loadPendingUsers = async (skipAdminCheck: boolean = false) => {
     try {
       setLoading(true);
       console.log('🔍 UserApprovalPanel: Loading pending users...');
-      
-      // Nejprve ověříme admin přístup
-      const adminCheck = await adminService.verifyAdminAccess();
-      console.log('🔍 UserApprovalPanel: Admin verification result:', adminCheck);
-      
-      if (!adminCheck.isAdmin) {
-        console.error('❌ UserApprovalPanel: Admin verification failed:', adminCheck.error);
-        setAdminVerified(false);
-        
-        if (adminCheck.error?.includes('permission-denied') || adminCheck.error?.includes('Firebase error')) {
-          console.log('🚨 UserApprovalPanel: Zkouším fallback metodu načítání...');
-          
-          // Fallback: použij adminService s vlastními metodami
-          const fallbackResult = await adminService.getPendingUsersWithFallback();
-          console.log('🔍 UserApprovalPanel: Fallback result:', fallbackResult.method, fallbackResult.users.length);
-          
-          setPendingUsers(fallbackResult.users);
-          setLoadMethod(`Fallback: ${fallbackResult.method}`);
-          setAdminVerified(true); // Můžeme pokračovat s fallback
+
+      // Admin check pouze pokud ještě nebyl proveden nebo je vynucen
+      if (!skipAdminCheck && !adminCheckDone) {
+        const adminCheck = await adminService.verifyAdminAccess();
+        console.log('🔍 UserApprovalPanel: Admin verification result:', adminCheck);
+
+        setAdminCheckDone(true); // Mark jako hotový
+
+        if (!adminCheck.isAdmin) {
+          console.error('❌ UserApprovalPanel: Admin verification failed:', adminCheck.error);
+          setAdminVerified(false);
+
+          // Pokud je quota exceeded, použij fallback bez admin check
+          if (adminCheck.error?.includes('quota-exceeded') || adminCheck.error?.includes('rate-limited')) {
+            console.log('🚨 UserApprovalPanel: Quota/rate issue - používám fallback...');
+
+            const fallbackResult = await adminService.getPendingUsersWithFallback();
+            console.log('🔍 UserApprovalPanel: Fallback result:', fallbackResult.method, fallbackResult.users.length);
+
+            setPendingUsers(fallbackResult.users);
+            setLoadMethod(`Quota Fallback: ${fallbackResult.method}`);
+            setAdminVerified(true); // Pročí povolujeme fallback
+            return;
+          }
+
+          if (adminCheck.error?.includes('permission-denied') || adminCheck.error?.includes('Firebase error')) {
+            console.log('🚨 UserApprovalPanel: Zkouším fallback metodu načítání...');
+
+            const fallbackResult = await adminService.getPendingUsersWithFallback();
+            console.log('🔍 UserApprovalPanel: Fallback result:', fallbackResult.method, fallbackResult.users.length);
+
+            setPendingUsers(fallbackResult.users);
+            setLoadMethod(`Fallback: ${fallbackResult.method}`);
+            setAdminVerified(true);
+            return;
+          }
+
+          // Jiná chyba - nelze pokračovat
+          setPendingUsers([]);
+          setLoadMethod('Failed: Admin verification failed');
           return;
         }
-        
-        // Jiná chyba - nelze pokračovat
-        setPendingUsers([]);
-        setLoadMethod('Failed: Admin verification failed');
-        return;
+
+        setAdminVerified(true);
       }
-      
-      setAdminVerified(true);
       
       // Admin ověřen, zkusíme standardní načítání
       try {
@@ -95,13 +112,13 @@ const UserApprovalPanel: React.FC<UserApprovalPanelProps> = ({ onUserActionCompl
     if (currentUser?.role === 'admin') {
       loadPendingUsers();
     }
-  }, [currentUser, loadPendingUsers]);
+  }, [currentUser]);
 
   const handleApprove = async (userId: string) => {
     try {
       setActionLoading(userId);
       await approveUser(userId);
-      await loadPendingUsers(); // Refresh list
+      await loadPendingUsers(true); // Refresh bez admin check
       
       // Obnovit parent komponentu
       if (onUserActionComplete) {
@@ -137,7 +154,7 @@ const UserApprovalPanel: React.FC<UserApprovalPanelProps> = ({ onUserActionCompl
       setActionLoading(userId);
       const reason = rejectReason[userId] || 'Nezadán důvod';
       await rejectUser(userId, reason);
-      await loadPendingUsers(); // Refresh list
+      await loadPendingUsers(true); // Refresh bez admin check
       setShowRejectDialog(null);
       setRejectReason(prev => ({ ...prev, [userId]: '' }));
       
