@@ -131,25 +131,16 @@ export class UserService {
   async getPendingUsers(): Promise<User[]> {
     try {
       console.log('🔍 UserService: Getting pending users...');
-      
-      let querySnapshot;
-      try {
-        // Try with orderBy first
-        querySnapshot = await db.collection(this.COLLECTION)
-          .where('status', '==', 'pending')
-          .orderBy('requestedAt', 'desc')
-          .get();
-      } catch (indexError) {
-        console.warn('⚠️ UserService: OrderBy failed (index missing?), trying without orderBy:', indexError);
-        // Fallback without orderBy
-        querySnapshot = await db.collection(this.COLLECTION)
-          .where('status', '==', 'pending')
-          .get();
-      }
+
+      // OPRAVA: Úplně odstranit orderBy aby nevyžadovalo kompozitní index
+      // Místo orderBy budeme řadit v paměti po načtení dat
+      const querySnapshot = await db.collection(this.COLLECTION)
+        .where('status', '==', 'pending')
+        .get();
 
       console.log('🔍 UserService: Found', querySnapshot.size, 'pending users');
 
-      return querySnapshot.docs.map((doc: any) => {
+      const pendingUsers = querySnapshot.docs.map((doc: any) => {
         const data = doc.data();
         console.log('👤 Pending user:', { id: doc.id, email: data.email, status: data.status, requestedAt: data.requestedAt });
         return {
@@ -173,15 +164,26 @@ export class UserService {
           rejectedReason: data.rejectedReason,
         };
       });
+
+      // Řazení v paměti podle requestedAt (nejnovější první)
+      pendingUsers.sort((a: User, b: User) => {
+        const timeA = a.requestedAt?.getTime() || 0;
+        const timeB = b.requestedAt?.getTime() || 0;
+        return timeB - timeA; // desc
+      });
+
+      return pendingUsers;
     } catch (error: any) {
       console.error('❌ Error getting pending users:', error);
       console.error('❌ Error code:', error.code);
       console.error('❌ Error message:', error.message);
-      
+
       if (error.code === 'permission-denied') {
         console.error('❌ Firebase Permission Denied - možná problém s auth nebo rules');
       }
-      
+
+      // DŮLEŽITÉ: Vrátit prázdné pole místo throwování chyby
+      // aby se zabránilo nekonečným reload smyčkám
       return [];
     }
   }
