@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useReducer } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import ThemeToggle from '../components/ThemeToggle';
 import ConnectionLoader from '../components/ConnectionLoader';
@@ -158,6 +158,7 @@ function dashboardReducer(state: DashboardState, action: DashboardAction): Dashb
 
 const Dashboard: React.FC = () => {
   const { currentUser, logout } = useAuth();
+  const navigate = useNavigate();
   const { timerState, startTravelTimer, startAutoCloseTimer, startOpenElapsedTimer, stopTimer } = useGateTimer();
   const {
     coordinationState,
@@ -2255,11 +2256,13 @@ const Dashboard: React.FC = () => {
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             {currentUser?.permissions.manageUsers && (
-              <Link 
-                to="/users" 
-                onClick={() => dispatch({ type: 'SET_SHOW_ADMIN_PANEL', payload: false })}
+              <button
+                onClick={() => {
+                  dispatch({ type: 'SET_SHOW_ADMIN_PANEL', payload: false });
+                  navigate('/users');
+                }}
                 className="md-ripple"
-                style={{ 
+                style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '12px',
@@ -2269,7 +2272,12 @@ const Dashboard: React.FC = () => {
                   borderRadius: '12px',
                   transition: 'background-color 0.2s ease',
                   fontSize: '0.875rem',
-                  fontWeight: 500
+                  fontWeight: 500,
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  width: '100%',
+                  textAlign: 'left'
                 }}
                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--md-surface-variant)'}
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -2278,7 +2286,7 @@ const Dashboard: React.FC = () => {
                   <path d="M16,4C18.21,4 20,5.79 20,8C20,10.21 18.21,12 16,12C13.79,12 12,10.21 12,8C12,5.79 13.79,4 16,4M16,14C20.42,14 24,15.79 24,18V20H8V18C8,15.79 11.58,14 16,14M6,6H2V4H6V6M6,10H2V8H6V10M6,14H2V12H6V14Z"/>
                 </svg>
                 Správa uživatelů
-              </Link>
+              </button>
             )}
             
             {currentUser?.permissions.viewLogs && (

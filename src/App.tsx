@@ -22,6 +22,18 @@ const UserManagement = lazy(() => import('./pages/UserManagement'));
 const ActivityLogs = lazy(() => import('./pages/ActivityLogs'));
 const Settings = lazy(() => import('./pages/Settings'));
 
+// Preload komponenty po načtení aplikace
+const preloadComponents = () => {
+  const preload = () => {
+    // Preload UserManagement při prvním načtení Dashboard
+    import('./pages/UserManagement');
+    import('./pages/ActivityLogs');
+    import('./pages/Settings');
+  };
+  // Preload po 2 sekundách od načtení
+  setTimeout(preload, 2000);
+};
+
 const ProtectedRoute: React.FC<IProtectedRouteProps> = ({ children }) => {
   const { currentUser, loading } = useAuth();
 
@@ -178,31 +190,61 @@ const AppRoutes: React.FC = () => {
       <Route
         path="/users"
         element={
-          <ProtectedRoute>
+          <ErrorBoundary
+            onError={(error, errorInfo) => {
+              console.error('🚨 Lazy UserManagement failed to load:', error, errorInfo);
+            }}
+            fallback={
+              <div style={{
+                minHeight: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '32px',
+                textAlign: 'center'
+              }}>
+                <div className="md-card" style={{ maxWidth: '400px', padding: '32px' }}>
+                  <h2 style={{ color: 'var(--md-error)', marginBottom: '16px' }}>Chyba načítání</h2>
+                  <p style={{ marginBottom: '24px', color: 'var(--md-on-surface-variant)' }}>
+                    Nepodařilo se načíst správu uživatelů.
+                  </p>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="md-button"
+                    style={{ background: 'var(--md-primary)', color: 'var(--md-on-primary)' }}
+                  >
+                    Obnovit stránku
+                  </button>
+                </div>
+              </div>
+            }
+          >
             <Suspense fallback={<LoadingSpinner message="Načítám správu uživatelů..." />}>
-              <UserManagement />
+              <ProtectedRoute>
+                <UserManagement />
+              </ProtectedRoute>
             </Suspense>
-          </ProtectedRoute>
+          </ErrorBoundary>
         }
       />
       <Route
         path="/logs"
         element={
-          <ProtectedRoute>
-            <Suspense fallback={<LoadingSpinner message="Načítám logy..." />}>
+          <Suspense fallback={<LoadingSpinner message="Načítám logy..." />}>
+            <ProtectedRoute>
               <ActivityLogs />
-            </Suspense>
-          </ProtectedRoute>
+            </ProtectedRoute>
+          </Suspense>
         }
       />
       <Route
         path="/settings"
         element={
-          <ProtectedRoute>
-            <Suspense fallback={<LoadingSpinner message="Načítám nastavení..." />}>
+          <Suspense fallback={<LoadingSpinner message="Načítám nastavení..." />}>
+            <ProtectedRoute>
               <Settings />
-            </Suspense>
-          </ProtectedRoute>
+            </ProtectedRoute>
+          </Suspense>
         }
       />
       {/* Fallback route: redirect unknown paths based on auth state */}
@@ -212,6 +254,11 @@ const AppRoutes: React.FC = () => {
 };
 
 function App(): React.ReactElement {
+  // Preload lazy komponenty po načtení aplikace
+  useEffect(() => {
+    preloadComponents();
+  }, []);
+
   return (
     <ErrorBoundary
       onError={(error, errorInfo) => {
