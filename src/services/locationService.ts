@@ -20,15 +20,46 @@ class LocationService {
   private isWatching: boolean = false;
   private watchId: number | null = null;
 
+  // Throttling pro GPS requests
+  private lastRequestTime: number = 0;
+  private readonly REQUEST_THROTTLE_MS = 10000; // 10 sekund mezi requesty
+  private isCurrentlyRequesting: boolean = false;
+  private lastErrorTime: number = 0;
+  private readonly ERROR_THROTTLE_MS = 30000; // 30 sekund mezi error logy
+
   /**
    * Získá aktuální polohu pomocí GPS s fallback strategií
    */
   async getCurrentLocation(): Promise<GeoLocation> {
     console.log('📍 LocationService: getCurrentLocation called');
-    
+
+    // Throttling: pokud je request příliš časný, vrať cached nebo chybu
+    const now = Date.now();
+    if (this.isCurrentlyRequesting) {
+      console.log('📍 LocationService: Request already in progress, using cache or rejecting');
+      const cached = this.getCachedLocation();
+      if (cached) {
+        return cached;
+      }
+      throw { code: 1, message: 'GPS request already in progress' };
+    }
+
+    if (now - this.lastRequestTime < this.REQUEST_THROTTLE_MS) {
+      console.log('📍 LocationService: Request throttled, using cache or rejecting');
+      const cached = this.getCachedLocation();
+      if (cached) {
+        return cached;
+      }
+      throw { code: 1, message: 'GPS requests throttled, try again later' };
+    }
+
+    this.lastRequestTime = now;
+    this.isCurrentlyRequesting = true;
+
     return new Promise((resolve, reject) => {
       // Kontrola, zda prohlížeč podporuje geolokaci
       if (!navigator.geolocation) {
+        this.isCurrentlyRequesting = false;
         const error: LocationError = {
           code: 0,
           message: 'Váš prohlížeč nepodporuje geolokaci'
@@ -48,7 +79,7 @@ class LocationService {
           (position) => {
             // Úspěšné získání pozice
             console.log('📍 LocationService: GPS SUCCESS - Got position:', position);
-            
+
             const location: GeoLocation = {
               latitude: position.coords.latitude,
               longitude: position.coords.longitude,
@@ -59,33 +90,40 @@ class LocationService {
               speed: position.coords.speed,
               timestamp: Date.now()
             };
-            
+
             this.currentLocation = location;
             this.lastUpdateTime = Date.now();
-            
+            this.isCurrentlyRequesting = false;
+
             console.log('📍 LocationService: Location stored:', this.formatLocationString(location));
             resolve(location);
           },
           (error) => {
-            console.error(`📍 LocationService: Pokus ${attemptCount} selhal:`, error);
-            
+            // Throttle error logging
+            const shouldLogError = (Date.now() - this.lastErrorTime) > this.ERROR_THROTTLE_MS;
+            if (shouldLogError) {
+              console.error(`📍 LocationService: Pokus ${attemptCount} selhal:`, error);
+              this.lastErrorTime = Date.now();
+            }
+
             // FALLBACK STRATEGIE:
             if (attemptCount === 1 && error.code === 3) {
               // 1. pokus: Vysoká přesnost selhala na timeout → zkus bez vysoké přesnosti
-              console.log('📍 LocationService: Fallback - zkouším bez vysoké přesnosti');
+              if (shouldLogError) console.log('📍 LocationService: Fallback - zkouším bez vysoké přesnosti');
               tryGetLocation(2, false, 15000);
             } else if (attemptCount === 2 && error.code === 3) {
               // 2. pokus: Nižší přesnost stále timeout → zkus s cache
-              console.log('📍 LocationService: Fallback - zkouším s cache');
+              if (shouldLogError) console.log('📍 LocationService: Fallback - zkouším s cache');
               tryGetLocation(3, false, 20000);
             } else {
               // Konečné selhání
-              console.error('📍 LocationService: Všechny pokusy selhaly');
+              this.isCurrentlyRequesting = false;
+              if (shouldLogError) console.error('📍 LocationService: Všechny pokusy selhaly');
               const locationError = this.handleLocationError(error);
-              
+
               // POSLEDNÍ FALLBACK: Vrať approximativní polohu pro testování
               if (window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1')) {
-                console.warn('📍 LocationService: Používám fallback lokaci pro localhost');
+                if (shouldLogError) console.warn('📍 LocationService: Používám fallback lokaci pro localhost');
                 const fallbackLocation: GeoLocation = {
                   latitude: 50.08804, // Praha centrum
                   longitude: 14.42076,

@@ -1124,3 +1124,191 @@ button:focus,
 a:focus {
   outline-offset: 2px;
 }
+
+/* Navbar Styles */
+.top-header {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  padding: 0.75rem 0;
+  box-shadow: var(--md-elevation-2-shadow);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.top-header .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+  color: inherit;
+  font-weight: 600;
+}
+
+.logo-icon {
+  width: 2rem;
+  height: 2rem;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.desktop-nav {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.desktop-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.8);
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.desktop-nav-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.desktop-nav-item.active {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+.nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.user-avatar {
+  width: 2rem;
+  height: 2rem;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logout-btn {
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 0.5rem;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logout-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+/* Bottom Navigation - Mobile */
+.bottom-nav {
+  display: none;
+  background: var(--md-surface);
+  border-top: 1px solid var(--md-outline);
+  padding: 0.5rem;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  text-decoration: none;
+  color: var(--md-on-surface-variant);
+  border-radius: 0.5rem;
+  transition: all 0.2s ease;
+  flex: 1;
+  min-width: 0;
+}
+
+.bottom-nav-item:hover {
+  background: var(--md-surface-variant);
+  color: var(--md-on-surface);
+}
+
+.bottom-nav-item.active {
+  color: var(--md-primary);
+  background: rgba(25, 118, 210, 0.08);
+}
+
+.bottom-nav-item .nav-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .desktop-nav {
+    display: none;
+  }
+
+  .bottom-nav {
+    display: flex;
+  }
+
+  /* Add bottom padding to main content on mobile */
+  body {
+    padding-bottom: 5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-content {
+    gap: 0.5rem;
+  }
+
+  .logo-text {
+    font-size: 0.875rem;
+  }
+
+  .user-info {
+    gap: 0.5rem;
+  }
+}

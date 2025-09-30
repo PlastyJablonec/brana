@@ -1,5 +1,5 @@
 import React, { useEffect, Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { QueryProvider } from './providers/QueryProvider';
@@ -13,8 +13,7 @@ import { mqttService } from './services/mqttService';
 import { locationService } from './services/locationService';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase/config';
-import AppFooter from './components/AppFooter';
-import UpdateNotification from './components/UpdateNotification';
+import AppLayout from './components/AppLayout';
 import { IProtectedRouteProps } from './types';
 
 // Lazy load components pro lepsi performance
@@ -106,6 +105,12 @@ const ProtectedRoute: React.FC<IProtectedRouteProps> = ({ children }) => {
 
 const AppRoutes: React.FC = () => {
   const { currentUser, loading } = useAuth();
+  const location = useLocation();
+
+  // Debug route changes
+  useEffect(() => {
+    console.log('🔄 AppRoutes: Route changed to:', location.pathname);
+  }, [location]);
 
   // Initialize MQTT and GPS globally when user is authenticated
   useEffect(() => {
@@ -173,80 +178,82 @@ const AppRoutes: React.FC = () => {
     return <LoadingSpinner />;
   }
 
+  console.log('🔄 AppRoutes rendering with location:', location.pathname, 'user:', currentUser?.email);
+
   return (
-    <Routes>
-      <Route 
-        path="/login" 
-        element={currentUser ? <Navigate to="/dashboard" replace /> : <LoginPage />} 
+    <Routes key={location.pathname}>
+      <Route
+        path="/login"
+        element={currentUser ? <Navigate to="/dashboard" replace /> : <LoginPage />}
       />
       <Route
-        path="/dashboard"
+        path="/"
         element={
           <ProtectedRoute>
-            <Dashboard />
+            <AppLayout />
           </ProtectedRoute>
         }
-      />
-      <Route
-        path="/users"
-        element={
-          <ErrorBoundary
-            onError={(error, errorInfo) => {
-              console.error('🚨 Lazy UserManagement failed to load:', error, errorInfo);
-            }}
-            fallback={
-              <div style={{
-                minHeight: '100vh',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '32px',
-                textAlign: 'center'
-              }}>
-                <div className="md-card" style={{ maxWidth: '400px', padding: '32px' }}>
-                  <h2 style={{ color: 'var(--md-error)', marginBottom: '16px' }}>Chyba načítání</h2>
-                  <p style={{ marginBottom: '24px', color: 'var(--md-on-surface-variant)' }}>
-                    Nepodařilo se načíst správu uživatelů.
-                  </p>
-                  <button
-                    onClick={() => window.location.reload()}
-                    className="md-button"
-                    style={{ background: 'var(--md-primary)', color: 'var(--md-on-primary)' }}
-                  >
-                    Obnovit stránku
-                  </button>
+      >
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route
+          path="dashboard"
+          element={<Dashboard key="dashboard" />}
+        />
+        <Route
+          path="users"
+          element={
+            <ErrorBoundary
+              onError={(error, errorInfo) => {
+                console.error('🚨 Lazy UserManagement failed to load:', error, errorInfo);
+              }}
+              fallback={
+                <div style={{
+                  minHeight: '100vh',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '32px',
+                  textAlign: 'center'
+                }}>
+                  <div className="md-card" style={{ maxWidth: '400px', padding: '32px' }}>
+                    <h2 style={{ color: 'var(--md-error)', marginBottom: '16px' }}>Chyba načítání</h2>
+                    <p style={{ marginBottom: '24px', color: 'var(--md-on-surface-variant)' }}>
+                      Nepodařilo se načíst správu uživatelů.
+                    </p>
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="md-button"
+                      style={{ background: 'var(--md-primary)', color: 'var(--md-on-primary)' }}
+                    >
+                      Obnovit stránku
+                    </button>
+                  </div>
                 </div>
-              </div>
-            }
-          >
-            <Suspense fallback={<LoadingSpinner message="Načítám správu uživatelů..." />}>
-              <ProtectedRoute>
-                <UserManagement />
-              </ProtectedRoute>
-            </Suspense>
-          </ErrorBoundary>
-        }
-      />
-      <Route
-        path="/logs"
-        element={
-          <Suspense fallback={<LoadingSpinner message="Načítám logy..." />}>
-            <ProtectedRoute>
+              }
+            >
+              <Suspense fallback={<LoadingSpinner message="Načítám správu uživatelů..." />}>
+                <UserManagement key="user-management" />
+              </Suspense>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="logs"
+          element={
+            <Suspense fallback={<LoadingSpinner message="Načítám logy..." />}>
               <ActivityLogs />
-            </ProtectedRoute>
-          </Suspense>
-        }
-      />
-      <Route
-        path="/settings"
-        element={
-          <Suspense fallback={<LoadingSpinner message="Načítám nastavení..." />}>
-            <ProtectedRoute>
+            </Suspense>
+          }
+        />
+        <Route
+          path="settings"
+          element={
+            <Suspense fallback={<LoadingSpinner message="Načítám nastavení..." />}>
               <Settings />
-            </ProtectedRoute>
-          </Suspense>
-        }
-      />
+            </Suspense>
+          }
+        />
+      </Route>
       {/* Fallback route: redirect unknown paths based on auth state */}
       <Route path="*" element={currentUser ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} />
     </Routes>
@@ -271,8 +278,6 @@ function App(): React.ReactElement {
           <ThemeProvider>
             <Router>
               <AppRoutes />
-              <AppFooter />
-              <UpdateNotification />
             </Router>
           </ThemeProvider>
         </AuthProvider>
