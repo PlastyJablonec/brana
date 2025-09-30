@@ -1,4 +1,7 @@
 {
+  "buildCommand": "npm run build",
+  "outputDirectory": "build",
+  "installCommand": "npm ci",
   "functions": {
     "api/mqtt-proxy.js": {
       "maxDuration": 30
@@ -9,11 +12,24 @@
   },
   "rewrites": [
     {
-      "source": "/((?!api|_next|static|favicon.ico).*)",
+      "source": "/static/(.*)",
+      "destination": "/static/$1"
+    },
+    {
+      "source": "/((?!api|static|favicon.ico|manifest.json|logo192.png).*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
+    {
+      "source": "/static/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
     {
       "source": "/api/(.*)",
       "headers": [
