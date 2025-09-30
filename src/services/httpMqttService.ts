@@ -15,10 +15,27 @@ export class HttpMqttService {
     isConnected: false
   };
   private statusPollingInterval: NodeJS.Timeout | null = null;
+  private isStatusPolling = false;
+  private shouldPoll = false;
+  private pendingImmediatePoll = false;
+  private visibilityListenerAttached = false;
+  private readonly basePollIntervalMs = Number(process.env.REACT_APP_MQTT_POLL_INTERVAL_MS || 7000);
+  private readonly hiddenPollIntervalMs = Number(process.env.REACT_APP_MQTT_POLL_HIDDEN_INTERVAL_MS || 20000);
   private lastGateLogMessage: string | null = null; // Pro detekci nových zpráv
   private readonly proxyUrl = process.env.NODE_ENV === 'development' 
     ? 'http://localhost:3003/api/mqtt-proxy'  // Dev server with MQTT proxy
     : '/api/mqtt-proxy';  // Production Vercel serverless function
+  private readonly visibilityChangeHandler = () => {
+    if (!this.shouldPoll || typeof document === 'undefined') {
+      return;
+    }
+    if (document.hidden) {
+      this.scheduleStatusPoll(this.hiddenPollIntervalMs);
+    } else {
+      // Trigger near-immediate refresh when returning to foreground
+      this.scheduleStatusPoll(0);
+    }
+  };
 
   public async connect(): Promise<void> {
     console.log('🌐 HTTP MQTT Service: Connecting via proxy...');
@@ -46,6 +63,7 @@ export class HttpMqttService {
       await this.fetchStatusOnce();
       
       // Start polling for status updates
+      this.stopStatusPolling();
       this.startStatusPolling();
 
       // CRITICAL FIX: Always notify on first connection even if status didn't "change"
@@ -72,100 +90,166 @@ export class HttpMqttService {
   }
 
   private startStatusPolling(): void {
-    console.log('🔄 HTTP MQTT Service: Starting status polling every 5s...');
-    
-    // Poll every 5 seconds for reasonable status updates (0.5s was too aggressive)
-    this.statusPollingInterval = setInterval(async () => {
-      try {
-        // Tichý polling - logovat jen při problémech
-        const response = await fetch(this.proxyUrl, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
+    console.log(`🔄 HTTP MQTT Service: Starting status polling (base ${this.basePollIntervalMs}ms, hidden ${this.hiddenPollIntervalMs}ms)...`);
+    this.shouldPoll = true;
+    this.attachVisibilityListener();
+    this.scheduleStatusPoll();
+  }
 
-        if (response.ok) {
-          const status = await response.json();
-          // Tichý režim - logovat jen změny stavu
-          const wasConnected = this.currentStatus.isConnected;
-          let statusChanged = false;
-          
-          // Update connection status
-          this.currentStatus.isConnected = status.connected || false;
-          if (wasConnected !== this.currentStatus.isConnected) {
-            console.log(`🔄 HTTP MQTT: Connection status changed: ${this.currentStatus.isConnected}`);
-            statusChanged = true;
-          }
-          
-          // Zpracovat MQTT zprávy
-          
-          // Update gate and garage status from messages
-          if (status.messages) {
-            const oldGateStatus = this.currentStatus.gateStatus;
-            const oldGarageStatus = this.currentStatus.garageStatus;
-            
-            if (status.messages['IoT/Brana/Status']) {
-              const parsedStatus = this.parseGateStatus(status.messages['IoT/Brana/Status']);
-              console.log(`🚪 HTTP MQTT DEBUG: Raw: "${status.messages['IoT/Brana/Status']}" → Parsed: "${parsedStatus}"`);
-              this.currentStatus.gateStatus = parsedStatus;
-              if (oldGateStatus !== this.currentStatus.gateStatus) {
-                console.log(`🚪 HTTP MQTT: Gate status CHANGED: ${oldGateStatus} → ${this.currentStatus.gateStatus}`);
-                statusChanged = true;
-              } else {
-                console.log(`🚪 HTTP MQTT: Gate status SAME: ${oldGateStatus} (no change)`);
-              }
-            }
-            
-            if (status.messages['IoT/Brana/Status2']) {
-              this.currentStatus.garageStatus = this.parseGarageStatus(status.messages['IoT/Brana/Status2']);
-              if (oldGarageStatus !== this.currentStatus.garageStatus) {
-                console.log(`🏠 HTTP MQTT: Garage status: ${oldGarageStatus} → ${this.currentStatus.garageStatus}`);
-                statusChanged = true;
-              }
-            }
-            
-            // Handle Log/Brana/ID messages (gate activity log)
-            if (status.messages['Log/Brana/ID']) {
-              const newLogMessage = status.messages['Log/Brana/ID'];
-              if (this.lastGateLogMessage !== newLogMessage) {
-                console.log(`🎯 HTTP MQTT: New Log/Brana/ID message: "${this.lastGateLogMessage}" → "${newLogMessage}"`);
-                this.lastGateLogMessage = newLogMessage;
-                this.handleGateLogMessage(newLogMessage);
-              }
-            }
-          } else {
-            // PROBLEM: Proxy říká, že je connected, ale nevrací žádné messages
-            if (this.currentStatus.isConnected) {
-              console.warn('🚨 HTTP MQTT: Proxy connected but NO MESSAGES! This explains why gate status is stuck!');
-              console.warn('🚨 HTTP MQTT: status.connected =', status.connected);
-              console.warn('🚨 HTTP MQTT: status.messages =', status.messages);
-            }
-          }
-          
-          if (statusChanged) {
-            console.log('🔔 HTTP MQTT: Status changed, notifying callbacks...');
-            this.notifyStatusChange();
-          } else {
-            console.log('🔕 HTTP MQTT: No status change, skipping notification');
-          }
-        } else {
-          console.error('❌ HTTP MQTT Service: Proxy polling failed - status:', response.status);
-          if (this.currentStatus.isConnected) {
-            console.warn('⚠️ HTTP MQTT: Proxy polling failed, marking as disconnected');
-            this.currentStatus.isConnected = false;
-            this.notifyStatusChange();
-          }
-        }
-      } catch (error) {
+  private stopStatusPolling(): void {
+    this.shouldPoll = false;
+    if (this.statusPollingInterval) {
+      clearTimeout(this.statusPollingInterval);
+      this.statusPollingInterval = null;
+    }
+    this.isStatusPolling = false;
+    this.pendingImmediatePoll = false;
+    this.detachVisibilityListener();
+  }
+
+  private getCurrentPollInterval(): number {
+    if (typeof document === 'undefined') {
+      return this.basePollIntervalMs;
+    }
+    return document.hidden ? this.hiddenPollIntervalMs : this.basePollIntervalMs;
+  }
+
+  private scheduleStatusPoll(customDelay?: number): void {
+    if (!this.shouldPoll) {
+      return;
+    }
+
+    if (this.statusPollingInterval) {
+      clearTimeout(this.statusPollingInterval);
+      this.statusPollingInterval = null;
+    }
+
+    const delay = typeof customDelay === 'number' ? customDelay : this.getCurrentPollInterval();
+    this.statusPollingInterval = setTimeout(() => {
+      this.pollStatus().catch((error) => {
         console.error('❌ HTTP MQTT Service: Polling error:', error);
         if (this.currentStatus.isConnected) {
           console.warn('⚠️ HTTP MQTT: Polling error, marking as disconnected:', error);
           this.currentStatus.isConnected = false;
           this.notifyStatusChange();
         }
+        if (this.shouldPoll) {
+          this.scheduleStatusPoll();
+        }
+      });
+    }, Math.max(0, delay));
+  }
+
+  private async pollStatus(): Promise<void> {
+    if (!this.shouldPoll) {
+      return;
+    }
+
+    if (this.isStatusPolling) {
+      // Ensure another poll is queued once the current one finishes
+      this.pendingImmediatePoll = true;
+      return;
+    }
+
+    this.isStatusPolling = true;
+    this.pendingImmediatePoll = false;
+
+    try {
+      const response = await fetch(this.proxyUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const status = await response.json();
+        const wasConnected = this.currentStatus.isConnected;
+        let statusChanged = false;
+
+        this.currentStatus.isConnected = status.connected || false;
+        if (wasConnected !== this.currentStatus.isConnected) {
+          console.log(`🔄 HTTP MQTT: Connection status changed: ${this.currentStatus.isConnected}`);
+          statusChanged = true;
+        }
+
+        if (status.messages) {
+          const oldGateStatus = this.currentStatus.gateStatus;
+          const oldGarageStatus = this.currentStatus.garageStatus;
+
+          if (status.messages['IoT/Brana/Status']) {
+            const parsedStatus = this.parseGateStatus(status.messages['IoT/Brana/Status']);
+            console.log(`🚪 HTTP MQTT DEBUG: Raw: "${status.messages['IoT/Brana/Status']}" → Parsed: "${parsedStatus}"`);
+            this.currentStatus.gateStatus = parsedStatus;
+            if (oldGateStatus !== this.currentStatus.gateStatus) {
+              console.log(`🚪 HTTP MQTT: Gate status CHANGED: ${oldGateStatus} → ${this.currentStatus.gateStatus}`);
+              statusChanged = true;
+            }
+          }
+
+          if (status.messages['IoT/Brana/Status2']) {
+            this.currentStatus.garageStatus = this.parseGarageStatus(status.messages['IoT/Brana/Status2']);
+            if (oldGarageStatus !== this.currentStatus.garageStatus) {
+              console.log(`🏠 HTTP MQTT: Garage status: ${oldGarageStatus} → ${this.currentStatus.garageStatus}`);
+              statusChanged = true;
+            }
+          }
+
+          if (status.messages['Log/Brana/ID']) {
+            const newLogMessage = status.messages['Log/Brana/ID'];
+            if (this.lastGateLogMessage !== newLogMessage) {
+              console.log(`🎯 HTTP MQTT: New Log/Brana/ID message: "${this.lastGateLogMessage}" → "${newLogMessage}"`);
+              this.lastGateLogMessage = newLogMessage;
+              this.handleGateLogMessage(newLogMessage);
+            }
+          }
+        } else if (this.currentStatus.isConnected) {
+          console.warn('🚨 HTTP MQTT: Proxy connected but NO MESSAGES!');
+        }
+
+        if (statusChanged) {
+          console.log('🔔 HTTP MQTT: Status changed, notifying callbacks...');
+          this.notifyStatusChange();
+        }
+      } else if (this.currentStatus.isConnected) {
+        console.error('❌ HTTP MQTT Service: Proxy polling failed - status:', response.status);
+        this.currentStatus.isConnected = false;
+        this.notifyStatusChange();
       }
-    }, 5000); // 5s polling - rozumný kompromis mezi rychlostí a výkonem
+    } catch (error) {
+      console.error('❌ HTTP MQTT Service: Polling error:', error);
+      if (this.currentStatus.isConnected) {
+        console.warn('⚠️ HTTP MQTT: Polling error, marking as disconnected:', error);
+        this.currentStatus.isConnected = false;
+        this.notifyStatusChange();
+      }
+    } finally {
+      this.isStatusPolling = false;
+      if (this.shouldPoll) {
+        if (this.pendingImmediatePoll) {
+          this.pendingImmediatePoll = false;
+          this.scheduleStatusPoll(0);
+        } else {
+          this.scheduleStatusPoll();
+        }
+      }
+    }
+  }
+
+  private attachVisibilityListener(): void {
+    if (typeof document === 'undefined' || this.visibilityListenerAttached) {
+      return;
+    }
+    document.addEventListener('visibilitychange', this.visibilityChangeHandler);
+    this.visibilityListenerAttached = true;
+  }
+
+  private detachVisibilityListener(): void {
+    if (typeof document === 'undefined' || !this.visibilityListenerAttached) {
+      return;
+    }
+    document.removeEventListener('visibilitychange', this.visibilityChangeHandler);
+    this.visibilityListenerAttached = false;
   }
 
   // Force check gate log messages on initial connection
@@ -362,11 +446,8 @@ export class HttpMqttService {
 
   public disconnect(): void {
     console.log('🔌 HTTP MQTT Service: Disconnecting...');
-    
-    if (this.statusPollingInterval) {
-      clearInterval(this.statusPollingInterval);
-      this.statusPollingInterval = null;
-    }
+
+    this.stopStatusPolling();
 
     this.currentStatus.isConnected = false;
     this.notifyStatusChange();

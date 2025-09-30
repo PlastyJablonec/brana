@@ -76,7 +76,34 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event handler
 self.addEventListener('fetch', (event) => {
-  
+  // Síť → cache strategie pro navigace (HTML) kvůli čerstvému indexu
+  if (event.request.mode === 'navigate') {
+    event.respondWith((async () => {
+      try {
+        const networkResponse = await fetch(event.request, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-store'
+          }
+        });
+
+        // Aktualizuj cache pro offline fallback, ale ignoruj chyby
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, networkResponse.clone()).catch(() => {});
+        }).catch(() => {});
+
+        return networkResponse;
+      } catch (error) {
+        const cachedResponse = await caches.match(event.request);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        return caches.match('/');
+      }
+    })());
+    return;
+  }
+
   // Speciální handling pro build-info.json - vždy fresh
   if (event.request.url.includes('build-info.json')) {
     event.respondWith(

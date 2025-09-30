@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 interface CameraWidgetProps {
   refreshInterval?: number;
@@ -7,8 +7,11 @@ interface CameraWidgetProps {
   className?: string;
 }
 
+const DEFAULT_REFRESH_MS = Number(process.env.REACT_APP_CAMERA_REFRESH_MS || 5000);
+const HIDDEN_REFRESH_MS = Number(process.env.REACT_APP_CAMERA_REFRESH_HIDDEN_MS || 20000);
+
 export const CameraWidget: React.FC<CameraWidgetProps> = ({
-  refreshInterval = 1000,
+  refreshInterval = DEFAULT_REFRESH_MS,
   showTimestamp = true,
   showSettings = true,
   className = ''
@@ -20,39 +23,46 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
   const [cameraUrl, setCameraUrl] = useState<string>('');
   
   const imgRef = useRef<HTMLImageElement>(null);
-  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const timestampIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const inFlightRef = useRef<boolean>(false);
   // Optional direct camera URL (prefer HTTPS)
   const directCameraUrl = (process.env.REACT_APP_CAMERA_URL || '').trim();
 
+  const baseRefreshMs = Math.max(500, refreshInterval);
+  const hiddenRefreshMs = Math.max(baseRefreshMs, HIDDEN_REFRESH_MS);
+
   // Resolve base URL for camera image (STRICT: no runtime overrides)
-  const getBaseUrl = (): string => {
+  const getBaseUrl = useCallback((): string => {
     const isHTTPS = window.location.protocol === 'https:';
     const isVercel = window.location.hostname.includes('vercel.app');
 
     // Force proxy for HTTPS (especially Vercel) - ignore direct camera URL env
     if (isHTTPS || isVercel) {
-      console.log('🔒 Camera: Using HTTPS API proxy for security (base=/api/camera-proxy)');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('🔒 Camera: Using HTTPS API proxy for security (base=/api/camera-proxy)');
+      }
       return '/api/camera-proxy';
     }
 
     // HTTP localhost: prefer env, fallback to direct
     if (directCameraUrl) {
-      console.log('📹 Camera: Using REACT_APP_CAMERA_URL =', directCameraUrl);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('📹 Camera: Using REACT_APP_CAMERA_URL =', directCameraUrl);
+      }
       return directCameraUrl;
     }
 
     console.warn('❌ Camera: Není nastavena REACT_APP_CAMERA_URL pro HTTP prostředí, použiji fallback');
     return 'http://89.24.76.191:10180/photo.jpg';
-  };
+  }, [directCameraUrl]);
 
-  const getFreshCameraUrl = (): string => {
+  const getFreshCameraUrl = useCallback((): string => {
     const baseUrl = getBaseUrl();
     return `${baseUrl}?t=${Date.now()}&cache=${Math.random()}`;
-  };
+  }, [getBaseUrl]);
 
-  const updateTimestampDisplay = () => {
+  const updateTimestampDisplay = useCallback(() => {
     if (lastSuccessfulLoad === 0) {
       setTimestampText('--');
       return;
@@ -67,10 +77,10 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
       const minutesAgo = Math.floor(secondsAgo / 60);
       setTimestampText(`Před ${minutesAgo}m`);
     }
-  };
+  }, [lastSuccessfulLoad]);
 
   // Simple camera refresh with proper error handling
-  const refreshCamera = () => {
+  const refreshCamera = useCallback(() => {
     if (inFlightRef.current) {
       // Prevent overlapping fetches (slow camera/network)
       return;
@@ -87,7 +97,9 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
       setIsLoading(false);
       setError('Kamera nedostupná (timeout)');
       setTimestampText('Offline');
-      console.log('⚠️ Camera: Load timeout after 10s');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('⚠️ Camera: Load timeout after 10s');
+      }
       inFlightRef.current = false;
     }, 10000); // 10s timeout for image load
     
@@ -97,7 +109,9 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
       setError(null);
       setLastSuccessfulLoad(Date.now());
       updateTimestampDisplay();
-      console.log('✅ Camera: Image loaded successfully');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('✅ Camera: Image loaded successfully');
+      }
       inFlightRef.current = false;
     };
     
@@ -106,12 +120,25 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
       setIsLoading(false);
       setError('Kamera nedostupná');
       setTimestampText('Offline');
-      console.log('❌ Camera: Image load failed');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('❌ Camera: Image load failed');
+      }
       inFlightRef.current = false;
     };
     
     newImg.src = newUrl;
-  };
+  }, [getFreshCameraUrl, updateTimestampDisplay]);
+
+  const scheduleNextRefresh = useCallback((delay: number) => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+    refreshTimeoutRef.current = setTimeout(() => {
+      refreshCamera();
+      const nextDelay = document.hidden ? hiddenRefreshMs : baseRefreshMs;
+      scheduleNextRefresh(nextDelay);
+    }, delay);
+  }, [baseRefreshMs, hiddenRefreshMs, refreshCamera]);
 
   const openCameraControl = () => {
     window.open('http://89.24.76.191:10180', '_blank');
@@ -120,26 +147,44 @@ export const CameraWidget: React.FC<CameraWidgetProps> = ({
   useEffect(() => {
     // Initialize with first camera URL
     const initial = getFreshCameraUrl();
-    console.log('📹 Camera: Initial resolved URL =', initial);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('📹 Camera: Initial resolved URL =', initial);
+    }
     setCameraUrl(initial);
     
     // Initial load
     refreshCamera();
-    
-    // Set up intervals for refreshing camera and timestamp
-    refreshIntervalRef.current = setInterval(refreshCamera, refreshInterval);
+    scheduleNextRefresh(baseRefreshMs);
+
+    // Set up interval for timestamp updates (cheap operation)
     timestampIntervalRef.current = setInterval(updateTimestampDisplay, 1000);
     
     // Cleanup function to prevent memory leaks
     return () => {
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
       }
       if (timestampIntervalRef.current) {
         clearInterval(timestampIntervalRef.current);
       }
     };
-  }, [refreshInterval]);
+  }, [baseRefreshMs, getFreshCameraUrl, refreshCamera, scheduleNextRefresh, updateTimestampDisplay]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        scheduleNextRefresh(hiddenRefreshMs);
+      } else {
+        refreshCamera();
+        scheduleNextRefresh(baseRefreshMs);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [baseRefreshMs, hiddenRefreshMs, refreshCamera, scheduleNextRefresh]);
 
   return (
     <div className={`camera-widget ${className}`}>

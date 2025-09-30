@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useReducer } from 'react';
+import React, { useEffect, useCallback, useReducer, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import ThemeToggle from '../components/ThemeToggle';
@@ -176,6 +176,11 @@ const Dashboard: React.FC = () => {
 
   // 🔧 REFAKTOR: useReducer místo 18 useState hooks pro eliminaci re-rendering
   const [state, dispatch] = useReducer(dashboardReducer, initialDashboardState);
+
+  // Sledujeme, zda jsme již zkusili požádat o GPS oprávnění pro aktuálního uživatele
+  const hasRequestedLocationRef = useRef(false);
+  const locationPermissionUserRef = useRef<string | null>(null);
+  const lastRequireLocationRef = useRef<boolean | null>(null);
 
   // Destructure state pro snadnější přístup
   const {
@@ -384,7 +389,7 @@ const Dashboard: React.FC = () => {
   };
 
   // Helper function to continuously check and update user distance from gate
-  const updateDistanceFromGate = async () => {
+  const updateDistanceFromGate = useCallback(async () => {
     // If user doesn't have location proximity requirement, always allow
     if (!currentUser?.permissions?.requireLocationProximity) {
       dispatch({ type: 'SET_IS_LOCATION_PROXIMITY_ALLOWED', payload: true });
@@ -393,8 +398,9 @@ const Dashboard: React.FC = () => {
     }
 
     try {
-      // Get current user location
-      const userLocation = await locationService.getCurrentLocation();
+      // Prefer cached position to avoid zbytečné GPS požadavky
+      const cachedLocation = locationService.getCachedLocation();
+      const userLocation = cachedLocation ?? await locationService.getCurrentLocation();
       
       // Get gate settings
       const settings = await settingsService.getAppSettings();
@@ -422,7 +428,7 @@ const Dashboard: React.FC = () => {
       dispatch({ type: 'SET_DISTANCE_FROM_GATE', payload: null });
       dispatch({ type: 'SET_IS_LOCATION_PROXIMITY_ALLOWED', payload: false });
     }
-  };
+  }, [currentUser?.permissions?.requireLocationProximity, dispatch]);
 
   // Helper function to check if user is within allowed distance for gate operations
   const checkLocationProximity = async (): Promise<{ allowed: boolean; message?: string }> => {
@@ -632,83 +638,123 @@ const Dashboard: React.FC = () => {
 
   // GPS permission request - only if required by user permissions
   useEffect(() => {
+    if (!currentUser) {
+      locationService.stopWatching();
+      hasRequestedLocationRef.current = false;
+      locationPermissionUserRef.current = null;
+      lastRequireLocationRef.current = null;
+      dispatch({ type: 'SET_LOCATION_PERMISSION', payload: null });
+      dispatch({ type: 'SET_LOCATION_ERROR', payload: '' });
+      return;
+    }
+
+    const requireLocation = Boolean(currentUser.permissions?.requireLocation);
+    const userKey = currentUser.id ?? currentUser.email ?? null;
+
+    if (locationPermissionUserRef.current !== userKey) {
+      locationPermissionUserRef.current = userKey;
+      hasRequestedLocationRef.current = false;
+      lastRequireLocationRef.current = requireLocation;
+    }
+
+    if (lastRequireLocationRef.current !== requireLocation) {
+      lastRequireLocationRef.current = requireLocation;
+      hasRequestedLocationRef.current = false;
+    }
+
+    if (hasRequestedLocationRef.current) {
+      return;
+    }
+
+    hasRequestedLocationRef.current = true;
+    let cancelled = false;
+
+    const safeDispatch = (action: DashboardAction) => {
+      if (!cancelled) {
+        dispatch(action);
+      }
+    };
+
     const requestLocation = async () => {
-      // Skip GPS if not required for this user
-      if (!currentUser?.permissions?.requireLocation) {
+      if (!requireLocation) {
         console.log('📍 Dashboard: GPS not required for this user, skipping');
-        dispatch({ type: 'SET_LOCATION_PERMISSION', payload: true }); // Set as "allowed" so UI doesn't show error
-        dispatch({ type: 'SET_LOCATION_ERROR', payload: '' });
-        // GPS na pozadí - nesleduje se v connection loaderu
+        locationService.stopWatching();
+        safeDispatch({ type: 'SET_LOCATION_PERMISSION', payload: true });
+        safeDispatch({ type: 'SET_LOCATION_ERROR', payload: '' });
+        safeDispatch({ type: 'SET_DISTANCE_FROM_GATE', payload: null });
+        safeDispatch({ type: 'SET_IS_LOCATION_PROXIMITY_ALLOWED', payload: true });
         return;
       }
 
-      // GPS na pozadí - nesleduje se v connection loaderu
-
       if (!locationService.isLocationSupported() || !locationService.isSecureContext()) {
         const reason = locationService.getLocationUnavailableReason();
-        dispatch({ type: 'SET_LOCATION_ERROR', payload: reason });
-        dispatch({ type: 'SET_LOCATION_PERMISSION', payload: false });
-        // GPS error - na pozadí
         console.log('📍 Dashboard: GPS unavailable:', reason);
+        safeDispatch({ type: 'SET_LOCATION_ERROR', payload: reason });
+        safeDispatch({ type: 'SET_LOCATION_PERMISSION', payload: false });
         return;
       }
 
       try {
         const hasPermission = await locationService.requestPermission();
-        dispatch({ type: 'SET_LOCATION_PERMISSION', payload: hasPermission });
-        
-        if (hasPermission) {
-          console.log('📍 Dashboard: GPS permission granted, starting location tracking');
-          // GPS loading - na pozadí
-          await locationService.startWatching();
-          
-          // Získáme aktuální lokaci hned
-          try {
-            const currentLoc = await locationService.getCurrentLocation();
-            dispatch({ type: 'SET_CURRENT_LOCATION', payload: currentLoc });
-            
-            if (currentLoc.accuracy > 50000) {
-              dispatch({ type: 'SET_LOCATION_ERROR', payload: 'Fallback lokace (Praha centrum)' });
-              // GPS fallback - na pozadí
-            } else {
-              dispatch({ type: 'SET_LOCATION_ERROR', payload: '' });
-              // GPS success - na pozadí
-            }
-            
-            // Update distance from gate for the first time
-            await updateDistanceFromGate();
-          } catch (error: any) {
-            console.warn('📍 Dashboard: Could not get initial location:', error);
-            dispatch({ type: 'SET_LOCATION_ERROR', payload: 'GPS nedostupné' });
-            // GPS error - na pozadí
-          }
-        } else {
+        if (cancelled) return;
+
+        safeDispatch({ type: 'SET_LOCATION_PERMISSION', payload: hasPermission });
+
+        if (!hasPermission) {
           console.log('📍 Dashboard: GPS permission denied');
-          dispatch({ type: 'SET_LOCATION_ERROR', payload: 'Oprávnění k lokaci bylo odepřeno' });
-          // GPS permission denied - na pozadí
+          safeDispatch({ type: 'SET_LOCATION_ERROR', payload: 'Oprávnění k lokaci bylo odepřeno' });
+          return;
+        }
+
+        console.log('📍 Dashboard: GPS permission granted, starting location tracking');
+        await locationService.startWatching();
+        if (cancelled) {
+          locationService.stopWatching();
+          return;
+        }
+
+        try {
+          const currentLoc = await locationService.getCurrentLocation();
+          if (cancelled) return;
+
+          safeDispatch({ type: 'SET_CURRENT_LOCATION', payload: currentLoc });
+
+          if (currentLoc.accuracy > 50000) {
+            safeDispatch({ type: 'SET_LOCATION_ERROR', payload: 'Fallback lokace (Praha centrum)' });
+          } else {
+            safeDispatch({ type: 'SET_LOCATION_ERROR', payload: '' });
+          }
+
+          await updateDistanceFromGate();
+        } catch (error: any) {
+          if (cancelled) return;
+          console.warn('📍 Dashboard: Could not get initial location:', error);
+          safeDispatch({ type: 'SET_LOCATION_ERROR', payload: 'GPS nedostupné' });
         }
       } catch (error: any) {
+        if (cancelled) return;
         console.warn('📍 Dashboard: GPS permission error:', error);
-        dispatch({ type: 'SET_LOCATION_PERMISSION', payload: false });
-        
+        safeDispatch({ type: 'SET_LOCATION_PERMISSION', payload: false });
+
         let errorMsg = 'Chyba při získávání GPS';
-        if (error.message && error.message.includes('429')) {
+        if (error?.message && error.message.includes('429')) {
           errorMsg = 'Google API limit překročen (desktop bez GPS)';
-        } else if (error.code === 2) {
+        } else if (error?.code === 2) {
           errorMsg = 'GPS nedostupné (možná desktop bez GPS čipu)';
         } else {
-          errorMsg = errorMsg + ': ' + (error.message || 'Neznámá chyba');
+          errorMsg = `${errorMsg}: ${error?.message || 'Neznámá chyba'}`;
         }
-        
-        dispatch({ type: 'SET_LOCATION_ERROR', payload: errorMsg });
-        // GPS general error - na pozadí
+
+        safeDispatch({ type: 'SET_LOCATION_ERROR', payload: errorMsg });
       }
     };
 
     requestLocation();
 
     return () => {
+      cancelled = true;
       locationService.stopWatching();
+      hasRequestedLocationRef.current = false;
     };
   }, [currentUser, updateDistanceFromGate]);
 
@@ -739,7 +785,7 @@ const Dashboard: React.FC = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [currentUser?.permissions?.requireLocationProximity, currentLocation]); // Remove function from dependencies
+  }, [currentUser?.permissions?.requireLocationProximity, updateDistanceFromGate]);
 
   // Backup check for MQTT status every 5 seconds
   useEffect(() => {

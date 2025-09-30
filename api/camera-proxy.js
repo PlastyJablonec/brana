@@ -1,6 +1,13 @@
 // Vercel Serverless Function - API proxy pro HTTP kameru
 // Řeší Mixed Content problém - HTTPS stránka přistupuje k HTTP kameře
 
+const enableVerboseLogging = process.env.NODE_ENV !== 'production';
+const log = (...args) => {
+  if (enableVerboseLogging) {
+    console.log(...args);
+  }
+};
+
 export default async function handler(req, res) {
   // CORS headers pro cross-origin requests
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -29,7 +36,7 @@ export default async function handler(req, res) {
   const CAMERA_URL = url.toString();
   
   try {
-    console.log('📹 Camera Proxy: Fetching image from', CAMERA_URL);
+    log('📹 Camera Proxy: Fetching image from', CAMERA_URL);
     
     // Fetch image from HTTP camera. Increase timeout to tolerate slow camera/network
     const controller = new AbortController();
@@ -59,7 +66,7 @@ export default async function handler(req, res) {
     const imageBuffer = await response.arrayBuffer();
     const imageBytes = Buffer.from(imageBuffer);
     
-    console.log('✅ Camera Proxy: Image fetched successfully,', imageBytes.length, 'bytes');
+    log('✅ Camera Proxy: Image fetched successfully,', imageBytes.length, 'bytes');
     
     // Set appropriate headers for fast response
     res.setHeader('Content-Type', 'image/jpeg');
