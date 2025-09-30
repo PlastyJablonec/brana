@@ -181,79 +181,91 @@ const AppRoutes: React.FC = () => {
   console.log('🔄 AppRoutes rendering with location:', location.pathname, 'user:', currentUser?.email);
 
   return (
-    <Routes key={location.pathname}>
+    <Routes>
       <Route
         path="/login"
         element={currentUser ? <Navigate to="/dashboard" replace /> : <LoginPage />}
       />
       <Route
-        path="/"
+        path="/dashboard"
         element={
           <ProtectedRoute>
-            <AppLayout />
+            <AppLayout>
+              <Dashboard />
+            </AppLayout>
           </ProtectedRoute>
         }
-      >
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route
-          path="dashboard"
-          element={<Dashboard key="dashboard" />}
-        />
-        <Route
-          path="users"
-          element={
-            <ErrorBoundary
-              onError={(error, errorInfo) => {
-                console.error('🚨 Lazy UserManagement failed to load:', error, errorInfo);
-              }}
-              fallback={
-                <div style={{
-                  minHeight: '100vh',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '32px',
-                  textAlign: 'center'
-                }}>
-                  <div className="md-card" style={{ maxWidth: '400px', padding: '32px' }}>
-                    <h2 style={{ color: 'var(--md-error)', marginBottom: '16px' }}>Chyba načítání</h2>
-                    <p style={{ marginBottom: '24px', color: 'var(--md-on-surface-variant)' }}>
-                      Nepodařilo se načíst správu uživatelů.
-                    </p>
-                    <button
-                      onClick={() => window.location.reload()}
-                      className="md-button"
-                      style={{ background: 'var(--md-primary)', color: 'var(--md-on-primary)' }}
-                    >
-                      Obnovit stránku
-                    </button>
+      />
+      <Route
+        path="/users"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <ErrorBoundary
+                onError={(error, errorInfo) => {
+                  console.error('🚨 Lazy UserManagement failed to load:', error, errorInfo);
+                }}
+                fallback={
+                  <div style={{
+                    minHeight: '100vh',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '32px',
+                    textAlign: 'center'
+                  }}>
+                    <div className="md-card" style={{ maxWidth: '400px', padding: '32px' }}>
+                      <h2 style={{ color: 'var(--md-error)', marginBottom: '16px' }}>Chyba načítání</h2>
+                      <p style={{ marginBottom: '24px', color: 'var(--md-on-surface-variant)' }}>
+                        Nepodařilo se načíst správu uživatelů.
+                      </p>
+                      <button
+                        onClick={() => window.location.reload()}
+                        className="md-button"
+                        style={{ background: 'var(--md-primary)', color: 'var(--md-on-primary)' }}
+                      >
+                        Obnovit stránku
+                      </button>
+                    </div>
                   </div>
-                </div>
-              }
-            >
-              <Suspense fallback={<LoadingSpinner message="Načítám správu uživatelů..." />}>
-                <UserManagement key="user-management" />
+                }
+              >
+                <Suspense fallback={<LoadingSpinner message="Načítám správu uživatelů..." />}>
+                  <UserManagement />
+                </Suspense>
+              </ErrorBoundary>
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/logs"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <Suspense fallback={<LoadingSpinner message="Načítám logy..." />}>
+                <ActivityLogs />
               </Suspense>
-            </ErrorBoundary>
-          }
-        />
-        <Route
-          path="logs"
-          element={
-            <Suspense fallback={<LoadingSpinner message="Načítám logy..." />}>
-              <ActivityLogs />
-            </Suspense>
-          }
-        />
-        <Route
-          path="settings"
-          element={
-            <Suspense fallback={<LoadingSpinner message="Načítám nastavení..." />}>
-              <Settings />
-            </Suspense>
-          }
-        />
-      </Route>
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <Suspense fallback={<LoadingSpinner message="Načítám nastavení..." />}>
+                <Settings />
+              </Suspense>
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/"
+        element={currentUser ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />}
+      />
       {/* Fallback route: redirect unknown paths based on auth state */}
       <Route path="*" element={currentUser ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} />
     </Routes>

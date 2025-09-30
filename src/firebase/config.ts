@@ -16,6 +16,12 @@ let auth: any = null;
 let db: any = null;
 let googleProvider: any = null;
 
+console.log('🔍 VERCEL DEBUG: Checking Firebase config...');
+console.log('  hasValidConfig:', hasValidConfig);
+console.log('  NODE_ENV:', process.env.NODE_ENV);
+console.log('  REACT_APP_FIREBASE_API_KEY exists:', !!process.env.REACT_APP_FIREBASE_API_KEY);
+console.log('  REACT_APP_FIREBASE_PROJECT_ID:', process.env.REACT_APP_FIREBASE_PROJECT_ID);
+
 if (hasValidConfig || process.env.NODE_ENV === 'production') {
   console.log('🔥 Firebase: Platná konfigurace nalezena, inicializuji Firebase...');
   console.log('🔍 DEBUG: Environment variables:');
@@ -70,9 +76,37 @@ if (hasValidConfig || process.env.NODE_ENV === 'production') {
   console.error('❌ Firebase: Neplatná konfigurace!');
   console.error('💡 POVINNÉ: Zkopíruj .env.example do .env a nastav správné Firebase hodnoty');
   console.error('🔧 Kontroluj proměnné: REACT_APP_FIREBASE_API_KEY, REACT_APP_FIREBASE_PROJECT_ID');
-  
-  // Application will not work without proper Firebase config
-  throw new Error('Firebase konfigurace chybí nebo je neplatná! Nastav správné hodnoty v .env souboru.');
+  console.error('🚨 VERCEL DEBUG: Firebase config validation failed');
+
+  // In production (Vercel), try to use hardcoded config anyway
+  if ((process.env.NODE_ENV as string) === 'production') {
+    console.warn('⚠️ VERCEL: Používám hardcoded Firebase config pro production...');
+
+    firebaseConfig = {
+      apiKey: 'AIzaSyBaDmIBLtw4ck4eUJMmGScwPBPYuIv8QSU',
+      authDomain: 'brana-a71fe.firebaseapp.com',
+      projectId: 'brana-a71fe',
+      storageBucket: 'brana-a71fe.firebasestorage.app',
+      messagingSenderId: '1080619570120',
+      appId: '1:1080619570120:web:62c1ea8d1a78532672e6fd',
+      measurementId: 'G-K8FRR55FR5'
+    };
+
+    try {
+      app = firebase.initializeApp(firebaseConfig);
+      auth = firebase.auth();
+      db = firebase.firestore();
+      googleProvider = new firebase.auth.GoogleAuthProvider();
+      googleProvider.addScope('email');
+      googleProvider.addScope('profile');
+      console.log('✅ Firebase initialized with hardcoded config');
+    } catch (error) {
+      console.error('❌ Firebase hardcoded initialization failed:', error);
+    }
+  } else {
+    // Application will not work without proper Firebase config in development
+    throw new Error('Firebase konfigurace chybí nebo je neplatná! Nastav správné hodnoty v .env souboru.');
+  }
 }
 
 export { auth, db, googleProvider };

@@ -1,9 +1,13 @@
 import React from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import AppFooter from './AppFooter';
 import UpdateNotification from './UpdateNotification';
 
-const AppLayout: React.FC = () => {
+interface AppLayoutProps {
+  children: React.ReactNode;
+}
+
+const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const location = useLocation();
 
   console.log('🎯 AppLayout rendering with location:', location.pathname);
@@ -11,7 +15,7 @@ const AppLayout: React.FC = () => {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <main style={{ flex: 1 }}>
-        <Outlet />
+        {children}
       </main>
       <AppFooter />
       <UpdateNotification />
