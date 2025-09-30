@@ -47,6 +47,7 @@ interface DashboardState {
   currentLocation: any;
   distanceFromGate: number | null;
   isLocationProximityAllowed: boolean;
+  gateCommandMessage: string;
 
   // Close Confirmation Slider
   showCloseConfirmSlider: boolean;
@@ -70,6 +71,7 @@ type DashboardAction =
   | { type: 'SET_CURRENT_LOCATION'; payload: any }
   | { type: 'SET_DISTANCE_FROM_GATE'; payload: number | null }
   | { type: 'SET_IS_LOCATION_PROXIMITY_ALLOWED'; payload: boolean }
+  | { type: 'SET_GATE_COMMAND_MESSAGE'; payload: string }
   | { type: 'SET_SHOW_CLOSE_CONFIRM_SLIDER'; payload: boolean }
   | { type: 'SET_CLOSE_SLIDER_POSITION'; payload: number }
   | { type: 'SET_IS_SLIDER_DRAGGING'; payload: boolean };
@@ -99,6 +101,7 @@ const initialDashboardState: DashboardState = {
   currentLocation: null,
   distanceFromGate: null,
   isLocationProximityAllowed: true,
+  gateCommandMessage: '',
 
   // Close Confirmation Slider
   showCloseConfirmSlider: false,
@@ -145,6 +148,8 @@ function dashboardReducer(state: DashboardState, action: DashboardAction): Dashb
       return { ...state, distanceFromGate: action.payload };
     case 'SET_IS_LOCATION_PROXIMITY_ALLOWED':
       return { ...state, isLocationProximityAllowed: action.payload };
+    case 'SET_GATE_COMMAND_MESSAGE':
+      return { ...state, gateCommandMessage: action.payload };
     case 'SET_SHOW_CLOSE_CONFIRM_SLIDER':
       return { ...state, showCloseConfirmSlider: action.payload };
     case 'SET_CLOSE_SLIDER_POSITION':
@@ -181,14 +186,19 @@ const Dashboard: React.FC = () => {
   const hasRequestedLocationRef = useRef(false);
   const locationPermissionUserRef = useRef<string | null>(null);
   const lastRequireLocationRef = useRef<boolean | null>(null);
+  const pendingGateCommandRef = useRef<{ issuedAt: number; attempts: number } | null>(null);
+  const lastGateMovementRef = useRef<number>(0);
+  const retryGateCommandTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Destructure state pro snadnější přístup
   const {
     gateStatus, garageStatus, garageTimerStatus, garageSettings, mqttConnected,
     loading, showAdminPanel, showMqttDebug, showConnectionLoader, connectionSteps,
-    locationPermission, locationError, currentLocation, distanceFromGate, isLocationProximityAllowed,
+    locationPermission, locationError, currentLocation, distanceFromGate, isLocationProximityAllowed, gateCommandMessage,
     showCloseConfirmSlider, closeSliderPosition, isSliderDragging
   } = state;
+
+  const gateCommandMessageRef = useRef(gateCommandMessage);
 
   // Helper function to update connection step status
   const updateConnectionStep = useCallback((stepIndex: number, status: 'pending' | 'loading' | 'success' | 'error', description?: string) => {
@@ -237,6 +247,83 @@ const Dashboard: React.FC = () => {
     }
   }, [closeSliderPosition]);
 
+  const registerGateStatusUpdate = useCallback((rawStatus: string | null, parsedStatus: string) => {
+    const normalizedRaw = (rawStatus ?? '').toUpperCase();
+    const normalizedParsed = parsedStatus.toUpperCase();
+
+    const ackOnly = normalizedRaw === 'OTEVÍRÁM BRÁNU' || normalizedRaw === 'ZAVÍRÁM BRÁNU';
+
+    const movementDetected =
+      normalizedRaw.includes('OTEVÍRÁ SE') ||
+      normalizedRaw.includes('ZAVÍRÁ SE') ||
+      (!ackOnly && (normalizedParsed.includes('OTEVÍRÁ SE') || normalizedParsed.includes('ZAVÍRÁ SE'))) ||
+      normalizedRaw === 'P3' ||
+      normalizedRaw === 'P4';
+
+    const finalStateDetected =
+      normalizedParsed.includes('BRÁNA OTEVŘENA') ||
+      normalizedParsed.includes('BRÁNA ZAVŘENA') ||
+      normalizedRaw === 'P2' ||
+      normalizedRaw === 'P1';
+
+    if (movementDetected || finalStateDetected) {
+      lastGateMovementRef.current = Date.now();
+      if (retryGateCommandTimeoutRef.current) {
+        clearTimeout(retryGateCommandTimeoutRef.current);
+        retryGateCommandTimeoutRef.current = null;
+      }
+      pendingGateCommandRef.current = null;
+      if (gateCommandMessageRef.current) {
+        dispatch({ type: 'SET_GATE_COMMAND_MESSAGE', payload: '' });
+      }
+    }
+  }, [dispatch]);
+
+  const startGateMovementMonitor = useCallback((attempt: number) => {
+    if (!currentUser) {
+      return;
+    }
+
+    if (retryGateCommandTimeoutRef.current) {
+      clearTimeout(retryGateCommandTimeoutRef.current);
+      retryGateCommandTimeoutRef.current = null;
+    }
+
+    const issuedAt = Date.now();
+    const baselineMovement = lastGateMovementRef.current;
+    pendingGateCommandRef.current = { issuedAt, attempts: attempt };
+
+    if (attempt === 1) {
+      dispatch({ type: 'SET_GATE_COMMAND_MESSAGE', payload: '' });
+    }
+
+    retryGateCommandTimeoutRef.current = setTimeout(async () => {
+      retryGateCommandTimeoutRef.current = null;
+      const pending = pendingGateCommandRef.current;
+      if (!pending || pending.issuedAt !== issuedAt || pending.attempts !== attempt) {
+        return;
+      }
+
+      if (lastGateMovementRef.current === baselineMovement) {
+        if (attempt === 1) {
+          dispatch({ type: 'SET_GATE_COMMAND_MESSAGE', payload: 'Brána nereaguje, zkouším druhý pokus...' });
+          try {
+            await mqttService.publishGateCommand(currentUser.email || '');
+            startGateMovementMonitor(2);
+            return;
+          } catch (error) {
+            console.error('❌ Druhý pokus o otevření brány selhal:', error);
+            dispatch({ type: 'SET_GATE_COMMAND_MESSAGE', payload: 'Druhý pokus o ovládání brány selhal.' });
+            pendingGateCommandRef.current = null;
+          }
+        } else {
+          dispatch({ type: 'SET_GATE_COMMAND_MESSAGE', payload: 'Brána stále nereaguje. Zkontrolujte prosím zařízení.' });
+          pendingGateCommandRef.current = null;
+        }
+      }
+    }, 3000);
+  }, [currentUser, dispatch]);
+
   const handleConfirmClose = useCallback(async () => {
     if (!currentUser) return;
     
@@ -261,6 +348,7 @@ const Dashboard: React.FC = () => {
       
       // MQTT pro zavření brány
       await mqttService.publishGateCommand(currentUser.email || '');
+      startGateMovementMonitor(1);
       console.log('✅ SLIDER: MQTT příkaz pro bránu odeslán úspěšně');
       
       // Send user ID to Log/Brana/ID topic (like original HTML)
@@ -276,7 +364,7 @@ const Dashboard: React.FC = () => {
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, [currentUser]);
+  }, [currentUser, startGateMovementMonitor]);
 
   const handleCancelCloseSlider = useCallback(() => {
     dispatch({ type: 'SET_SHOW_CLOSE_CONFIRM_SLIDER', payload: false });
@@ -381,12 +469,16 @@ const Dashboard: React.FC = () => {
   };
 
   // Helper function to get user identifier for MQTT messages
-  const getUserIdentifier = (): string => {
+  const getUserIdentifier = useCallback((): string => {
     if (currentUser?.nick && currentUser.nick.trim()) {
       return currentUser.nick;
     }
     return currentUser?.displayName || currentUser?.email || 'Neznámý';
-  };
+  }, [currentUser, startGateMovementMonitor]);
+
+  useEffect(() => {
+    gateCommandMessageRef.current = gateCommandMessage;
+  }, [gateCommandMessage]);
 
   // Helper function to continuously check and update user distance from gate
   const updateDistanceFromGate = useCallback(async () => {
@@ -472,6 +564,7 @@ const Dashboard: React.FC = () => {
   };
 
   // MQTT Status Subscription ONLY (connection managed globally in App.tsx)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     console.log('🔧 Dashboard: Subscribing to MQTT status changes...');
 
@@ -481,6 +574,8 @@ const Dashboard: React.FC = () => {
     dispatch({ type: 'SET_GATE_STATUS', payload: initialStatus.gateStatus });
     dispatch({ type: 'SET_GARAGE_STATUS', payload: initialStatus.garageStatus });
     dispatch({ type: 'SET_MQTT_CONNECTED', payload: initialStatus.isConnected });
+
+    registerGateStatusUpdate(initialStatus.rawGateStatus ?? null, initialStatus.gateStatus);
 
     // Update connection steps based on initial status
     if (initialStatus.isConnected) {
@@ -589,6 +684,8 @@ const Dashboard: React.FC = () => {
       }
       
       console.log('🔧 Dashboard: React state updated - mqttConnected:', status.isConnected);
+
+      registerGateStatusUpdate(status.rawGateStatus ?? null, status.gateStatus);
     });
 
     return () => {
@@ -618,6 +715,7 @@ const Dashboard: React.FC = () => {
         console.log('🚪 AUTO-OPEN: Odesílám MQTT příkaz...');
         
         await mqttService.publishGateCommand(currentUser.email || '');
+        startGateMovementMonitor(1);
         
         // Send user ID to Log/Brana/ID topic
         const logMessage = `ID: ${getUserIdentifier()}`;
@@ -634,7 +732,7 @@ const Dashboard: React.FC = () => {
     return () => {
       window.removeEventListener('gate-auto-open', handleAutoOpen);
     };
-  }, []); // Event listener should be set only once
+  }, [currentUser, mqttConnected, startGateMovementMonitor, getUserIdentifier]);
 
   // GPS permission request - only if required by user permissions
   useEffect(() => {
@@ -763,7 +861,7 @@ const Dashboard: React.FC = () => {
     if (currentUser) {
       // Oprávnění se už nesledují v connection loaderu
     }
-  }, [currentUser]);
+  }, [currentUser, startGateMovementMonitor]);
 
   // Monitor connection completion
   useEffect(() => {
@@ -815,6 +913,7 @@ const Dashboard: React.FC = () => {
           try {
             console.log('🔧 Dashboard: Odesílám automatické otevření...');
             await mqttService.publishGateCommand(currentUser.email || '');
+            startGateMovementMonitor(1);
             
             // Loguj aktivitu
             await activityService.logActivity({
@@ -1157,6 +1256,14 @@ const Dashboard: React.FC = () => {
     };
   }, [isSliderDragging, handleSliderMove, handleSliderEnd]);
 
+  useEffect(() => {
+    return () => {
+      if (retryGateCommandTimeoutRef.current) {
+        clearTimeout(retryGateCommandTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleGateControl = async () => {
     // Play click sound
     playSound('click');
@@ -1329,6 +1436,7 @@ const Dashboard: React.FC = () => {
       
       // Step 1: Send MQTT commands (critical part)
       await mqttService.publishGateCommand(currentUser.email || '');
+      startGateMovementMonitor(1);
       
       // Send user ID to Log/Brana/ID topic (like original HTML)
       const logMessage = `ID: ${getUserIdentifier()}`;
@@ -1952,7 +2060,25 @@ const Dashboard: React.FC = () => {
                 )}
               </div>
             </button>
-            
+
+            {gateCommandMessage && (
+              <div
+                style={{
+                  marginTop: '12px',
+                  textAlign: 'center',
+                  background: 'rgba(255,193,7,0.15)',
+                  color: 'var(--md-on-tertiary-container)',
+                  borderRadius: '12px',
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  letterSpacing: '0.01em'
+                }}
+              >
+                {gateCommandMessage}
+              </div>
+            )}
+
             {/* STOP tlačítko pro uživatele s stopMode oprávněním */}
             {currentUser?.permissions.stopMode && (
               <button

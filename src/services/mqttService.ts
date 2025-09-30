@@ -10,6 +10,8 @@ export interface IMqttStatus {
   gateStatus: GateStatusType;
   garageStatus: GarageStatusType;
   isConnected: boolean;
+  rawGateStatus?: string | null;
+  rawGarageStatus?: string | null;
 }
 
 export interface IMqttConnectionOptions extends IClientOptions {
@@ -92,7 +94,9 @@ export class MqttService {
   private currentStatus: IMqttStatus = {
     gateStatus: 'Neznámý stav',
     garageStatus: 'Garáž zavřena', // OPRAVA: Výchozí stav místo "Neznámý stav"
-    isConnected: false
+    isConnected: false,
+    rawGateStatus: null,
+    rawGarageStatus: null
   };
 
   private static getMqttOverrideFromQuery(): string | null {
@@ -369,11 +373,13 @@ export class MqttService {
     
     switch (topic) {
       case 'IoT/Brana/Status':
+        this.currentStatus.rawGateStatus = message;
         const oldGateStatus = this.currentStatus.gateStatus;
         this.currentStatus.gateStatus = this.parseGateStatus(message);
         console.log(`🚪 Gate status: ${oldGateStatus} → ${this.currentStatus.gateStatus}`);
         break;
       case 'IoT/Brana/Status2':
+        this.currentStatus.rawGarageStatus = message;
         const oldGarageStatus = this.currentStatus.garageStatus;
         this.currentStatus.garageStatus = this.parseGarageStatus(message);
         console.log(`🏠 Garage status: ${oldGarageStatus} → ${this.currentStatus.garageStatus}`);

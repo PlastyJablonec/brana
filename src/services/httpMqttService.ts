@@ -12,7 +12,9 @@ export class HttpMqttService {
   private currentStatus: IMqttStatus = {
     gateStatus: 'Neznámý stav',
     garageStatus: 'Neznámý stav',
-    isConnected: false
+    isConnected: false,
+    rawGateStatus: null,
+    rawGarageStatus: null
   };
   private statusPollingInterval: NodeJS.Timeout | null = null;
   private isStatusPolling = false;
@@ -174,6 +176,10 @@ export class HttpMqttService {
         }
 
         if (status.messages) {
+          const rawGateStatus = status.messages['IoT/Brana/Status'] ?? null;
+          const rawGarageStatus = status.messages['IoT/Brana/Status2'] ?? null;
+          this.currentStatus.rawGateStatus = rawGateStatus;
+          this.currentStatus.rawGarageStatus = rawGarageStatus;
           const oldGateStatus = this.currentStatus.gateStatus;
           const oldGarageStatus = this.currentStatus.garageStatus;
 
@@ -311,6 +317,9 @@ export class HttpMqttService {
         this.currentStatus.isConnected = status.connected || false;
 
         if (status.messages) {
+          this.currentStatus.rawGateStatus = status.messages['IoT/Brana/Status'] ?? null;
+          this.currentStatus.rawGarageStatus = status.messages['IoT/Brana/Status2'] ?? null;
+
           if (status.messages['IoT/Brana/Status']) {
             this.currentStatus.gateStatus = this.parseGateStatus(status.messages['IoT/Brana/Status']);
             if (oldGateStatus !== this.currentStatus.gateStatus) {
