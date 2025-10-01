@@ -1846,7 +1846,7 @@ const Dashboard: React.FC = () => {
               onClick={isAdminUser && gateCoordinationStatus.connectedUsers > 0 ? handleConnectedUsersClick : undefined}
               title={isAdminUser && gateCoordinationStatus.connectedUsers > 0 ? 'Zobrazit připojené uživatele' : undefined}
             >
-              👥 {gateCoordinationStatus.connectedUsers} {gateCoordinationStatus.connectedUsers === 1 ? 'uživatel připojen' : 'uživatelů připojeno'}
+              👥 {gateCoordinationStatus.connectedUsers} {gateCoordinationStatus.connectedUsers === 1 ? 'uživatel online' : 'uživatelů online'}
               {gateCoordinationStatus.activeUser && (
                 <div style={{ fontSize: '0.75rem', marginTop: '4px', opacity: 0.8 }}>
                   🎮 Aktivní: {gateCoordinationStatus.activeUser}

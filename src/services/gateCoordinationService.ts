@@ -760,9 +760,13 @@ class GateCoordinationService {
     }
   }
 
-  // NOVÉ: Získat počet všech připojených uživatelů
+  // NOVÉ: Získat počet aktuálně online připojených uživatelů (heartbeat <= 2 min)
   getConnectedUsersCount(state: GateCoordination): number {
-    return Object.keys(state.connectedUsers || {}).length;
+    const ONLINE_THRESHOLD_MS = 2 * 60 * 1000;
+    const now = Date.now();
+    return Object.values(state.connectedUsers || {}).filter((info) => {
+      return now - info.lastSeen <= ONLINE_THRESHOLD_MS;
+    }).length;
   }
 }
 

@@ -22,6 +22,8 @@ export interface GateCoordinationStatus {
   debugInfo?: any;             // Debug informace pro vývojáře
 }
 
+const ONLINE_THRESHOLD_MS = 2 * 60 * 1000; // 2 min bez heartbeatu = offline
+
 export function useGateCoordination() {
   const { currentUser } = useAuth();
   const [coordinationState, setCoordinationState] = useState<GateCoordination | null>(null);
@@ -176,7 +178,13 @@ export function useGateCoordination() {
     const canStartControl = gateCoordinationService.canUserStartControl(userId, coordinationState);
     
     // NOVÉ: Používej heartbeat systém pro správné počítání všech připojených uživatelů
-    const connectedUsers = gateCoordinationService.getConnectedUsersCount(coordinationState);
+    const now = Date.now();
+    const allConnectedUsers = coordinationState.connectedUsers || {};
+    const filteredConnectedUsersEntries = Object.entries(allConnectedUsers).filter(([, info]) => {
+      return now - info.lastSeen <= ONLINE_THRESHOLD_MS;
+    });
+    const filteredConnectedUsers = Object.fromEntries(filteredConnectedUsersEntries);
+    const connectedUsers = filteredConnectedUsersEntries.length;
     
     // NOVÉ WORKFLOW LOGIKY
     const canCloseNormally = gateCoordinationService.canUserCloseGateNormally(userId, coordinationState);
@@ -197,7 +205,7 @@ export function useGateCoordination() {
       isBlocked,
       canStartControl,
       connectedUsers,
-      connectedUsersData: coordinationState.connectedUsers,
+      connectedUsersData: filteredConnectedUsers,
       // NOVÉ DEBUG FIELDS
       canCloseNormally,
       mustUseSlider,
