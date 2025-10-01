@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useReducer, useRef } from 'react';
+import React, { useEffect, useCallback, useReducer, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import ThemeToggle from '../components/ThemeToggle';
@@ -49,6 +49,9 @@ interface DashboardState {
   isLocationProximityAllowed: boolean;
   gateCommandMessage: string;
 
+  // Connected users detail
+  showConnectedUsersModal: boolean;
+
   // Close Confirmation Slider
   showCloseConfirmSlider: boolean;
   closeSliderPosition: number;
@@ -72,6 +75,7 @@ type DashboardAction =
   | { type: 'SET_DISTANCE_FROM_GATE'; payload: number | null }
   | { type: 'SET_IS_LOCATION_PROXIMITY_ALLOWED'; payload: boolean }
   | { type: 'SET_GATE_COMMAND_MESSAGE'; payload: string }
+  | { type: 'SET_SHOW_CONNECTED_USERS_MODAL'; payload: boolean }
   | { type: 'SET_SHOW_CLOSE_CONFIRM_SLIDER'; payload: boolean }
   | { type: 'SET_CLOSE_SLIDER_POSITION'; payload: number }
   | { type: 'SET_IS_SLIDER_DRAGGING'; payload: boolean };
@@ -102,6 +106,7 @@ const initialDashboardState: DashboardState = {
   distanceFromGate: null,
   isLocationProximityAllowed: true,
   gateCommandMessage: '',
+  showConnectedUsersModal: false,
 
   // Close Confirmation Slider
   showCloseConfirmSlider: false,
@@ -150,6 +155,8 @@ function dashboardReducer(state: DashboardState, action: DashboardAction): Dashb
       return { ...state, isLocationProximityAllowed: action.payload };
     case 'SET_GATE_COMMAND_MESSAGE':
       return { ...state, gateCommandMessage: action.payload };
+    case 'SET_SHOW_CONNECTED_USERS_MODAL':
+      return { ...state, showConnectedUsersModal: action.payload };
     case 'SET_SHOW_CLOSE_CONFIRM_SLIDER':
       return { ...state, showCloseConfirmSlider: action.payload };
     case 'SET_CLOSE_SLIDER_POSITION':
@@ -195,10 +202,16 @@ const Dashboard: React.FC = () => {
     gateStatus, garageStatus, garageTimerStatus, garageSettings, mqttConnected,
     loading, showAdminPanel, showMqttDebug, showConnectionLoader, connectionSteps,
     locationPermission, locationError, currentLocation, distanceFromGate, isLocationProximityAllowed, gateCommandMessage,
+    showConnectedUsersModal,
     showCloseConfirmSlider, closeSliderPosition, isSliderDragging
   } = state;
 
   const gateCommandMessageRef = useRef(gateCommandMessage);
+  const isAdminUser = currentUser?.role === 'admin';
+  const connectedUsersEntries = useMemo(() => {
+    const entries = Object.entries(gateCoordinationStatus.connectedUsersData || {});
+    return entries.sort((a, b) => b[1].lastSeen - a[1].lastSeen);
+  }, [gateCoordinationStatus.connectedUsersData]);
 
   // Helper function to update connection step status
   const updateConnectionStep = useCallback((stepIndex: number, status: 'pending' | 'loading' | 'success' | 'error', description?: string) => {
@@ -323,6 +336,20 @@ const Dashboard: React.FC = () => {
       }
     }, 3000);
   }, [currentUser, dispatch]);
+
+  const handleConnectedUsersClick = useCallback(() => {
+    if (currentUser?.role !== 'admin') {
+      return;
+    }
+    if (!gateCoordinationStatus.connectedUsersData || gateCoordinationStatus.connectedUsers === 0) {
+      return;
+    }
+    dispatch({ type: 'SET_SHOW_CONNECTED_USERS_MODAL', payload: true });
+  }, [currentUser?.role, gateCoordinationStatus.connectedUsers, gateCoordinationStatus.connectedUsersData, dispatch]);
+
+  const handleCloseConnectedUsersModal = useCallback(() => {
+    dispatch({ type: 'SET_SHOW_CONNECTED_USERS_MODAL', payload: false });
+  }, [dispatch]);
 
   const handleConfirmClose = useCallback(async () => {
     if (!currentUser) return;
@@ -1806,19 +1833,24 @@ const Dashboard: React.FC = () => {
               {/* NOVÉ: Informační lišta o připojených uživatelích - VŽDY ZOBRAZ */}
               <div style={{
                 background: gateCoordinationStatus.connectedUsers > 1 ? 'var(--md-tertiary-container)' : 'var(--md-surface-variant)',
-                color: gateCoordinationStatus.connectedUsers > 1 ? 'var(--md-on-tertiary-container)' : 'var(--md-on-surface-variant)',
-                padding: '8px 12px',
-                borderRadius: '12px',
-                fontSize: '0.875rem',
-                fontWeight: '600',
-                marginTop: '8px',
-                textAlign: 'center'
-              }}>
-                👥 {gateCoordinationStatus.connectedUsers} {gateCoordinationStatus.connectedUsers === 1 ? 'uživatel připojen' : 'uživatelů připojeno'}
-                {gateCoordinationStatus.activeUser && (
-                  <div style={{ fontSize: '0.75rem', marginTop: '4px', opacity: 0.8 }}>
-                    🎮 Aktivní: {gateCoordinationStatus.activeUser}
-                  </div>
+              color: gateCoordinationStatus.connectedUsers > 1 ? 'var(--md-on-tertiary-container)' : 'var(--md-on-surface-variant)',
+              padding: '8px 12px',
+              borderRadius: '12px',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              marginTop: '8px',
+              textAlign: 'center',
+              cursor: isAdminUser && gateCoordinationStatus.connectedUsers > 0 ? 'pointer' : 'default',
+              textDecoration: isAdminUser && gateCoordinationStatus.connectedUsers > 0 ? 'underline' : 'none'
+            }}
+              onClick={isAdminUser && gateCoordinationStatus.connectedUsers > 0 ? handleConnectedUsersClick : undefined}
+              title={isAdminUser && gateCoordinationStatus.connectedUsers > 0 ? 'Zobrazit připojené uživatele' : undefined}
+            >
+              👥 {gateCoordinationStatus.connectedUsers} {gateCoordinationStatus.connectedUsers === 1 ? 'uživatel připojen' : 'uživatelů připojeno'}
+              {gateCoordinationStatus.activeUser && (
+                <div style={{ fontSize: '0.75rem', marginTop: '4px', opacity: 0.8 }}>
+                  🎮 Aktivní: {gateCoordinationStatus.activeUser}
+                </div>
                 )}
               </div>
             </div>
@@ -2076,6 +2108,87 @@ const Dashboard: React.FC = () => {
                 }}
               >
                 {gateCommandMessage}
+              </div>
+            )}
+
+            {showConnectedUsersModal && isAdminUser && (
+              <div
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  background: 'rgba(0,0,0,0.45)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 9999
+                }}
+                onClick={handleCloseConnectedUsersModal}
+              >
+                <div
+                  style={{
+                    background: 'var(--md-surface)',
+                    color: 'var(--md-on-surface)',
+                    borderRadius: '16px',
+                    padding: '24px',
+                    width: 'min(90vw, 420px)',
+                    maxHeight: '70vh',
+                    overflowY: 'auto',
+                    boxShadow: '0 12px 32px rgba(0,0,0,0.35)'
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.15rem' }}>
+                      Připojení uživatelé ({connectedUsersEntries.length})
+                    </h3>
+                    <button
+                      onClick={handleCloseConnectedUsersModal}
+                      className="md-button"
+                      style={{ background: 'var(--md-secondary)', color: 'var(--md-on-secondary)', borderRadius: '8px', padding: '6px 12px' }}
+                    >
+                      Zavřít
+                    </button>
+                  </div>
+                  {connectedUsersEntries.length === 0 ? (
+                    <div style={{ fontSize: '0.9rem', color: 'var(--md-on-surface-variant)' }}>
+                      Nikdo není připojen.
+                    </div>
+                  ) : (
+                    <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {connectedUsersEntries.map(([userId, info]) => {
+                        const lastSeenDiff = Date.now() - info.lastSeen;
+                        const seconds = Math.floor(lastSeenDiff / 1000);
+                        const minutes = Math.floor(seconds / 60);
+                        const lastSeenText = minutes > 0
+                          ? `před ${minutes} ${minutes === 1 ? 'minutou' : minutes < 5 ? 'minutami' : 'minutami'}`
+                          : `před ${seconds} s`;
+                        const isCurrent = currentUser?.id === userId;
+                        const isActiveUser = gateCoordinationStatus.activeUser === info.displayName;
+                        return (
+                          <li
+                            key={userId}
+                            style={{
+                              padding: '10px 12px',
+                              borderRadius: '12px',
+                              background: isActiveUser ? 'rgba(76,175,80,0.12)' : 'var(--md-surface-variant)',
+                              border: isCurrent ? '2px solid var(--md-primary)' : '1px solid rgba(0,0,0,0.05)'
+                            }}
+                          >
+                            <div style={{ fontWeight: 600 }}>
+                              {info.displayName} {isCurrent && <span style={{ fontSize: '0.8rem', color: 'var(--md-primary)' }}>(Vy)</span>}
+                            </div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--md-on-surface-variant)' }}>
+                              ID: {userId}
+                            </div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--md-on-surface-variant)' }}>
+                              Poslední aktivita: {lastSeenText}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
               </div>
             )}
 

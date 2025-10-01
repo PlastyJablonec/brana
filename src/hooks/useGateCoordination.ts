@@ -13,6 +13,7 @@ export interface GateCoordinationStatus {
   queueLength: number;        // Počet čekajících v queue
   waitingTimeText: string;    // Text pro UI ("Aktivní", "Další na řadě", "3. v pořadí")
   connectedUsers: number;     // NOVÉ: Počet připojených uživatelů (informační)
+  connectedUsersData?: { [userId: string]: { lastSeen: number; displayName: string } };
   
   // NOVÉ WORKFLOW FIELDS PRO POŽADOVANOU LOGIKU
   canCloseNormally: boolean;    // Může zavřít bránu normálním tlačítkem
@@ -220,6 +221,7 @@ export function useGateCoordination() {
       queueLength: coordinationState.reservationQueue.length,
       waitingTimeText,
       connectedUsers,
+      connectedUsersData: coordinationState.connectedUsers,
       
       // NOVÉ WORKFLOW FIELDS
       canCloseNormally,
