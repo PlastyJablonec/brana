@@ -229,8 +229,8 @@ export function useGateCoordination() {
       queueLength: coordinationState.reservationQueue.length,
       waitingTimeText,
       connectedUsers,
-      connectedUsersData: coordinationState.connectedUsers,
-      
+      connectedUsersData: filteredConnectedUsers, // ✅ OPRAVA: vrátit filtrované uživatele
+
       // NOVÉ WORKFLOW FIELDS
       canCloseNormally,
       mustUseSlider,

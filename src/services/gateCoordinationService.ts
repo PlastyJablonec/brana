@@ -768,6 +768,21 @@ class GateCoordinationService {
       return now - info.lastSeen <= ONLINE_THRESHOLD_MS;
     }).length;
   }
+
+  // NOVÉ: Získat filtrované připojené uživatele (pouze online - do 2 min)
+  getActiveConnectedUsers(state: GateCoordination): { [userId: string]: { lastSeen: number, displayName: string } } {
+    const ONLINE_THRESHOLD_MS = 2 * 60 * 1000;
+    const now = Date.now();
+    const activeUsers: { [userId: string]: { lastSeen: number, displayName: string } } = {};
+
+    Object.entries(state.connectedUsers || {}).forEach(([userId, info]) => {
+      if (now - info.lastSeen <= ONLINE_THRESHOLD_MS) {
+        activeUsers[userId] = info;
+      }
+    });
+
+    return activeUsers;
+  }
 }
 
 // Export singleton instance
