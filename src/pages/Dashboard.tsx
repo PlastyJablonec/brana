@@ -384,25 +384,21 @@ const Dashboard: React.FC = () => {
           timeSinceCommand: Date.now() - issuedAt
         });
 
-        if (attempt === 1) {
-          console.log('🔄 GATE MONITOR: Attempt 1 failed, retrying with attempt 2...');
-          dispatch({ type: 'SET_GATE_COMMAND_MESSAGE', payload: 'Brána nereaguje, zkouším druhý pokus...' });
-          try {
-            console.log('📤 GATE MONITOR: Publishing retry MQTT command...');
-            await mqttService.publishGateCommand(currentUser.email || '');
-            console.log('✅ GATE MONITOR: Retry command published, starting monitor for attempt 2');
-            startGateMovementMonitor(2);
-            return;
-          } catch (error) {
-            console.error('❌ GATE MONITOR: Retry command failed:', error);
-            dispatch({ type: 'SET_GATE_COMMAND_MESSAGE', payload: 'Druhý pokus o ovládání brány selhal.' });
-            pendingGateCommandRef.current = null;
-          }
-        } else {
-          console.error('❌ GATE MONITOR: Attempt 2 also failed - giving up');
-          dispatch({ type: 'SET_GATE_COMMAND_MESSAGE', payload: 'Brána stále nereaguje. Zkontrolujte prosím zařízení.' });
-          pendingGateCommandRef.current = null;
-        }
+        // OPRAVA: Retry logika odstraněna - způsobovala toggle efekt
+        // Pokud brána nereaguje, jen zobrazíme varování bez dalšího příkazu
+        console.warn('⚠️ GATE MONITOR: Brána nereagovala do 3s - možná zpožděná MQTT zpráva');
+        dispatch({
+          type: 'SET_GATE_COMMAND_MESSAGE',
+          payload: attempt === 1
+            ? 'Brána možná reaguje pomaleji. Sledujte stav brány.'
+            : 'Brána stále nereaguje. Zkontrolujte prosím zařízení.'
+        });
+        pendingGateCommandRef.current = null;
+
+        // Automaticky vymaž zprávu po 5 sekundách
+        setTimeout(() => {
+          dispatch({ type: 'SET_GATE_COMMAND_MESSAGE', payload: '' });
+        }, 5000);
       } else {
         console.log('✅ GATE MONITOR: Movement detected within timeout!', {
           attempt,
@@ -1538,14 +1534,10 @@ const Dashboard: React.FC = () => {
     // Pokud už jsem aktivní, pokračuj normálně s MQTT příkazem
     console.log('✅ DEBUG: Potvrzeno aktivní stav, pokračuji s MQTT příkazem...');
 
-    // NOVÉ: Kontrola zda se brána už nepohybuje - zabránit konfliktům
+    // OPRAVA: Odstraněna blokace pohybu - uživatel může změnit směr kdykoliv
     const isGateMoving = gateStatus.includes('se...') || gateStatus.includes('Otevírá') || gateStatus.includes('Zavírá');
     if (isGateMoving) {
-      console.log('🚫 MQTT BLOCK: Brána se už pohybuje, blokuji další příkaz:', gateStatus);
-      playSound('error');
-      alert(`⚠️ Brána se právě ${gateStatus.includes('Otevírá') ? 'otevírá' : 'zavírá'}. Počkejte až dokončí pohyb.`);
-      dispatch({ type: 'SET_LOADING', payload: false });
-      return;
+      console.log('⚠️ GATE WARNING: Brána se již pohybuje, ale umožňuji změnu směru:', gateStatus);
     }
 
     // Loading už je true z předchozího nastavení
