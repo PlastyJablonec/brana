@@ -1542,10 +1542,27 @@ const Dashboard: React.FC = () => {
 
     // Loading už je true z předchozího nastavení
     let mqttCommandSucceeded = false;
-    
+
     try {
       console.log('🔧 Dashboard: Sending gate command...');
-      
+
+      // NOVÉ: Optimistický UI update - okamžitě zobraz očekávaný stav
+      const isCurrentlyClosed = gateStatus.includes('zavřen') || gateStatus.includes('Zavřena');
+      const isCurrentlyOpen = gateStatus.includes('otevřen') || gateStatus.includes('Otevřena');
+
+      if (isCurrentlyClosed) {
+        console.log('⚡ OPTIMISTIC UI: Setting status to "Otevírá se..." before MQTT response');
+        dispatch({ type: 'SET_GATE_STATUS', payload: 'Otevírá se...' });
+      } else if (isCurrentlyOpen) {
+        console.log('⚡ OPTIMISTIC UI: Setting status to "Zavírá se..." before MQTT response');
+        dispatch({ type: 'SET_GATE_STATUS', payload: 'Zavírá se...' });
+      } else {
+        // Brána je v pohybu nebo neznámém stavu - invertuj směr
+        const isOpening = gateStatus.includes('Otevírá');
+        console.log('⚡ OPTIMISTIC UI: Inverting direction -', isOpening ? 'closing' : 'opening');
+        dispatch({ type: 'SET_GATE_STATUS', payload: isOpening ? 'Zavírá se...' : 'Otevírá se...' });
+      }
+
       // Step 1: Send MQTT commands (critical part)
       await mqttService.publishGateCommand(currentUser.email || '');
       startGateMovementMonitor(1);
