@@ -312,15 +312,70 @@ const isAllowed = distance <= maxDistanceMeters;
 
 ## 🌐 API a služby
 
-### MQTT Topics
+### MQTT Protokol
 
-| Topic | Směr | Popis |
-|-------|------|-------|
-| `brana/prikaz` | → | Příkazy pro bránu |
-| `brana/stav` | ← | Stav brány |
-| `garaz/prikaz` | → | Příkazy pro garáž |
-| `garaz/stav` | ← | Stav garáže |
-| `Log/Brana/ID` | → | Logování uživatelských akcí |
+#### Broker konfigurace
+
+**Produkční (Veřejná IP):**
+- IP: `89.24.76.191`
+- MQTT port: `1883`
+- WebSocket: `9001` (ws://)
+- WebSocket Secure: `9002` (wss://)
+
+**Lokální (na WiFi síti 172.19.3.x):**
+- IP: `172.19.3.200`
+- MQTT port: `1883`
+- WebSocket: `9001` (ws://)
+
+#### Topics
+
+| Topic | Směr | Payload | Popis |
+|-------|------|---------|-------|
+| `IoT/Brana/Ovladani` | → | `"1"` | Brána otevřít/zavřít |
+| `IoT/Brana/Ovladani` | → | `"3"` | Garáž otevřít/zavřít |
+| `IoT/Brana/Ovladani/STOP` | → | `"6"` | STOP režim (zastaví bránu) |
+| `IoT/Brana/Status` | ← | String | Stav brány (hlavní) |
+| `IoT/Brana/Status2` | ← | String | Stav garáže (vedlejší) |
+| `Log/Brana/ID` | → | `"ID: {nick}"` | Log aktivit uživatelů |
+
+#### Status zprávy od brány
+
+**Pohyb (movement detection):**
+- `"Otevírá se..."` - Brána se právě otevírá
+- `"Zavírá se..."` - Brána se právě zavírá
+- `"Garážová vrata v pohybu..."` - Garáž se pohybuje
+
+**Finální stavy:**
+- `"Brána otevřena"` - Brána je plně otevřená
+- `"Brána zavřena"` - Brána je plně zavřená
+- `"Není zavřena"` - Brána není úplně zavřená (částečně otevřená)
+- `"Není otevřena"` - Brána není úplně otevřená (částečně zavřená)
+- `"Garáž zavřena"` - Garáž je zavřená
+- `"Garáž otevřena"` - Garáž je otevřená
+
+**Acknowledgment zprávy (neznamenají pohyb):**
+- `"Otevírám bránu"` - Brána potvrdila příkaz, ještě se nepohybuje
+- `"Zavírám bránu"` - Brána potvrdila příkaz, ještě se nepohybuje
+
+#### Gate Movement Monitor
+
+**Logika kontroly otevření brány:**
+
+1. **Odeslání příkazu** - MQTT publish `"1"` na `IoT/Brana/Ovladani`
+2. **Start monitoring** - Čeká 3 sekundy na zprávu o pohybu
+3. **Detekce pohybu** - Pokud přijde zpráva s pohybem (např. `"Otevírá se..."`)
+4. **Retry logika** - Pokud brána nereaguje do 3s, zkusí 2. pokus
+5. **Failure** - Pokud ani 2. pokus neuspěje, zobrazí chybu
+
+**Detekované zprávy:**
+- ✅ Pohyb: Zprávy obsahující `"Otevírá se"`, `"Zavírá se"`, nebo `"Garážová vrata v pohybu"`
+- ✅ Finální stav: Zprávy obsahující `"Brána otevřena"`, `"Brána zavřena"`, `"Není zavřena"`, `"Není otevřena"`, `"Garáž zavřena"`, `"Garáž otevřena"`
+- ❌ Acknowledgment only: Zprávy `"Otevírám bránu"`, `"Zavírám bránu"` (neaktualizují lastMovement)
+
+**Timeout:**
+- První pokus: 3000ms
+- Druhý pokus: 3000ms
+- Celková max. doba: 6 sekund
 
 ### Firebase Collections
 

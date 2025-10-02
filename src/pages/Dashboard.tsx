@@ -274,20 +274,26 @@ const Dashboard: React.FC = () => {
       hasPendingCommand: !!pendingGateCommandRef.current
     });
 
+    // Acknowledgment zprávy - brána potvrdila příkaz, ale ještě se nepohybuje
     const ackOnly = normalizedRaw === 'OTEVÍRÁM BRÁNU' || normalizedRaw === 'ZAVÍRÁM BRÁNU';
 
+    // Detekce pohybu brány - skutečné zprávy z MQTT
     const movementDetected =
-      normalizedRaw.includes('OTEVÍRÁ SE') ||
-      normalizedRaw.includes('ZAVÍRÁ SE') ||
-      (!ackOnly && (normalizedParsed.includes('OTEVÍRÁ SE') || normalizedParsed.includes('ZAVÍRÁ SE'))) ||
-      normalizedRaw === 'P3' ||
-      normalizedRaw === 'P4';
+      normalizedRaw.includes('OTEVÍRÁ SE') ||        // "Otevírá se..."
+      normalizedRaw.includes('ZAVÍRÁ SE') ||         // "Zavírá se..."
+      normalizedRaw.includes('GARÁŽOVÁ VRATA V POHYBU') ||  // "Garážová vrata v pohybu..."
+      (!ackOnly && (normalizedParsed.includes('OTEVÍRÁ SE') || normalizedParsed.includes('ZAVÍRÁ SE')));
 
+    // Detekce finálního stavu - brána dokončila pohyb
     const finalStateDetected =
+      normalizedRaw.includes('BRÁNA OTEVŘENA') ||    // "Brána otevřena"
+      normalizedRaw.includes('BRÁNA ZAVŘENA') ||     // "Brána zavřena"
+      normalizedRaw.includes('NENÍ ZAVŘENA') ||      // "Není zavřena"
+      normalizedRaw.includes('NENÍ OTEVŘENA') ||     // "Není otevřena"
+      normalizedRaw.includes('GARÁŽ ZAVŘENA') ||     // "Garáž zavřena"
+      normalizedRaw.includes('GARÁŽ OTEVŘENA') ||    // "Garáž otevřena"
       normalizedParsed.includes('BRÁNA OTEVŘENA') ||
-      normalizedParsed.includes('BRÁNA ZAVŘENA') ||
-      normalizedRaw === 'P2' ||
-      normalizedRaw === 'P1';
+      normalizedParsed.includes('BRÁNA ZAVŘENA');
 
     console.log('🔍 GATE MONITOR: Detection result', {
       ackOnly,
