@@ -264,6 +264,16 @@ const Dashboard: React.FC = () => {
     const normalizedRaw = (rawStatus ?? '').toUpperCase();
     const normalizedParsed = parsedStatus.toUpperCase();
 
+    console.log('🔍 GATE MONITOR: Status update received', {
+      rawStatus,
+      parsedStatus,
+      normalizedRaw,
+      normalizedParsed,
+      timestamp: new Date().toISOString(),
+      lastMovement: lastGateMovementRef.current,
+      hasPendingCommand: !!pendingGateCommandRef.current
+    });
+
     const ackOnly = normalizedRaw === 'OTEVÍRÁM BRÁNU' || normalizedRaw === 'ZAVÍRÁM BRÁNU';
 
     const movementDetected =
@@ -279,25 +289,46 @@ const Dashboard: React.FC = () => {
       normalizedRaw === 'P2' ||
       normalizedRaw === 'P1';
 
+    console.log('🔍 GATE MONITOR: Detection result', {
+      ackOnly,
+      movementDetected,
+      finalStateDetected,
+      willUpdateMovement: movementDetected || finalStateDetected
+    });
+
     if (movementDetected || finalStateDetected) {
+      const previousMovement = lastGateMovementRef.current;
       lastGateMovementRef.current = Date.now();
+
+      console.log('✅ GATE MONITOR: Movement detected! Updated lastGateMovementRef', {
+        previousMovement: new Date(previousMovement).toISOString(),
+        newMovement: new Date(lastGateMovementRef.current).toISOString(),
+        timeDiff: Date.now() - previousMovement
+      });
+
       if (retryGateCommandTimeoutRef.current) {
+        console.log('🔄 GATE MONITOR: Clearing retry timeout - gate responded');
         clearTimeout(retryGateCommandTimeoutRef.current);
         retryGateCommandTimeoutRef.current = null;
       }
       pendingGateCommandRef.current = null;
       if (gateCommandMessageRef.current) {
+        console.log('🔄 GATE MONITOR: Clearing gate command message');
         dispatch({ type: 'SET_GATE_COMMAND_MESSAGE', payload: '' });
       }
+    } else {
+      console.log('⏭️ GATE MONITOR: No movement detected, ignoring status update');
     }
   }, [dispatch]);
 
   const startGateMovementMonitor = useCallback((attempt: number) => {
     if (!currentUser) {
+      console.warn('⚠️ GATE MONITOR: Cannot start - no currentUser');
       return;
     }
 
     if (retryGateCommandTimeoutRef.current) {
+      console.log('🔄 GATE MONITOR: Clearing existing retry timeout');
       clearTimeout(retryGateCommandTimeoutRef.current);
       retryGateCommandTimeoutRef.current = null;
     }
@@ -306,6 +337,14 @@ const Dashboard: React.FC = () => {
     const baselineMovement = lastGateMovementRef.current;
     pendingGateCommandRef.current = { issuedAt, attempts: attempt };
 
+    console.log('🚀 GATE MONITOR: Starting movement monitor', {
+      attempt,
+      issuedAt: new Date(issuedAt).toISOString(),
+      baselineMovement: new Date(baselineMovement).toISOString(),
+      baselineTimestamp: baselineMovement,
+      willCheckAfter: '3000ms'
+    });
+
     if (attempt === 1) {
       dispatch({ type: 'SET_GATE_COMMAND_MESSAGE', payload: '' });
     }
@@ -313,26 +352,58 @@ const Dashboard: React.FC = () => {
     retryGateCommandTimeoutRef.current = setTimeout(async () => {
       retryGateCommandTimeoutRef.current = null;
       const pending = pendingGateCommandRef.current;
+
+      console.log('⏰ GATE MONITOR: Timeout reached (3s), checking movement', {
+        attempt,
+        hasPending: !!pending,
+        pendingIssuedAt: pending?.issuedAt,
+        expectedIssuedAt: issuedAt,
+        pendingAttempts: pending?.attempts,
+        expectedAttempt: attempt,
+        baselineMovement: new Date(baselineMovement).toISOString(),
+        currentMovement: new Date(lastGateMovementRef.current).toISOString(),
+        movementChanged: lastGateMovementRef.current !== baselineMovement
+      });
+
       if (!pending || pending.issuedAt !== issuedAt || pending.attempts !== attempt) {
+        console.warn('⚠️ GATE MONITOR: Timeout cancelled - pending command mismatch or cleared');
         return;
       }
 
       if (lastGateMovementRef.current === baselineMovement) {
+        console.warn('❌ GATE MONITOR: No movement detected!', {
+          attempt,
+          baselineMovement: new Date(baselineMovement).toISOString(),
+          currentMovement: new Date(lastGateMovementRef.current).toISOString(),
+          timeSinceCommand: Date.now() - issuedAt
+        });
+
         if (attempt === 1) {
+          console.log('🔄 GATE MONITOR: Attempt 1 failed, retrying with attempt 2...');
           dispatch({ type: 'SET_GATE_COMMAND_MESSAGE', payload: 'Brána nereaguje, zkouším druhý pokus...' });
           try {
+            console.log('📤 GATE MONITOR: Publishing retry MQTT command...');
             await mqttService.publishGateCommand(currentUser.email || '');
+            console.log('✅ GATE MONITOR: Retry command published, starting monitor for attempt 2');
             startGateMovementMonitor(2);
             return;
           } catch (error) {
-            console.error('❌ Druhý pokus o otevření brány selhal:', error);
+            console.error('❌ GATE MONITOR: Retry command failed:', error);
             dispatch({ type: 'SET_GATE_COMMAND_MESSAGE', payload: 'Druhý pokus o ovládání brány selhal.' });
             pendingGateCommandRef.current = null;
           }
         } else {
+          console.error('❌ GATE MONITOR: Attempt 2 also failed - giving up');
           dispatch({ type: 'SET_GATE_COMMAND_MESSAGE', payload: 'Brána stále nereaguje. Zkontrolujte prosím zařízení.' });
           pendingGateCommandRef.current = null;
         }
+      } else {
+        console.log('✅ GATE MONITOR: Movement detected within timeout!', {
+          attempt,
+          baselineMovement: new Date(baselineMovement).toISOString(),
+          currentMovement: new Date(lastGateMovementRef.current).toISOString(),
+          timeDiff: lastGateMovementRef.current - baselineMovement
+        });
       }
     }, 3000);
   }, [currentUser, dispatch]);
@@ -1292,16 +1363,32 @@ const Dashboard: React.FC = () => {
   }, []);
 
   const handleGateControl = async () => {
+    console.log('🎯 GATE CONTROL: Button clicked!', {
+      timestamp: new Date().toISOString(),
+      user: currentUser?.email,
+      gateStatus,
+      mqttConnected,
+      coordinationStatus: {
+        isActive: gateCoordinationStatus.isActive,
+        isBlocked: gateCoordinationStatus.isBlocked,
+        isInQueue: gateCoordinationStatus.isInQueue,
+        position: gateCoordinationStatus.position,
+        mustUseSlider: gateCoordinationStatus.mustUseSlider
+      }
+    });
+
     // Play click sound
     playSound('click');
-    
+
     if (!currentUser?.permissions.gate) {
+      console.error('❌ GATE CONTROL: No gate permission');
       playSound('error');
       alert('Nemáte oprávnění k ovládání brány');
       return;
     }
 
     if (!mqttConnected) {
+      console.error('❌ GATE CONTROL: MQTT not connected');
       playSound('error');
       alert('MQTT není připojen');
       return;
